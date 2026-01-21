@@ -1,0 +1,1494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Language App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            /* Primary colors */
+            --primary: #7C9EB2;
+            --primary-light: #A8C5D8;
+            --primary-dark: #5A7A8A;
+
+            /* Secondary colors */
+            --secondary: #E8B4BC;
+            --secondary-light: #F5D5DA;
+            --secondary-dark: #C9929A;
+
+            /* Backgrounds */
+            --background: #FAFAFA;
+            --background-alt: #F5F5F5;
+            --surface: #FFFFFF;
+
+            /* Text */
+            --text-primary: #2D3436;
+            --text-secondary: #636E72;
+            --text-muted: #B2BEC3;
+            --translation-color: #6b5b95;
+
+            /* Segment colors (8 rotating) */
+            --pastel-1: #FFB3BA; /* pink */
+            --pastel-2: #BAFFC9; /* mint */
+            --pastel-3: #BAE1FF; /* sky */
+            --pastel-4: #FFFFBA; /* lemon */
+            --pastel-5: #FFD9BA; /* peach */
+            --pastel-6: #E0BBE4; /* lavender */
+            --pastel-7: #C9F0FF; /* ice */
+            --pastel-8: #FFDAB3; /* apricot */
+
+            /* UI elements */
+            --border: #E0E0E0;
+            --border-focus: #7C9EB2;
+            --shadow: rgba(0, 0, 0, 0.08);
+
+            /* Feedback */
+            --success: #A8E6CF;
+            --warning: #FFE5B4;
+            --error: #FFB3BA;
+            --info: #BAE1FF;
+
+            /* Tooltip */
+            --tooltip-bg: #2D3436;
+            --tooltip-text: #FFFFFF;
+
+            /* Typography */
+            --font-chinese: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+            --font-body: "Inter", "SF Pro Display", system-ui, sans-serif;
+            --font-mono: "JetBrains Mono", "Fira Code", monospace;
+
+            /* Font sizes - smaller, refined */
+            --text-xs: 0.7rem;
+            --text-chinese: 1.2rem;
+            --text-base: 0.875rem;
+            --text-sm: 0.75rem;
+            --text-lg: 1rem;
+            --text-xl: 1.125rem;
+            --text-2xl: 1.5rem;
+
+            /* Line heights */
+            --leading-tight: 1.25;
+            --leading-segmented: 2.4;
+            --leading-normal: 1.5;
+            --leading-relaxed: 1.75;
+        }
+
+        body {
+            font-family: var(--font-body);
+            background: var(--background);
+            line-height: var(--leading-normal);
+        }
+
+        .font-chinese {
+            font-family: var(--font-chinese);
+        }
+
+        .segment:nth-child(8n+1) { background: var(--pastel-1); }
+        .segment:nth-child(8n+2) { background: var(--pastel-2); }
+        .segment:nth-child(8n+3) { background: var(--pastel-3); }
+        .segment:nth-child(8n+4) { background: var(--pastel-4); }
+        .segment:nth-child(8n+5) { background: var(--pastel-5); }
+        .segment:nth-child(8n+6) { background: var(--pastel-6); }
+        .segment:nth-child(8n+7) { background: var(--pastel-7); }
+        .segment:nth-child(8n+8) { background: var(--pastel-8); }
+
+        .spinner {
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        form.htmx-request .btn-text { display: none; }
+        form.htmx-request .btn-loading { display: inline-flex; }
+        form.htmx-request button[type="submit"] { pointer-events: none; opacity: 0.9; }
+
+        .input-card {
+            background: var(--surface);
+            border-radius: 12px;
+            box-shadow: 0 1px 3px var(--shadow);
+            border: 1px solid var(--border);
+        }
+
+        .textarea-main {
+            font-family: var(--font-chinese);
+            font-size: var(--text-chinese);
+            line-height: 1.6;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .textarea-main::placeholder {
+            font-size: var(--text-sm);
+            color: var(--text-muted);
+        }
+
+        .full-translation {
+            color: var(--translation-color);
+            font-size: var(--text-base);
+            line-height: var(--leading-relaxed);
+            font-weight: 500;
+        }
+
+        .textarea-main:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(124, 158, 178, 0.15);
+        }
+
+        .image-upload-zone {
+            border: 1px dashed var(--border);
+            border-radius: 8px;
+            background: var(--background-alt);
+            transition: all 0.15s ease;
+        }
+
+        .image-upload-zone:hover {
+            border-color: var(--primary);
+            background: var(--surface);
+        }
+
+        .image-upload-zone.drag-over {
+            border-color: var(--primary);
+            background: rgba(124, 158, 178, 0.06);
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+            border-radius: 6px;
+            font-weight: 500;
+            font-size: var(--text-sm);
+            transition: all 0.15s ease;
+            box-shadow: 0 1px 2px rgba(124, 158, 178, 0.2);
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            box-shadow: 0 2px 6px rgba(124, 158, 178, 0.3);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-weight: 500;
+            font-size: var(--text-sm);
+            transition: all 0.15s ease;
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        .section-divider {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--text-muted);
+            font-size: var(--text-xs);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .section-divider::before,
+        .section-divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--border);
+        }
+
+        /* Progress bar styles */
+        .progress-container {
+            margin-bottom: 0.75rem;
+        }
+
+        .progress-bar-bg {
+            width: 100%;
+            height: 4px;
+            background: var(--border);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: var(--primary);
+            border-radius: 2px;
+            transition: width 0.3s ease;
+        }
+
+        /* Pending segment style */
+        .segment-pending {
+            background: var(--border) !important;
+            color: var(--text-muted);
+            cursor: default;
+        }
+
+        .segment-pending:hover {
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* Translating animation */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .segment-translating {
+            animation: pulse 1s ease-in-out infinite;
+            background: var(--primary-light) !important;
+        }
+
+        /* SRS opacity styling for saved words */
+        .segment.saved {
+            position: relative;
+        }
+
+        .segment.saved::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            background: var(--segment-color, transparent);
+            opacity: var(--segment-opacity, 1);
+            z-index: -1;
+        }
+
+        .segment.saved {
+            background: transparent !important;
+        }
+
+        .segment.struggling {
+            text-decoration: underline dotted var(--text-muted);
+        }
+
+        /* Review panel styles */
+        .review-panel {
+            position: fixed;
+            top: 0;
+            right: -400px;
+            width: 400px;
+            max-width: 100vw;
+            height: 100vh;
+            background: var(--surface);
+            box-shadow: -4px 0 20px rgba(0, 0, 0, 0.15);
+            transition: right 0.3s ease;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .review-panel.open {
+            right: 0;
+        }
+
+        .review-panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .review-panel-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1.5rem;
+        }
+
+        .review-card {
+            background: var(--background-alt);
+            border-radius: 12px;
+            padding: 2rem;
+            text-align: center;
+        }
+
+        .review-card .headword {
+            font-family: var(--font-chinese);
+            font-size: 3rem;
+            color: var(--text-primary);
+            margin-bottom: 1.5rem;
+        }
+
+        .review-card .answer-section {
+            margin-top: 1.5rem;
+        }
+
+        .review-card .pinyin {
+            font-size: var(--text-lg);
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+
+        .review-card .english {
+            font-size: var(--text-base);
+            color: var(--primary-dark);
+            margin-bottom: 1rem;
+        }
+
+        .review-card .snippet {
+            font-family: var(--font-chinese);
+            font-size: var(--text-sm);
+            color: var(--text-muted);
+            background: var(--surface);
+            padding: 0.75rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+        }
+
+        .grade-buttons {
+            display: flex;
+            gap: 0.75rem;
+            justify-content: center;
+            margin-top: 1.5rem;
+        }
+
+        .grade-btn {
+            padding: 0.5rem 1.25rem;
+            border-radius: 6px;
+            font-weight: 500;
+            font-size: var(--text-sm);
+            transition: all 0.15s ease;
+            border: none;
+            cursor: pointer;
+        }
+
+        .grade-btn.again {
+            background: var(--error);
+            color: var(--text-primary);
+        }
+
+        .grade-btn.hard {
+            background: var(--warning);
+            color: var(--text-primary);
+        }
+
+        .grade-btn.good {
+            background: var(--success);
+            color: var(--text-primary);
+        }
+
+        .grade-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 6px var(--shadow);
+        }
+
+        .reveal-btn {
+            background: var(--primary);
+            color: white;
+            padding: 0.75rem 2rem;
+            border-radius: 8px;
+            font-weight: 500;
+            border: none;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .reveal-btn:hover {
+            background: var(--primary-dark);
+        }
+
+        .review-progress {
+            text-align: center;
+            padding: 1rem;
+            color: var(--text-muted);
+            font-size: var(--text-sm);
+            border-top: 1px solid var(--border);
+        }
+
+        .review-badge {
+            background: var(--secondary);
+            color: var(--text-primary);
+            font-size: 0.7rem;
+            padding: 0.15rem 0.4rem;
+            border-radius: 10px;
+            margin-left: 0.5rem;
+            font-weight: 600;
+        }
+
+        .review-empty {
+            text-align: center;
+            padding: 3rem 1.5rem;
+            color: var(--text-muted);
+        }
+
+        .review-empty svg {
+            width: 48px;
+            height: 48px;
+            margin: 0 auto 1rem;
+            color: var(--text-muted);
+        }
+
+        .panel-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.3);
+            z-index: 99;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .panel-overlay.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
+        <header class="mb-8 flex items-start justify-between">
+            <div>
+                <h1 class="font-chinese font-semibold mb-1" style="color: var(--text-primary); font-size: var(--text-2xl);">
+                    Language App
+                </h1>
+                <p style="color: var(--text-secondary); font-size: var(--text-base);">
+                    Enter Chinese text to get word segmentation, pinyin, and English translation
+                </p>
+            </div>
+            <button id="review-btn" class="btn-secondary px-3 py-1.5 flex items-center" onclick="openReviewPanel()">
+                Review
+                <span id="review-badge" class="review-badge hidden">0</span>
+            </button>
+        </header>
+
+        <!-- Review Panel Overlay -->
+        <div id="panel-overlay" class="panel-overlay" onclick="closeReviewPanel()"></div>
+
+        <!-- Review Panel -->
+        <div id="review-panel" class="review-panel">
+            <div class="review-panel-header">
+                <h2 class="font-semibold" style="color: var(--text-primary); font-size: var(--text-lg);">Review</h2>
+                <button onclick="closeReviewPanel()" style="color: var(--text-muted); font-size: var(--text-xl);">&times;</button>
+            </div>
+            <div id="review-panel-content" class="review-panel-content">
+                <!-- Cards loaded dynamically -->
+            </div>
+            <div id="review-progress" class="review-progress hidden">
+                <span id="review-current">0</span> / <span id="review-total">0</span>
+            </div>
+        </div>
+
+        <main class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+            <!-- Left Column: Unified Input -->
+            <div class="space-y-4">
+                <div class="input-card p-5 h-[100%]">
+                    <!-- Text Input Form -->
+                    <form id="translate-form">
+
+                        <div class="mb-4">
+                            <label for="text" class="block font-medium mb-1.5" style="color: var(--text-primary); font-size: var(--text-sm);">
+                                Chinese Text
+                            </label>
+                            <textarea
+                                id="text"
+                                name="text"
+                                rows="5"
+                                placeholder="Enter Chinese text here, e.g., 你好世界"
+                                required
+                                class="textarea-main w-full px-3 py-2.5 resize-y"
+                            ></textarea>
+                        </div>
+
+                        <button type="submit" class="btn-primary inline-flex items-center justify-center gap-1.5 px-4 py-2 min-w-[110px]">
+                            <span class="btn-text">Translate</span>
+                            <span class="btn-loading hidden items-center gap-1.5">
+                                <span class="spinner"></span>
+                                Translating...
+                            </span>
+                        </button>
+                    </form>
+
+                    <!-- Divider -->
+                    <div class="section-divider my-5">
+                        <span>or extract from image</span>
+                    </div>
+
+                    <!-- Image Upload Form (OCR only) -->
+                    <form id="ocr-form"
+                          hx-post="/extract-text-html"
+                          hx-target="#results"
+                          hx-swap="innerHTML"
+                          hx-encoding="multipart/form-data">
+
+                        <div id="drop-zone" class="image-upload-zone p-4 text-center cursor-pointer">
+                            <input type="file"
+                                   id="image-input"
+                                   name="file"
+                                   accept=".png,.jpg,.jpeg,.webp,.gif"
+                                   class="hidden">
+
+                            <div id="upload-prompt">
+                                <svg class="mx-auto h-8 w-8 mb-2" style="color: var(--text-muted);" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                                    <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                                </svg>
+                                <p class="font-medium" style="color: var(--text-secondary); font-size: var(--text-sm);">
+                                    Drop an image here or click to upload
+                                </p>
+                                <p class="mt-0.5" style="color: var(--text-muted); font-size: var(--text-xs);">
+                                    PNG, JPG, JPEG, WebP, GIF (max 5MB)
+                                </p>
+                            </div>
+
+                            <div id="preview-container" class="hidden">
+                                <img id="image-preview" class="max-h-32 mx-auto rounded-md shadow-sm">
+                                <p id="file-name" class="mt-2 font-medium" style="color: var(--text-primary); font-size: var(--text-sm);"></p>
+                                <div class="mt-2 flex items-center justify-center gap-2">
+                                    <button type="submit" class="btn-secondary px-3 py-1.5 inline-flex items-center gap-1.5">
+                                        <span class="btn-text">Extract Text</span>
+                                        <span class="btn-loading hidden items-center gap-1.5">
+                                            <span class="spinner" style="border-color: rgba(99, 110, 114, 0.3); border-top-color: var(--text-secondary);"></span>
+                                            Extracting...
+                                        </span>
+                                    </button>
+                                    <button type="button" onclick="clearPreview()" class="hover:underline" style="color: var(--primary); font-size: var(--text-xs);">
+                                        Remove
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Translation Results Table (appears below input) -->
+                <div id="translation-table"></div>
+            </div>
+
+            <!-- Right Column: Segmented Output -->
+            <div id="results" class="input-card h-[100%] overflow-y-auto p-5">
+                <div class="h-full flex items-center justify-center">
+                    <p class="text-center italic" style="color: var(--text-muted); font-size: var(--text-sm);">Translation results will appear here</p>
+                </div>
+            </div>
+        </main>
+
+        <script>
+            // --- Milestone 0: lightweight persistence hooks ---
+            let currentTextId = null;
+            let currentRawText = '';
+
+            async function apiPostJson(path, payload) {
+                const res = await fetch(path, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!res.ok) {
+                    let detail = '';
+                    try { detail = await res.text(); } catch (e) {}
+                    throw new Error(`Request failed (${res.status}): ${detail}`);
+                }
+                return await res.json();
+            }
+
+            async function ensureSavedText() {
+                if (currentTextId || !currentRawText) return currentTextId;
+                const data = await apiPostJson('/api/texts', {
+                    raw_text: currentRawText,
+                    source_type: 'text',
+                    metadata: {}
+                });
+                currentTextId = data.id;
+                return currentTextId;
+            }
+
+            async function logEvent(eventType, payload = {}) {
+                // Best effort: don't block UX on analytics.
+                try {
+                    await apiPostJson('/api/events', {
+                        event_type: eventType,
+                        text_id: currentTextId,
+                        payload
+                    });
+                } catch (e) {
+                    // swallow
+                }
+            }
+
+            function clearPreview() {
+                const fileInput = document.getElementById('image-input');
+                const uploadPrompt = document.getElementById('upload-prompt');
+                const previewContainer = document.getElementById('preview-container');
+
+                fileInput.value = '';
+                uploadPrompt.classList.remove('hidden');
+                previewContainer.classList.add('hidden');
+            }
+
+            // Pastel colors for segments (8 rotating)
+            const pastelColors = [
+                '#FFB3BA', // pink
+                '#BAFFC9', // mint
+                '#BAE1FF', // sky
+                '#FFFFBA', // lemon
+                '#FFD9BA', // peach
+                '#E0BBE4', // lavender
+                '#C9F0FF', // ice
+                '#FFDAB3'  // apricot
+            ];
+
+            // Store results for tooltip interaction
+            let translationResults = [];
+            let isClickActive = false;
+            let activeSegment = null;
+            let lastTooltipData = null;
+
+            // SRS tracking
+            let savedVocabMap = new Map(); // headword -> { vocabItemId, opacity, isStruggling }
+            let reviewQueue = [];
+            let reviewIndex = 0;
+            let reviewAnswered = false;
+
+            // Record a lookup for a saved word and update its opacity
+            async function recordLookup(vocabItemId, segmentEl) {
+                try {
+                    const data = await apiPostJson('/api/vocab/lookup', { vocab_item_id: vocabItemId });
+                    if (data && segmentEl) {
+                        segmentEl.style.setProperty('--segment-opacity', data.opacity);
+                        if (data.is_struggling) {
+                            segmentEl.classList.add('struggling');
+                        } else {
+                            segmentEl.classList.remove('struggling');
+                        }
+                        // Update local map
+                        const headword = segmentEl.textContent;
+                        if (savedVocabMap.has(headword)) {
+                            savedVocabMap.get(headword).opacity = data.opacity;
+                            savedVocabMap.get(headword).isStruggling = data.is_struggling;
+                        }
+                    }
+                } catch (e) {
+                    console.error('Failed to record lookup:', e);
+                }
+            }
+
+            // Fetch SRS info for all visible segments and apply opacity
+            async function fetchAndApplySRSInfo() {
+                const segments = document.querySelectorAll('.segment:not(.segment-pending)');
+                const headwords = [...new Set([...segments].map(s => s.textContent))];
+                if (headwords.length === 0) return;
+
+                try {
+                    const params = new URLSearchParams();
+                    headwords.forEach(h => params.append('headwords', h));
+                    const res = await fetch('/api/vocab/srs-info?' + params.toString());
+                    if (!res.ok) return;
+                    const data = await res.json();
+
+                    // Build map from response
+                    savedVocabMap.clear();
+                    data.items.forEach(info => {
+                        // Known words get 0 opacity (no highlight)
+                        const opacity = info.status === 'known' ? 0 : info.opacity;
+                        savedVocabMap.set(info.headword, {
+                            vocabItemId: info.vocab_item_id,
+                            opacity: opacity,
+                            isStruggling: info.is_struggling,
+                            status: info.status
+                        });
+                    });
+
+                    // Apply to segments
+                    segments.forEach(seg => {
+                        const info = savedVocabMap.get(seg.textContent);
+                        if (info) {
+                            // Store original color BEFORE clearing inline style
+                            const originalColor = seg.style.background || getPastelColor(parseInt(seg.dataset.index) || 0);
+
+                            seg.classList.add('saved');
+                            seg.style.background = '';  // Clear inline background to let CSS take over
+                            seg.style.setProperty('--segment-color', originalColor);
+                            seg.style.setProperty('--segment-opacity', info.opacity);
+                            seg.dataset.vocabItemId = info.vocabItemId;
+                            if (info.isStruggling) {
+                                seg.classList.add('struggling');
+                            }
+                        }
+                    });
+                } catch (e) {
+                    console.error('Failed to fetch SRS info:', e);
+                }
+            }
+
+            // Update due count badge
+            async function updateDueCount() {
+                try {
+                    const res = await fetch('/api/review/count');
+                    if (!res.ok) return;
+                    const data = await res.json();
+                    const badge = document.getElementById('review-badge');
+                    if (data.due_count > 0) {
+                        badge.textContent = data.due_count;
+                        badge.classList.remove('hidden');
+                    } else {
+                        badge.classList.add('hidden');
+                    }
+                } catch (e) {
+                    console.error('Failed to fetch due count:', e);
+                }
+            }
+
+            // Open review panel
+            async function openReviewPanel() {
+                const panel = document.getElementById('review-panel');
+                const overlay = document.getElementById('panel-overlay');
+                panel.classList.add('open');
+                overlay.classList.add('visible');
+                await loadReviewQueue();
+            }
+
+            // Close review panel
+            function closeReviewPanel() {
+                const panel = document.getElementById('review-panel');
+                const overlay = document.getElementById('panel-overlay');
+                panel.classList.remove('open');
+                overlay.classList.remove('visible');
+                // Refresh due count after review
+                updateDueCount();
+            }
+
+            // Load review queue
+            async function loadReviewQueue() {
+                const content = document.getElementById('review-panel-content');
+                const progress = document.getElementById('review-progress');
+
+                content.innerHTML = `
+                    <div class="text-center py-8">
+                        <div class="spinner mx-auto" style="width: 24px; height: 24px; border-color: rgba(124, 158, 178, 0.3); border-top-color: var(--primary);"></div>
+                        <p class="mt-2" style="color: var(--text-muted); font-size: var(--text-sm);">Loading cards...</p>
+                    </div>
+                `;
+
+                try {
+                    const res = await fetch('/api/review/queue?limit=20');
+                    if (!res.ok) throw new Error('Failed to load queue');
+                    const data = await res.json();
+
+                    reviewQueue = data.cards;
+                    reviewIndex = 0;
+
+                    if (reviewQueue.length === 0) {
+                        content.innerHTML = `
+                            <div class="review-empty">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                                <p class="font-medium" style="font-size: var(--text-base);">All caught up!</p>
+                                <p style="font-size: var(--text-sm);">No cards due for review right now.</p>
+                            </div>
+                        `;
+                        progress.classList.add('hidden');
+                    } else {
+                        document.getElementById('review-total').textContent = reviewQueue.length;
+                        progress.classList.remove('hidden');
+                        renderReviewCard();
+                    }
+                } catch (e) {
+                    content.innerHTML = `
+                        <div class="review-empty">
+                            <p style="color: var(--error);">Failed to load review cards.</p>
+                        </div>
+                    `;
+                }
+            }
+
+            // Render current review card
+            function renderReviewCard() {
+                const content = document.getElementById('review-panel-content');
+                const card = reviewQueue[reviewIndex];
+
+                document.getElementById('review-current').textContent = reviewIndex + 1;
+                reviewAnswered = false;
+
+                const snippetHtml = card.snippets && card.snippets.length > 0
+                    ? `<div class="snippet">"${card.snippets[0]}"</div>`
+                    : '';
+
+                content.innerHTML = `
+                    <div class="review-card">
+                        <div class="headword">${card.headword}</div>
+                        <button class="reveal-btn" onclick="revealAnswer()">Show Answer</button>
+                        <div id="answer-section" class="answer-section hidden">
+                            <div class="pinyin">${card.pinyin}</div>
+                            <div class="english">${card.english}</div>
+                            ${snippetHtml}
+                            <div class="grade-buttons">
+                                <button class="grade-btn again" onclick="gradeCard(0)">Again</button>
+                                <button class="grade-btn hard" onclick="gradeCard(1)">Hard</button>
+                                <button class="grade-btn good" onclick="gradeCard(2)">Good</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Reveal answer
+            function revealAnswer() {
+                document.getElementById('answer-section').classList.remove('hidden');
+                document.querySelector('.reveal-btn').classList.add('hidden');
+            }
+
+            // Grade card and move to next
+            async function gradeCard(grade) {
+                if (reviewAnswered) return;
+                reviewAnswered = true;
+
+                const card = reviewQueue[reviewIndex];
+
+                try {
+                    await apiPostJson('/api/review/answer', {
+                        vocab_item_id: card.vocab_item_id,
+                        grade: grade
+                    });
+                } catch (e) {
+                    console.error('Failed to record grade:', e);
+                }
+
+                // Move to next card
+                reviewIndex++;
+                if (reviewIndex >= reviewQueue.length) {
+                    // Session complete
+                    const content = document.getElementById('review-panel-content');
+                    content.innerHTML = `
+                        <div class="review-empty">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                            <p class="font-medium" style="font-size: var(--text-base);">Session Complete!</p>
+                            <p style="font-size: var(--text-sm);">You've reviewed ${reviewQueue.length} cards.</p>
+                            <button class="btn-primary mt-4 px-4 py-2" onclick="loadReviewQueue()">Continue Reviewing</button>
+                        </div>
+                    `;
+                    document.getElementById('review-progress').classList.add('hidden');
+                } else {
+                    renderReviewCard();
+                }
+            }
+
+            function getPastelColor(index) {
+                return pastelColors[index % pastelColors.length];
+            }
+
+            // Render initial progress UI with pending segments (paragraph-aware)
+            function renderProgressUI(paragraphs, totalSegments, fullTranslation = '') {
+                const resultsDiv = document.getElementById('results');
+                let html = `
+                    <div class="relative space-y-3">
+                        <div class="space-y-1">
+                            <h2 class="font-semibold" style="color: var(--text-primary); font-size: var(--text-lg);">Translation</h2>
+                            <p id="full-translation" class="full-translation">Translating...</p>
+                        </div>
+
+                        <div class="section-divider my-3">
+                            <span>Segmented Text</span>
+                        </div>
+
+                        <div class="progress-container">
+                            <div class="flex justify-between mb-1.5" style="font-size: var(--text-xs);">
+                                <span id="progress-label" style="color: var(--text-secondary);">Segmenting...</span>
+                                <span id="progress-count" style="color: var(--text-secondary);"></span>
+                            </div>
+                            <div class="progress-bar-bg">
+                                <div id="progress-bar" class="progress-bar-fill" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <h2 class="font-semibold mb-3" style="color: var(--text-primary); font-size: var(--text-lg);">Segmented Text</h2>
+                        <div id="segments-container">
+                `;
+
+                let globalIndex = 0;
+                paragraphs.forEach((para, paraIdx) => {
+                    const marginBottom = para.separator ? para.separator.split('\n').length * 0.4 : 0;
+                    html += `<div class="paragraph flex flex-wrap gap-1" style="margin-bottom: ${marginBottom}rem;">`;
+
+                    // Create placeholder segments based on segment_count
+                    for (let i = 0; i < para.segment_count; i++) {
+                        html += `
+                            <span class="segment segment-pending inline-block px-2 py-1 rounded border-2 border-transparent"
+                                  style="font-family: var(--font-chinese); font-size: var(--text-chinese);"
+                                  data-index="${globalIndex}"
+                                  data-paragraph="${paraIdx}">Loading...</span>
+                        `;
+                        globalIndex++;
+                    }
+
+                    html += `</div>`;
+                });
+
+                html += `
+                        </div>
+                        <!-- Floating tooltip overlay -->
+                        <div id="word-tooltip" class="hidden absolute z-50 rounded-md shadow-lg p-2 min-w-[160px] pointer-events-auto" style="background: var(--tooltip-bg);">
+                            <div class="font-semibold mb-0.5" style="color: var(--tooltip-text); font-size: var(--text-sm);" id="tooltip-pinyin"></div>
+                            <div style="color: var(--tooltip-text); opacity: 0.8; font-size: var(--text-xs);" id="tooltip-english"></div>
+                            <div class="mt-2 flex items-center gap-2">
+                                <button id="save-word-btn"
+                                        type="button"
+                                        class="px-2 py-1 rounded"
+                                        style="background: rgba(255,255,255,0.12); color: var(--tooltip-text); font-size: var(--text-xs);">
+                                    Save to Learn
+                                </button>
+                                <button id="mark-known-btn"
+                                        type="button"
+                                        class="hidden px-2 py-1 rounded"
+                                        style="background: rgba(255,255,255,0.12); color: var(--tooltip-text); font-size: var(--text-xs);">
+                                    Mark as Known
+                                </button>
+                                <button id="resume-learning-btn"
+                                        type="button"
+                                        class="hidden px-2 py-1 rounded"
+                                        style="background: rgba(255,255,255,0.12); color: var(--tooltip-text); font-size: var(--text-xs);">
+                                    Resume Learning
+                                </button>
+                                <span id="save-word-status" style="color: rgba(255,255,255,0.75); font-size: var(--text-xs);"></span>
+                            </div>
+                            <div class="absolute w-2 h-2 transform rotate-45 -bottom-1 left-1/2 -translate-x-1/2" style="background: var(--tooltip-bg);"></div>
+                        </div>
+                    </div>
+                `;
+
+                resultsDiv.innerHTML = html;
+
+                const translationEl = document.getElementById('full-translation');
+                if (translationEl) {
+                    translationEl.textContent = fullTranslation || 'Translating...';
+                }
+            }
+
+            // Update progress bar
+            function updateProgress(current, total) {
+                const progressBar = document.getElementById('progress-bar');
+                const progressLabel = document.getElementById('progress-label');
+                const progressCount = document.getElementById('progress-count');
+
+                const percentage = (current / total) * 100;
+                progressBar.style.width = percentage + '%';
+                progressLabel.textContent = 'Translating...';
+                progressCount.textContent = `${current} / ${total}`;
+            }
+
+            // Update a segment when translation completes
+            function updateSegment(result) {
+                const segment = document.querySelector(`.segment[data-index="${result.index}"]`);
+                if (segment) {
+                    segment.textContent = result.segment;
+                    segment.classList.remove('segment-pending', 'segment-translating');
+                    segment.style.background = getPastelColor(result.index);
+                    segment.style.color = 'var(--text-primary)';
+                    segment.style.cursor = 'pointer';
+                    segment.classList.add('transition-all', 'duration-150', 'hover:-translate-y-px', 'hover:shadow-sm');
+                    segment.dataset.pinyin = result.pinyin;
+                    segment.dataset.english = result.english;
+
+                    // Add hover/click handlers
+                    addSegmentInteraction(segment);
+                }
+
+                // Mark next segment as translating
+                const nextSegment = document.querySelector(`.segment[data-index="${result.index + 1}"]`);
+                if (nextSegment && nextSegment.classList.contains('segment-pending')) {
+                    nextSegment.classList.add('segment-translating');
+                }
+            }
+
+            // Add hover and click interaction to a segment
+            function addSegmentInteraction(segment) {
+                const tooltip = document.getElementById('word-tooltip');
+                const tooltipPinyin = document.getElementById('tooltip-pinyin');
+                const tooltipEnglish = document.getElementById('tooltip-english');
+
+                function showTooltip(seg) {
+                    // Clear highlight from all segments
+                    document.querySelectorAll('.segment').forEach(s => {
+                        s.classList.remove('border-gray-800', 'shadow-lg');
+                    });
+
+                    tooltipPinyin.textContent = seg.dataset.pinyin;
+                    tooltipEnglish.textContent = seg.dataset.english;
+                    lastTooltipData = {
+                        headword: seg.textContent,
+                        pinyin: seg.dataset.pinyin || '',
+                        english: seg.dataset.english || ''
+                    };
+                    const saveStatus = document.getElementById('save-word-status');
+                    if (saveStatus) saveStatus.textContent = '';
+
+                    // Show/hide buttons based on word status
+                    const saveBtn = document.getElementById('save-word-btn');
+                    const markKnownBtn = document.getElementById('mark-known-btn');
+                    const resumeLearningBtn = document.getElementById('resume-learning-btn');
+                    const info = savedVocabMap.get(seg.textContent);
+
+                    if (!info) {
+                        // Unsaved word - show "Save to Learn"
+                        saveBtn.classList.remove('hidden');
+                        markKnownBtn.classList.add('hidden');
+                        resumeLearningBtn.classList.add('hidden');
+                    } else if (info.status === 'learning') {
+                        // Learning word - show "Mark as Known"
+                        saveBtn.classList.add('hidden');
+                        markKnownBtn.classList.remove('hidden');
+                        resumeLearningBtn.classList.add('hidden');
+                    } else if (info.status === 'known') {
+                        // Known word - show "Resume Learning"
+                        saveBtn.classList.add('hidden');
+                        markKnownBtn.classList.add('hidden');
+                        resumeLearningBtn.classList.remove('hidden');
+                    } else {
+                        // Unknown status (default) - show "Save to Learn"
+                        saveBtn.classList.remove('hidden');
+                        markKnownBtn.classList.add('hidden');
+                        resumeLearningBtn.classList.add('hidden');
+                    }
+
+                    const segRect = seg.getBoundingClientRect();
+                    const containerRect = seg.closest('.relative').getBoundingClientRect();
+
+                    tooltip.classList.remove('hidden');
+
+                    const left = segRect.left - containerRect.left + (segRect.width / 2) - (tooltip.offsetWidth / 2);
+                    const top = segRect.top - containerRect.top - tooltip.offsetHeight - 8;
+
+                    tooltip.style.left = Math.max(0, left) + 'px';
+                    tooltip.style.top = top + 'px';
+
+                    seg.classList.add('border-gray-800', 'shadow-lg');
+                }
+
+                function hideTooltip() {
+                    tooltip.classList.add('hidden');
+                    document.querySelectorAll('.segment').forEach(s => {
+                        s.classList.remove('border-gray-800', 'shadow-lg');
+                    });
+                }
+
+                // Hover: show tooltip (only if not pinned)
+                segment.addEventListener('mouseenter', () => {
+                    if (!isClickActive) {
+                        showTooltip(segment);
+                    }
+                });
+
+                // Hover out: hide tooltip (only if not pinned)
+                segment.addEventListener('mouseleave', () => {
+                    if (!isClickActive) {
+                        hideTooltip();
+                    }
+                });
+
+                // Click/tap: toggle pinned state
+                segment.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (isClickActive && activeSegment === segment) {
+                        // Same segment clicked again - unpin
+                        isClickActive = false;
+                        activeSegment = null;
+                        hideTooltip();
+                    } else {
+                        // Pin this segment
+                        isClickActive = true;
+                        activeSegment = segment;
+                        showTooltip(segment);
+                        // Log a deliberate lookup/tap (not hover).
+                        logEvent('tap', { headword: segment.textContent });
+
+                        // If this is a saved word, record the lookup to update SRS
+                        if (segment.dataset.vocabItemId) {
+                            recordLookup(segment.dataset.vocabItemId, segment);
+                        }
+                    }
+                });
+            }
+
+            // Finalize the UI after completion (now with paragraphs)
+            function finalizeUI(paragraphs) {
+                // Flatten paragraphs into a single results array for table
+                const results = paragraphs.flatMap(p => p.translations);
+                translationResults = results;
+
+                // Hide progress bar
+                const progressContainer = document.querySelector('.progress-container');
+                if (progressContainer) {
+                    progressContainer.style.display = 'none';
+                }
+
+                // Build translation table
+                const tableContainer = document.getElementById('translation-table');
+                if (tableContainer) {
+                    let tableHtml = `
+                        <div class="p-4 rounded-xl" style="background: var(--surface); box-shadow: 0 1px 3px var(--shadow); border: 1px solid var(--border);">
+                            <button id="toggle-details-btn" class="flex items-center justify-between w-full text-left">
+                                <h3 class="font-semibold" style="color: var(--text-primary); font-size: var(--text-base);">Translation Details</h3>
+                                <span id="toggle-icon" style="color: var(--text-muted); font-size: var(--text-lg);">+</span>
+                            </button>
+                            <div id="details-content" class="hidden mt-3 overflow-x-auto">
+                                <table class="w-full text-left">
+                                    <thead>
+                                        <tr style="border-bottom: 1px solid var(--border);">
+                                            <th class="py-1.5 px-2 font-semibold uppercase tracking-wider" style="color: var(--text-muted); font-size: var(--text-xs);">Chinese</th>
+                                            <th class="py-1.5 px-2 font-semibold uppercase tracking-wider" style="color: var(--text-muted); font-size: var(--text-xs);">Pinyin</th>
+                                            <th class="py-1.5 px-2 font-semibold uppercase tracking-wider" style="color: var(--text-muted); font-size: var(--text-xs);">English</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                    `;
+
+                    results.forEach((item, index) => {
+                        tableHtml += `
+                            <tr class="cursor-pointer translation-row" style="border-bottom: 1px solid var(--background-alt);" data-index="${index}">
+                                <td class="py-2 px-2" style="font-family: var(--font-chinese); font-size: var(--text-chinese); color: var(--text-primary);">${item.segment}</td>
+                                <td class="py-2 px-2" style="color: var(--text-secondary); font-size: var(--text-sm);">${item.pinyin}</td>
+                                <td class="py-2 px-2" style="color: var(--secondary-dark); font-size: var(--text-sm);">${item.english}</td>
+                            </tr>
+                        `;
+                    });
+
+                    tableHtml += `
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    `;
+                    tableContainer.innerHTML = tableHtml;
+
+                    // Toggle details visibility
+                    document.getElementById('toggle-details-btn').addEventListener('click', () => {
+                        const content = document.getElementById('details-content');
+                        const icon = document.getElementById('toggle-icon');
+                        content.classList.toggle('hidden');
+                        icon.textContent = content.classList.contains('hidden') ? '+' : '−';
+                    });
+                }
+            }
+
+            // Show error message
+            function showError(message) {
+                const resultsDiv = document.getElementById('results');
+                resultsDiv.innerHTML = `
+                    <div class="p-3 rounded-md" style="background: var(--error); border-left: 3px solid var(--secondary-dark);">
+                        <p style="color: var(--text-primary); font-size: var(--text-sm);">${message}</p>
+                    </div>
+                `;
+            }
+
+            // Main translation function with SSE
+            async function translateWithProgress(text) {
+                const resultsDiv = document.getElementById('results');
+                const tableContainer = document.getElementById('translation-table');
+
+                // Clear previous results
+                tableContainer.innerHTML = '';
+                isClickActive = false;
+                activeSegment = null;
+                lastTooltipData = null;
+                currentTextId = null;
+                currentRawText = text;
+                resultsDiv.innerHTML = `
+                    <div class="h-full flex items-center justify-center">
+                        <div class="text-center">
+                            <div class="spinner mx-auto mb-2" style="width: 20px; height: 20px; border-color: rgba(124, 158, 178, 0.3); border-top-color: var(--primary);"></div>
+                            <p style="color: var(--text-muted); font-size: var(--text-sm);">Segmenting text...</p>
+                        </div>
+                    </div>
+                `;
+
+                try {
+                    const formData = new FormData();
+                    formData.append('text', text);
+
+                    const response = await fetch('/translate-stream', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let buffer = '';
+
+                    while (true) {
+                        const { value, done } = await reader.read();
+                        if (done) break;
+
+                        buffer += decoder.decode(value, { stream: true });
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop() || '';
+
+                        for (const line of lines) {
+                            if (line.startsWith('data: ')) {
+                                const data = JSON.parse(line.slice(6));
+
+                                switch (data.type) {
+                                    case 'start':
+                                        renderProgressUI(data.paragraphs, data.total, data.fullTranslation);
+                                        // Mark first segment as translating
+                                        const firstSeg = document.querySelector('.segment[data-index="0"]');
+                                        if (firstSeg) firstSeg.classList.add('segment-translating');
+                                        break;
+
+                                    case 'progress':
+                                        updateProgress(data.current, data.total);
+                                        updateSegment(data.result);
+                                        break;
+
+                                    case 'complete':
+                                        finalizeUI(data.paragraphs);
+                                        if (data.fullTranslation) {
+                                            const translationEl = document.getElementById('full-translation');
+                                            if (translationEl) {
+                                                translationEl.textContent = data.fullTranslation;
+                                            }
+                                        }
+                                        // Persist the source text after successful completion.
+                                        try { await ensureSavedText(); } catch (e) {}
+                                        // Fetch SRS info for saved words and apply opacity
+                                        await fetchAndApplySRSInfo();
+                                        break;
+
+                                    case 'error':
+                                        showError(data.message);
+                                        break;
+                                }
+                            }
+                        }
+                    }
+                } catch (error) {
+                    showError('Translation failed: ' + error.message);
+                }
+            }
+
+            document.addEventListener('DOMContentLoaded', function() {
+                // Load initial due count for review badge
+                updateDueCount();
+
+                // Save button inside tooltip
+                document.addEventListener('click', async (e) => {
+                    if (e.target && e.target.id === 'save-word-btn') {
+                        e.stopPropagation();
+                        const statusEl = document.getElementById('save-word-status');
+                        try {
+                            await ensureSavedText();
+                            if (!lastTooltipData || !lastTooltipData.headword) return;
+                            const result = await apiPostJson('/api/vocab/save', {
+                                headword: lastTooltipData.headword,
+                                pinyin: lastTooltipData.pinyin,
+                                english: lastTooltipData.english,
+                                text_id: currentTextId,
+                                snippet: currentRawText,
+                                status: 'learning'
+                            });
+                            if (statusEl) statusEl.textContent = 'Saved';
+                            logEvent('save_vocab', { headword: lastTooltipData.headword });
+
+                            // Mark the active segment as saved with full opacity
+                            if (activeSegment && result.vocab_item_id) {
+                                activeSegment.classList.add('saved');
+                                activeSegment.style.setProperty('--segment-color', activeSegment.style.background || getPastelColor(parseInt(activeSegment.dataset.index) || 0));
+                                activeSegment.style.setProperty('--segment-opacity', 1.0);
+                                activeSegment.dataset.vocabItemId = result.vocab_item_id;
+                                savedVocabMap.set(lastTooltipData.headword, {
+                                    vocabItemId: result.vocab_item_id,
+                                    opacity: 1.0,
+                                    isStruggling: false,
+                                    status: 'learning'
+                                });
+
+                                // Update button visibility
+                                document.getElementById('save-word-btn').classList.add('hidden');
+                                document.getElementById('mark-known-btn').classList.remove('hidden');
+                            }
+
+                            // Update due count since new card was added
+                            updateDueCount();
+                        } catch (err) {
+                            if (statusEl) statusEl.textContent = 'Error';
+                        }
+                    }
+                });
+
+                // Mark as Known button handler
+                document.addEventListener('click', async (e) => {
+                    if (e.target && e.target.id === 'mark-known-btn') {
+                        e.stopPropagation();
+                        const statusEl = document.getElementById('save-word-status');
+                        try {
+                            if (!activeSegment || !activeSegment.dataset.vocabItemId) return;
+                            const vocabItemId = activeSegment.dataset.vocabItemId;
+                            await apiPostJson('/api/vocab/status', {
+                                vocab_item_id: vocabItemId,
+                                status: 'known'
+                            });
+                            if (statusEl) statusEl.textContent = 'Marked known';
+                            logEvent('mark_known', { headword: activeSegment.textContent });
+
+                            // Update local state - known words have 0 opacity
+                            const headword = activeSegment.textContent;
+                            if (savedVocabMap.has(headword)) {
+                                const info = savedVocabMap.get(headword);
+                                info.status = 'known';
+                                info.opacity = 0;
+                            }
+
+                            // Remove highlight from segment (0 opacity)
+                            activeSegment.style.setProperty('--segment-opacity', '0');
+
+                            // Update button visibility
+                            document.getElementById('mark-known-btn').classList.add('hidden');
+                            document.getElementById('resume-learning-btn').classList.remove('hidden');
+
+                            // Update due count since card was removed from queue
+                            updateDueCount();
+                        } catch (err) {
+                            if (statusEl) statusEl.textContent = 'Error';
+                        }
+                    }
+                });
+
+                // Resume Learning button handler
+                document.addEventListener('click', async (e) => {
+                    if (e.target && e.target.id === 'resume-learning-btn') {
+                        e.stopPropagation();
+                        const statusEl = document.getElementById('save-word-status');
+                        try {
+                            if (!activeSegment || !activeSegment.dataset.vocabItemId) return;
+                            const vocabItemId = activeSegment.dataset.vocabItemId;
+                            await apiPostJson('/api/vocab/status', {
+                                vocab_item_id: vocabItemId,
+                                status: 'learning'
+                            });
+                            if (statusEl) statusEl.textContent = 'Resumed';
+                            logEvent('resume_learning', { headword: activeSegment.textContent });
+
+                            // Update local state - restore opacity
+                            const headword = activeSegment.textContent;
+                            if (savedVocabMap.has(headword)) {
+                                const info = savedVocabMap.get(headword);
+                                info.status = 'learning';
+                                info.opacity = 1.0; // Full opacity when resuming
+                            }
+
+                            // Restore highlight on segment
+                            activeSegment.style.setProperty('--segment-opacity', '1.0');
+
+                            // Update button visibility
+                            document.getElementById('resume-learning-btn').classList.add('hidden');
+                            document.getElementById('mark-known-btn').classList.remove('hidden');
+
+                            // Update due count since card was added back to queue
+                            updateDueCount();
+                        } catch (err) {
+                            if (statusEl) statusEl.textContent = 'Error';
+                        }
+                    }
+                });
+
+                // Translate form handler
+                const translateForm = document.getElementById('translate-form');
+                const translateBtn = translateForm.querySelector('button[type="submit"]');
+
+                translateForm.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const text = document.getElementById('text').value.trim();
+                    if (!text) return;
+
+                    // Show loading state on button
+                    translateBtn.querySelector('.btn-text').classList.add('hidden');
+                    translateBtn.querySelector('.btn-loading').classList.remove('hidden');
+                    translateBtn.disabled = true;
+
+                    await translateWithProgress(text);
+
+                    // Reset button state
+                    translateBtn.querySelector('.btn-text').classList.remove('hidden');
+                    translateBtn.querySelector('.btn-loading').classList.add('hidden');
+                    translateBtn.disabled = false;
+                });
+
+                // Image upload handlers
+                const dropZone = document.getElementById('drop-zone');
+                const fileInput = document.getElementById('image-input');
+                const uploadPrompt = document.getElementById('upload-prompt');
+                const previewContainer = document.getElementById('preview-container');
+                const imagePreview = document.getElementById('image-preview');
+                const fileName = document.getElementById('file-name');
+
+                dropZone.addEventListener('click', (e) => {
+                    if (e.target.tagName !== 'BUTTON') {
+                        fileInput.click();
+                    }
+                });
+
+                dropZone.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    dropZone.classList.add('drag-over');
+                });
+
+                dropZone.addEventListener('dragleave', () => {
+                    dropZone.classList.remove('drag-over');
+                });
+
+                dropZone.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    dropZone.classList.remove('drag-over');
+
+                    const files = e.dataTransfer.files;
+                    if (files.length > 0) {
+                        fileInput.files = files;
+                        showPreview(files[0]);
+                    }
+                });
+
+                fileInput.addEventListener('change', (e) => {
+                    if (e.target.files.length > 0) {
+                        showPreview(e.target.files[0]);
+                    }
+                });
+
+                function showPreview(file) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        imagePreview.src = e.target.result;
+                        fileName.textContent = file.name;
+                        uploadPrompt.classList.add('hidden');
+                        previewContainer.classList.remove('hidden');
+                    };
+                    reader.readAsDataURL(file);
+                }
+
+                // Click outside segments to dismiss pinned tooltip
+                document.addEventListener('click', (e) => {
+                    // Don't dismiss if clicking inside tooltip UI
+                    const tooltip = document.getElementById('word-tooltip');
+                    const clickedInTooltip = tooltip && tooltip.contains(e.target);
+                    if (isClickActive && !clickedInTooltip && !e.target.classList.contains('segment')) {
+                        isClickActive = false;
+                        activeSegment = null;
+                        if (tooltip) {
+                            tooltip.classList.add('hidden');
+                        }
+                        document.querySelectorAll('.segment').forEach(s => {
+                            s.classList.remove('border-gray-800', 'shadow-lg');
+                        });
+                    }
+                });
+            });
+        </script>
+    </div>
+</body>
+</html>

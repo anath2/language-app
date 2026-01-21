@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Language App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #7C9EB2;
+            --primary-dark: #5A7A8A;
+            --background: #FAFAFA;
+            --surface: #FFFFFF;
+            --text-primary: #2D3436;
+            --text-secondary: #636E72;
+            --text-muted: #B2BEC3;
+            --border: #E0E0E0;
+            --shadow: rgba(0, 0, 0, 0.08);
+            --error: #FFB3BA;
+            --font-chinese: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+            --font-body: "Inter", "SF Pro Display", system-ui, sans-serif;
+            --text-sm: 0.75rem;
+            --text-base: 0.875rem;
+            --text-2xl: 1.5rem;
+        }
+
+        body {
+            font-family: var(--font-body);
+            background: var(--background);
+        }
+
+        .font-chinese {
+            font-family: var(--font-chinese);
+        }
+
+        .input-card {
+            background: var(--surface);
+            border-radius: 12px;
+            box-shadow: 0 1px 3px var(--shadow);
+            border: 1px solid var(--border);
+        }
+
+        .input-field {
+            font-size: var(--text-base);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .input-field:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(124, 158, 178, 0.15);
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+            border-radius: 6px;
+            font-weight: 500;
+            font-size: var(--text-sm);
+            transition: all 0.15s ease;
+            box-shadow: 0 1px 2px rgba(124, 158, 178, 0.2);
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            box-shadow: 0 2px 6px rgba(124, 158, 178, 0.3);
+        }
+
+        .spinner {
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        form.htmx-request .btn-text { display: none; }
+        form.htmx-request .btn-loading { display: inline-flex; }
+        form.htmx-request button[type="submit"] { pointer-events: none; opacity: 0.9; }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+    <div class="input-card p-8 w-full max-w-sm">
+        <h1 class="font-chinese font-semibold mb-6 text-center"
+            style="color: var(--text-primary); font-size: var(--text-2xl);">
+            Language App
+        </h1>
+
+        <form hx-post="/login"
+              hx-target="#login-error"
+              hx-swap="innerHTML">
+
+            <div id="login-error"></div>
+
+            <div class="mb-4">
+                <label for="password" class="block font-medium mb-1.5"
+                       style="color: var(--text-primary); font-size: var(--text-sm);">
+                    Password
+                </label>
+                <input type="password"
+                       id="password"
+                       name="password"
+                       required
+                       autofocus
+                       class="input-field w-full px-3 py-2.5">
+            </div>
+
+            <button type="submit" class="btn-primary w-full px-4 py-2.5">
+                <span class="btn-text">Sign In</span>
+                <span class="btn-loading hidden items-center justify-center gap-1.5">
+                    <span class="spinner"></span>
+                    Signing in...
+                </span>
+            </button>
+        </form>
+    </div>
+</body>
+</html>
