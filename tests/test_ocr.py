@@ -13,11 +13,8 @@ import os
 os.environ.setdefault("OPENROUTER_API_KEY", "test-key-for-testing")
 os.environ.setdefault("OPENROUTER_MODEL", "test-model")
 
-from app.server import (
-    validate_image_file,
-    extract_text_from_image,
-    MAX_FILE_SIZE,
-)
+from app.utils import validate_image_file, extract_text_from_image
+from app.config import MAX_FILE_SIZE
 
 
 # ============================================================================
@@ -105,7 +102,7 @@ class TestValidateImageFile:
 class TestExtractTextFromImage:
     """Tests for OCR text extraction."""
 
-    @patch("app.server.PILImage")
+    @patch("app.utils.PILImage")
     @patch("dspy.ChainOfThought")
     @patch("dspy.Image")
     def test_extracts_chinese_text(self, mock_image_class, mock_cot, mock_pil):
@@ -128,7 +125,7 @@ class TestExtractTextFromImage:
         mock_pil.open.assert_called_once()
         mock_image_class.assert_called_once()
 
-    @patch("app.server.PILImage")
+    @patch("app.utils.PILImage")
     @patch("dspy.ChainOfThought")
     @patch("dspy.Image")
     def test_returns_empty_string_for_no_text(self, mock_image_class, mock_cot, mock_pil):
@@ -149,7 +146,7 @@ class TestExtractTextFromImage:
 
         assert result == ""
 
-    @patch("app.server.PILImage")
+    @patch("app.utils.PILImage")
     @patch("dspy.ChainOfThought")
     @patch("dspy.Image")
     def test_handles_multiline_text(self, mock_image_class, mock_cot, mock_pil):
@@ -210,8 +207,8 @@ class TestTranslateImageEndpoint:
         assert response.status_code == 400
         assert "too large" in response.json()["detail"]
 
-    @patch("app.server.extract_text_from_image", new_callable=AsyncMock)
-    @patch("app.server.get_pipeline")
+    @patch("app.routes.translation.extract_text_from_image", new_callable=AsyncMock)
+    @patch("app.routes.translation.get_pipeline")
     def test_successful_image_translation(self, mock_pipeline, mock_ocr, client):
         """Successfully process image and return translations."""
         mock_ocr.return_value = "你好"
@@ -232,7 +229,7 @@ class TestTranslateImageEndpoint:
         assert data["paragraphs"][0]["translations"][0]["pinyin"] == "nǐ hǎo"
         assert data["paragraphs"][0]["translations"][0]["english"] == "hello"
 
-    @patch("app.server.extract_text_from_image")
+    @patch("app.routes.translation.extract_text_from_image")
     def test_no_text_found_in_image(self, mock_ocr, client):
         """Return error when no Chinese text found in image."""
         mock_ocr.return_value = ""
@@ -245,7 +242,7 @@ class TestTranslateImageEndpoint:
         assert response.status_code == 400
         assert "No Chinese text found" in response.json()["detail"]
 
-    @patch("app.server.extract_text_from_image")
+    @patch("app.routes.translation.extract_text_from_image")
     def test_whitespace_only_text(self, mock_ocr, client):
         """Return error when only whitespace found."""
         mock_ocr.return_value = "   \n\t  "
@@ -282,8 +279,8 @@ class TestTranslateImageHtmlEndpoint:
         assert response.status_code == 200  # HTML endpoint returns 200 with error fragment
         assert "Unsupported file type" in response.text
 
-    @patch("app.server.extract_text_from_image", new_callable=AsyncMock)
-    @patch("app.server.get_pipeline")
+    @patch("app.routes.translation.extract_text_from_image", new_callable=AsyncMock)
+    @patch("app.routes.translation.get_pipeline")
     def test_successful_image_translation_html(self, mock_pipeline, mock_ocr, client):
         """Successfully process image and return HTML fragment."""
         mock_ocr.return_value = "你好"
@@ -300,7 +297,7 @@ class TestTranslateImageHtmlEndpoint:
         # Should contain the segment in the response
         assert "你好" in response.text
 
-    @patch("app.server.extract_text_from_image")
+    @patch("app.routes.translation.extract_text_from_image")
     def test_no_text_found_html(self, mock_ocr, client):
         """Return error HTML when no Chinese text found."""
         mock_ocr.return_value = ""
