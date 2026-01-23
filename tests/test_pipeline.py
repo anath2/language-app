@@ -14,7 +14,8 @@ os.environ.setdefault("OPENROUTER_API_KEY", "test-key-for-testing")
 os.environ.setdefault("OPENROUTER_MODEL", "test-model")
 
 import dspy
-from app.server import Pipeline, Segmenter, Translator, should_skip_translation, split_into_paragraphs
+from app.pipeline import Pipeline, Segmenter, Translator
+from app.utils import should_skip_translation, split_into_paragraphs
 
 
 # ============================================================================

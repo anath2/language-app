@@ -21,8 +21,8 @@ from app.persistence import (
     record_review_grade,
     save_vocab_item,
     update_vocab_status,
-    STRUGGLE_OPACITY_BOOST,
 )
+from app.persistence.srs import STRUGGLE_OPACITY_BOOST
 
 
 @pytest.fixture
