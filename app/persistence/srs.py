@@ -173,6 +173,11 @@ def get_vocab_srs_info(headwords: list[str]) -> list[VocabSRSInfo]:
     Get SRS info for a list of headwords (for opacity rendering).
     Returns info for words that have been saved (exist in vocab_items).
     """
+    # Import here to avoid circular dependency
+    from app.utils import should_skip_segment
+
+    # Filter out punctuation-only headwords
+    headwords = [h for h in headwords if not should_skip_segment(h)]
     if not headwords:
         return []
 

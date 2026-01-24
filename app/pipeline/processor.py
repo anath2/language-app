@@ -11,7 +11,7 @@ from threading import Lock
 import dspy
 
 from app.pipeline.signatures import FullTranslator, Segmenter, Translator
-from app.utils import should_skip_translation
+from app.utils import should_skip_segment, to_pinyin
 
 # Thread-safe lazy initialization
 _pipeline_lock = Lock()
@@ -54,11 +54,13 @@ class Pipeline(dspy.Module):
         result = []
         for segment in segmentation.segments:
             # Skip translation for segments with only symbols, numbers, and punctuation
-            if should_skip_translation(segment):
+            if should_skip_segment(segment):
                 result.append((segment, "", ""))
             else:
+                # Pinyin is generated deterministically; LLM only provides English
+                pinyin = to_pinyin(segment)
                 translation = self.translate(segment=segment, context=text)
-                result.append((segment, translation.pinyin, translation.english))
+                result.append((segment, pinyin, translation.english))
         return result
 
     async def aforward(self, text: str) -> list[tuple[str, str, str]]:
@@ -68,9 +70,11 @@ class Pipeline(dspy.Module):
         result = []
         for segment in segmentation.segments:
             # Skip translation for segments with only symbols, numbers, and punctuation
-            if should_skip_translation(segment):
+            if should_skip_segment(segment):
                 result.append((segment, "", ""))
             else:
+                # Pinyin is generated deterministically; LLM only provides English
+                pinyin = to_pinyin(segment)
                 translation = await self.translate.acall(segment=segment, context=text)
-                result.append((segment, translation.pinyin, translation.english))
+                result.append((segment, pinyin, translation.english))
         return result
