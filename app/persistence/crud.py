@@ -91,6 +91,11 @@ def save_vocab_item(
     Upsert-like behavior based on (headword, pinyin, english).
     Returns vocab_item_id.
     """
+    # Import here to avoid circular dependency
+    from app.utils import should_skip_segment
+
+    if should_skip_segment(headword):
+        raise ValueError("Cannot save punctuation-only segment")
     if status not in {"unknown", "learning", "known"}:
         raise ValueError("Invalid status")
     now = _utc_now_iso()

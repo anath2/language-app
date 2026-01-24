@@ -11,7 +11,7 @@ from threading import Lock
 import dspy
 
 from app.pipeline.signatures import FullTranslator, Segmenter, Translator
-from app.utils import should_skip_translation
+from app.utils import should_skip_segment
 
 # Thread-safe lazy initialization
 _pipeline_lock = Lock()
@@ -54,7 +54,7 @@ class Pipeline(dspy.Module):
         result = []
         for segment in segmentation.segments:
             # Skip translation for segments with only symbols, numbers, and punctuation
-            if should_skip_translation(segment):
+            if should_skip_segment(segment):
                 result.append((segment, "", ""))
             else:
                 translation = self.translate(segment=segment, context=text)
@@ -68,7 +68,7 @@ class Pipeline(dspy.Module):
         result = []
         for segment in segmentation.segments:
             # Skip translation for segments with only symbols, numbers, and punctuation
-            if should_skip_translation(segment):
+            if should_skip_segment(segment):
                 result.append((segment, "", ""))
             else:
                 translation = await self.translate.acall(segment=segment, context=text)

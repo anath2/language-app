@@ -17,20 +17,41 @@ from app.config import ALLOWED_EXTENSIONS, CHINESE_PUNCTUATION, MAX_FILE_SIZE
 from app.pipeline.signatures import OCRExtractor
 
 
-def should_skip_translation(segment: str) -> bool:
+def _is_cjk_ideograph(char: str) -> bool:
+    """Check if a character is a CJK Unified Ideograph (Chinese character)."""
+    code_point = ord(char)
+    # CJK Unified Ideographs: U+4E00-U+9FFF
+    # CJK Unified Ideographs Extension A: U+3400-U+4DBF
+    # CJK Unified Ideographs Extension B-F and beyond
+    return (
+        0x4E00 <= code_point <= 0x9FFF  # Main CJK block
+        or 0x3400 <= code_point <= 0x4DBF  # Extension A
+        or 0x20000 <= code_point <= 0x2A6DF  # Extension B
+        or 0x2A700 <= code_point <= 0x2CEAF  # Extensions C-E
+        or 0x2CEB0 <= code_point <= 0x2EBEF  # Extensions F-I
+        or 0x30000 <= code_point <= 0x323AF  # Extensions G-H
+    )
+
+
+def should_skip_segment(segment: str) -> bool:
     """
-    Check if a segment should skip translation.
-    Returns True if segment contains only:
-    - Whitespace
-    - ASCII punctuation/symbols
-    - ASCII digits
-    - Chinese punctuation
-    - Full-width numbers and symbols
+    Check if a segment should be skipped (for translation and SRS).
+    Returns True if segment:
+    - Is empty or whitespace only
+    - Contains no CJK ideographs (Chinese characters)
+    - Contains only punctuation/symbols/numbers
     """
     if not segment or not segment.strip():
         return True
 
+    has_cjk = False
+
     for char in segment:
+        # Check if it's a CJK ideograph (Chinese character)
+        if _is_cjk_ideograph(char):
+            has_cjk = True
+            continue
+
         # Skip whitespace
         if char.isspace():
             continue
@@ -52,11 +73,11 @@ def should_skip_translation(segment: str) -> bool:
             # Sk: Modifier symbol, Sm: Math symbol, So: Other symbol
             continue
 
-        # If we found a character that's not punctuation/number/symbol, don't skip
-        return False
+        # Non-CJK alphabetic characters (e.g., English letters) - not skippable punctuation,
+        # but we only care if there's at least one CJK character in the segment
 
-    # All characters are punctuation/numbers/symbols
-    return True
+    # Skip if no CJK characters were found
+    return not has_cjk
 
 
 def split_into_paragraphs(text: str) -> list[dict[str, str]]:

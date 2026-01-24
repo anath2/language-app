@@ -679,15 +679,43 @@
                 }
             }
 
+            // Update all segment instances of a headword with new SRS styling
+            function updateAllSegmentInstances(headword, vocabItemId, opacity, isStruggling) {
+                document.querySelectorAll('.segment').forEach(seg => {
+                    if (seg.textContent === headword) {
+                        seg.classList.add('saved');
+                        seg.dataset.vocabItemId = vocabItemId;
+
+                        // Get or preserve segment color
+                        const originalColor = seg.style.getPropertyValue('--segment-color')
+                            || seg.style.background
+                            || getPastelColor(parseInt(seg.dataset.index) || 0);
+                        seg.style.background = '';
+                        seg.style.setProperty('--segment-color', originalColor);
+                        seg.style.setProperty('--segment-opacity', opacity);
+
+                        if (isStruggling) {
+                            seg.classList.add('struggling');
+                        } else {
+                            seg.classList.remove('struggling');
+                        }
+                    }
+                });
+            }
+
             // Fetch SRS info for all visible segments and apply opacity
             async function fetchAndApplySRSInfo() {
                 const segments = document.querySelectorAll('.segment:not(.segment-pending)');
-                const headwords = [...new Set([...segments].map(s => s.textContent))];
+                // Filter out punctuation segments (no pinyin and no english)
+                const headwords = [...new Set([...segments]
+                    .filter(s => s.dataset.pinyin || s.dataset.english)
+                    .map(s => s.textContent)
+                )];
                 if (headwords.length === 0) return;
 
                 try {
                     const params = new URLSearchParams();
-                    headwords.forEach(h => params.append('headwords', h));
+                    params.set('headwords', headwords.join(','));
                     const res = await fetch('/api/vocab/srs-info?' + params.toString());
                     if (!res.ok) return;
                     const data = await res.json();
@@ -725,6 +753,44 @@
                 } catch (e) {
                     console.error('Failed to fetch SRS info:', e);
                 }
+            }
+
+            // Apply pastel backgrounds and interactions after streaming completes
+            // Called after fetchAndApplySRSInfo() so savedVocabMap is populated
+            function applyPostStreamStyling() {
+                const segments = document.querySelectorAll('.segment:not(.segment-pending)');
+                segments.forEach(seg => {
+                    // Skip punctuation/non-Chinese (no translation data)
+                    if (!seg.dataset.pinyin && !seg.dataset.english) {
+                        seg.style.background = 'transparent';
+                        seg.style.cursor = 'default';
+                        return;
+                    }
+
+                    const headword = seg.textContent;
+                    const info = savedVocabMap.get(headword);
+
+                    if (info) {
+                        // Saved word - apply SRS styling
+                        const originalColor = getPastelColor(parseInt(seg.dataset.index) || 0);
+                        seg.classList.add('saved');
+                        seg.style.background = '';
+                        seg.style.setProperty('--segment-color', originalColor);
+                        seg.style.setProperty('--segment-opacity', info.opacity);
+                        seg.dataset.vocabItemId = info.vocabItemId;
+                        if (info.isStruggling) {
+                            seg.classList.add('struggling');
+                        }
+                    } else {
+                        // Unsaved word - apply pastel background
+                        seg.style.background = getPastelColor(parseInt(seg.dataset.index) || 0);
+                    }
+
+                    // Apply hover effects and interactions to all valid segments
+                    seg.style.cursor = 'pointer';
+                    seg.classList.add('transition-all', 'duration-150', 'hover:-translate-y-px', 'hover:shadow-sm');
+                    addSegmentInteraction(seg);
+                });
             }
 
             // Update due count badge
@@ -984,21 +1050,19 @@
                 progressCount.textContent = `${current} / ${total}`;
             }
 
-            // Update a segment when translation completes
+            // Update a segment when translation completes (during streaming)
+            // Keep segments transparent during streaming; styling applied after complete
             function updateSegment(result) {
                 const segment = document.querySelector(`.segment[data-index="${result.index}"]`);
                 if (segment) {
                     segment.textContent = result.segment;
                     segment.classList.remove('segment-pending', 'segment-translating');
-                    segment.style.background = getPastelColor(result.index);
                     segment.style.color = 'var(--text-primary)';
-                    segment.style.cursor = 'pointer';
-                    segment.classList.add('transition-all', 'duration-150', 'hover:-translate-y-px', 'hover:shadow-sm');
+                    segment.style.background = 'transparent';
+                    segment.style.cursor = 'default';
                     segment.dataset.pinyin = result.pinyin;
                     segment.dataset.english = result.english;
-
-                    // Add hover/click handlers
-                    addSegmentInteraction(segment);
+                    // Note: pastel background and interactions are applied after streaming completes
                 }
 
                 // Mark next segment as translating
@@ -1034,28 +1098,36 @@
                     const saveBtn = document.getElementById('save-word-btn');
                     const markKnownBtn = document.getElementById('mark-known-btn');
                     const resumeLearningBtn = document.getElementById('resume-learning-btn');
-                    const info = savedVocabMap.get(seg.textContent);
 
-                    if (!info) {
-                        // Unsaved word - show "Save to Learn"
-                        saveBtn.classList.remove('hidden');
-                        markKnownBtn.classList.add('hidden');
-                        resumeLearningBtn.classList.add('hidden');
-                    } else if (info.status === 'learning') {
-                        // Learning word - show "Mark as Known"
-                        saveBtn.classList.add('hidden');
-                        markKnownBtn.classList.remove('hidden');
-                        resumeLearningBtn.classList.add('hidden');
-                    } else if (info.status === 'known') {
-                        // Known word - show "Resume Learning"
+                    // If segment has no translation (punctuation), hide all buttons
+                    if (!seg.dataset.pinyin && !seg.dataset.english) {
                         saveBtn.classList.add('hidden');
                         markKnownBtn.classList.add('hidden');
-                        resumeLearningBtn.classList.remove('hidden');
+                        resumeLearningBtn.classList.add('hidden');
                     } else {
-                        // Unknown status (default) - show "Save to Learn"
-                        saveBtn.classList.remove('hidden');
-                        markKnownBtn.classList.add('hidden');
-                        resumeLearningBtn.classList.add('hidden');
+                        const info = savedVocabMap.get(seg.textContent);
+
+                        if (!info) {
+                            // Unsaved word - show "Save to Learn"
+                            saveBtn.classList.remove('hidden');
+                            markKnownBtn.classList.add('hidden');
+                            resumeLearningBtn.classList.add('hidden');
+                        } else if (info.status === 'learning') {
+                            // Learning word - show "Mark as Known"
+                            saveBtn.classList.add('hidden');
+                            markKnownBtn.classList.remove('hidden');
+                            resumeLearningBtn.classList.add('hidden');
+                        } else if (info.status === 'known') {
+                            // Known word - show "Resume Learning"
+                            saveBtn.classList.add('hidden');
+                            markKnownBtn.classList.add('hidden');
+                            resumeLearningBtn.classList.remove('hidden');
+                        } else {
+                            // Unknown status (default) - show "Save to Learn"
+                            saveBtn.classList.remove('hidden');
+                            markKnownBtn.classList.add('hidden');
+                            resumeLearningBtn.classList.add('hidden');
+                        }
                     }
 
                     const segRect = seg.getBoundingClientRect();
@@ -1257,8 +1329,9 @@
                                         }
                                         // Persist the source text after successful completion.
                                         try { await ensureSavedText(); } catch (e) {}
-                                        // Fetch SRS info for saved words and apply opacity
+                                        // Fetch SRS info for saved words, then apply pastel + interactions
                                         await fetchAndApplySRSInfo();
+                                        applyPostStreamStyling();
                                         break;
 
                                     case 'error':
@@ -1296,18 +1369,17 @@
                             if (statusEl) statusEl.textContent = 'Saved';
                             logEvent('save_vocab', { headword: lastTooltipData.headword });
 
-                            // Mark the active segment as saved with full opacity
-                            if (activeSegment && result.vocab_item_id) {
-                                activeSegment.classList.add('saved');
-                                activeSegment.style.setProperty('--segment-color', activeSegment.style.background || getPastelColor(parseInt(activeSegment.dataset.index) || 0));
-                                activeSegment.style.setProperty('--segment-opacity', 1.0);
-                                activeSegment.dataset.vocabItemId = result.vocab_item_id;
+                            // Update local map and ALL segment instances
+                            if (result.vocab_item_id) {
                                 savedVocabMap.set(lastTooltipData.headword, {
                                     vocabItemId: result.vocab_item_id,
                                     opacity: 1.0,
                                     isStruggling: false,
                                     status: 'learning'
                                 });
+
+                                // Update ALL instances of this word
+                                updateAllSegmentInstances(lastTooltipData.headword, result.vocab_item_id, 1.0, false);
 
                                 // Update button visibility
                                 document.getElementById('save-word-btn').classList.add('hidden');
@@ -1335,18 +1407,18 @@
                                 status: 'known'
                             });
                             if (statusEl) statusEl.textContent = 'Marked known';
-                            logEvent('mark_known', { headword: activeSegment.textContent });
+                            const headword = activeSegment.textContent;
+                            logEvent('mark_known', { headword: headword });
 
                             // Update local state - known words have 0 opacity
-                            const headword = activeSegment.textContent;
                             if (savedVocabMap.has(headword)) {
                                 const info = savedVocabMap.get(headword);
                                 info.status = 'known';
                                 info.opacity = 0;
                             }
 
-                            // Remove highlight from segment (0 opacity)
-                            activeSegment.style.setProperty('--segment-opacity', '0');
+                            // Update ALL instances of this word (0 opacity for known)
+                            updateAllSegmentInstances(headword, vocabItemId, 0, false);
 
                             // Update button visibility
                             document.getElementById('mark-known-btn').classList.add('hidden');
@@ -1373,18 +1445,18 @@
                                 status: 'learning'
                             });
                             if (statusEl) statusEl.textContent = 'Resumed';
-                            logEvent('resume_learning', { headword: activeSegment.textContent });
+                            const headword = activeSegment.textContent;
+                            logEvent('resume_learning', { headword: headword });
 
                             // Update local state - restore opacity
-                            const headword = activeSegment.textContent;
                             if (savedVocabMap.has(headword)) {
                                 const info = savedVocabMap.get(headword);
                                 info.status = 'learning';
                                 info.opacity = 1.0; // Full opacity when resuming
                             }
 
-                            // Restore highlight on segment
-                            activeSegment.style.setProperty('--segment-opacity', '1.0');
+                            // Update ALL instances of this word (full opacity for learning)
+                            updateAllSegmentInstances(headword, vocabItemId, 1.0, false);
 
                             // Update button visibility
                             document.getElementById('resume-learning-btn').classList.add('hidden');

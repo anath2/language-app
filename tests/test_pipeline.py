@@ -15,7 +15,7 @@ os.environ.setdefault("OPENROUTER_MODEL", "test-model")
 
 import dspy
 from app.pipeline import Pipeline, Segmenter, Translator
-from app.utils import should_skip_translation, split_into_paragraphs
+from app.utils import should_skip_segment, split_into_paragraphs
 
 
 # ============================================================================
@@ -82,59 +82,63 @@ def mock_translator(mock_prediction):
 # TEST CASES
 # ============================================================================
 
-def test_should_skip_translation():
-    """Test the should_skip_translation helper function."""
+def test_should_skip_segment():
+    """Test the should_skip_segment helper function."""
     # Should skip: empty string and whitespace
-    assert should_skip_translation("") is True
-    assert should_skip_translation("   ") is True
-    assert should_skip_translation("\n\t") is True
+    assert should_skip_segment("") is True
+    assert should_skip_segment("   ") is True
+    assert should_skip_segment("\n\t") is True
 
     # Should skip: ASCII punctuation and symbols
-    assert should_skip_translation(",") is True
-    assert should_skip_translation("!") is True
-    assert should_skip_translation("?") is True
-    assert should_skip_translation(".") is True
-    assert should_skip_translation("...") is True
-    assert should_skip_translation("@#$%") is True
+    assert should_skip_segment(",") is True
+    assert should_skip_segment("!") is True
+    assert should_skip_segment("?") is True
+    assert should_skip_segment(".") is True
+    assert should_skip_segment("...") is True
+    assert should_skip_segment("@#$%") is True
 
     # Should skip: ASCII numbers
-    assert should_skip_translation("123") is True
-    assert should_skip_translation("0") is True
-    assert should_skip_translation("3.14") is True
+    assert should_skip_segment("123") is True
+    assert should_skip_segment("0") is True
+    assert should_skip_segment("3.14") is True
 
     # Should skip: Chinese punctuation
-    assert should_skip_translation("，") is True  # Chinese comma
-    assert should_skip_translation("。") is True  # Chinese period
-    assert should_skip_translation("！") is True  # Chinese exclamation
-    assert should_skip_translation("？") is True  # Chinese question mark
-    assert should_skip_translation("、") is True  # Chinese enumeration comma
-    assert should_skip_translation("；") is True  # Chinese semicolon
-    assert should_skip_translation("：") is True  # Chinese colon
-    assert should_skip_translation('"') is True  # Chinese quote
-    assert should_skip_translation("'") is True  # Chinese quote
-    assert should_skip_translation("（") is True  # Chinese left paren
-    assert should_skip_translation("）") is True  # Chinese right paren
-    assert should_skip_translation("【") is True  # Chinese bracket
-    assert should_skip_translation("】") is True  # Chinese bracket
+    assert should_skip_segment("，") is True  # Chinese comma
+    assert should_skip_segment("。") is True  # Chinese period
+    assert should_skip_segment("！") is True  # Chinese exclamation
+    assert should_skip_segment("？") is True  # Chinese question mark
+    assert should_skip_segment("、") is True  # Chinese enumeration comma
+    assert should_skip_segment("；") is True  # Chinese semicolon
+    assert should_skip_segment("：") is True  # Chinese colon
+    assert should_skip_segment('"') is True  # Chinese quote
+    assert should_skip_segment("'") is True  # Chinese quote
+    assert should_skip_segment("（") is True  # Chinese left paren
+    assert should_skip_segment("）") is True  # Chinese right paren
+    assert should_skip_segment("【") is True  # Chinese bracket
+    assert should_skip_segment("】") is True  # Chinese bracket
 
     # Should skip: mixed punctuation and numbers
-    assert should_skip_translation("123,456") is True
-    assert should_skip_translation("...!!!") is True
-    assert should_skip_translation("，。、") is True
+    assert should_skip_segment("123,456") is True
+    assert should_skip_segment("...!!!") is True
+    assert should_skip_segment("，。、") is True
 
     # Should NOT skip: Chinese characters
-    assert should_skip_translation("你好") is False
-    assert should_skip_translation("世界") is False
-    assert should_skip_translation("我") is False
+    assert should_skip_segment("你好") is False
+    assert should_skip_segment("世界") is False
+    assert should_skip_segment("我") is False
 
     # Should NOT skip: mixed Chinese and punctuation (contains Chinese)
-    assert should_skip_translation("你好，") is False
-    assert should_skip_translation("，你好") is False
-    assert should_skip_translation("123你好") is False
+    assert should_skip_segment("你好，") is False
+    assert should_skip_segment("，你好") is False
+    assert should_skip_segment("123你好") is False
 
-    # Should NOT skip: ASCII letters
-    assert should_skip_translation("hello") is False
-    assert should_skip_translation("a") is False
+    # Should skip: ASCII letters (no CJK characters)
+    assert should_skip_segment("hello") is True
+    assert should_skip_segment("a") is True
+
+    # Should NOT skip: mixed Chinese and English (contains CJK)
+    assert should_skip_segment("hello你好") is False
+    assert should_skip_segment("a中") is False
 
 
 def test_split_into_paragraphs():
