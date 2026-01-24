@@ -16,13 +16,10 @@ class Segmenter(dspy.Signature):
 
 
 class Translator(dspy.Signature):
-    """Translate Chinese words to Pinyin and English"""
+    """Translate Chinese words to English"""
 
     segment: str = dspy.InputField(description="A segment of chinese text to translate")
     context: str = dspy.InputField(description="Context of the translation task")
-    pinyin: str = dspy.OutputField(
-        description="Pinyin transliteration of the segment"
-    )
     english: str = dspy.OutputField(
         description="English translation of the segment"
     )

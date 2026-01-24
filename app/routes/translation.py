@@ -27,6 +27,7 @@ from app.utils import (
     extract_text_from_image,
     should_skip_segment,
     split_into_paragraphs,
+    to_pinyin,
     validate_image_file,
 )
 
@@ -150,12 +151,14 @@ async def translate_stream(text: str = Form(...)):
                             "paragraph_index": para_idx,
                         }
                     else:
+                        # Pinyin is generated deterministically; LLM only provides English
+                        pinyin = to_pinyin(segment)
                         # Use the original paragraph content as context
                         context = paragraphs[para_idx]['content']
                         translation = await pipe.translate.acall(segment=segment, context=context)
                         result = {
                             "segment": segment,
-                            "pinyin": translation.pinyin,
+                            "pinyin": pinyin,
                             "english": translation.english,
                             "index": global_index,
                             "paragraph_index": para_idx,

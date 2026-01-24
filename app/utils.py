@@ -3,6 +3,7 @@ Utility functions for text and image processing.
 
 This module provides:
 - Text processing (paragraph splitting, translation skip logic)
+- Deterministic pinyin generation
 - Image validation and OCR extraction
 """
 
@@ -12,6 +13,7 @@ from pathlib import Path
 
 import dspy
 from PIL import Image as PILImage
+from pypinyin import Style, pinyin
 
 from app.config import ALLOWED_EXTENSIONS, CHINESE_PUNCTUATION, MAX_FILE_SIZE
 from app.pipeline.signatures import OCRExtractor
@@ -78,6 +80,29 @@ def should_skip_segment(segment: str) -> bool:
 
     # Skip if no CJK characters were found
     return not has_cjk
+
+
+def to_pinyin(segment: str) -> str:
+    """
+    Convert a Chinese segment to pinyin with tone marks.
+
+    Uses pypinyin for deterministic conversion. Syllables are joined with spaces
+    to match the expected API output format (e.g., "nǐ hǎo").
+
+    Non-hanzi characters are preserved as-is via the errors handler.
+    """
+    if should_skip_segment(segment):
+        return ""
+
+    # Get pinyin for each character/word
+    # Each element in the result is a list of possible readings; we take the first
+    result = pinyin(segment, style=Style.TONE, heteronym=False, errors=lambda x: x)
+
+    # Flatten: pinyin() returns list of lists, take first reading from each
+    syllables = [readings[0] for readings in result]
+
+    # Join with spaces and normalize whitespace
+    return " ".join(syllables).strip()
 
 
 def split_into_paragraphs(text: str) -> list[dict[str, str]]:

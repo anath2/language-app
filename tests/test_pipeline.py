@@ -15,7 +15,7 @@ os.environ.setdefault("OPENROUTER_MODEL", "test-model")
 
 import dspy
 from app.pipeline import Pipeline, Segmenter, Translator
-from app.utils import should_skip_segment, split_into_paragraphs
+from app.utils import should_skip_segment, split_into_paragraphs, to_pinyin
 
 
 # ============================================================================
@@ -54,24 +54,28 @@ def mock_segmenter(mock_prediction):
 
 @pytest.fixture
 def mock_translator(mock_prediction):
-    """Mock translator that returns pinyin and english for a single segment."""
-    # Mapping of Chinese segments to translations
+    """Mock translator that returns english for a single segment.
+
+    Note: Pinyin is now generated deterministically by to_pinyin(),
+    so the translator only provides English translations.
+    """
+    # Mapping of Chinese segments to English translations
     translation_map = {
-        "你好": ("nǐ hǎo", "hello"),
-        "世界": ("shì jiè", "world"),
-        "我": ("wǒ", "I"),
-        "喜欢": ("xǐ huān", "like"),
-        "编程": ("biān chéng", "programming"),
-        "测试": ("cè shì", "test"),
-        "默认": ("mò rèn", "default"),
-        "段落": ("duàn luò", "paragraph"),
-        "你": ("nǐ", "you"),
-        "好": ("hǎo", "good"),
+        "你好": "hello",
+        "世界": "world",
+        "我": "I",
+        "喜欢": "like",
+        "编程": "programming",
+        "测试": "test",
+        "默认": "default",
+        "段落": "paragraph",
+        "你": "you",
+        "好": "good",
     }
 
     def _translator(segment: str, context: str):
-        pinyin, english = translation_map.get(segment, ("unknown", "unknown"))
-        return mock_prediction(pinyin=pinyin, english=english)
+        english = translation_map.get(segment, "unknown")
+        return mock_prediction(english=english)
 
     mock = Mock()
     mock.side_effect = _translator
@@ -139,6 +143,30 @@ def test_should_skip_segment():
     # Should NOT skip: mixed Chinese and English (contains CJK)
     assert should_skip_segment("hello你好") is False
     assert should_skip_segment("a中") is False
+
+
+def test_to_pinyin():
+    """Test the to_pinyin helper function for deterministic pinyin generation."""
+    # Basic Chinese words - should return pinyin with tone marks
+    assert to_pinyin("你好") == "nǐ hǎo"
+    assert to_pinyin("世界") == "shì jiè"
+    assert to_pinyin("我") == "wǒ"
+
+    # Single characters
+    assert to_pinyin("你") == "nǐ"
+    assert to_pinyin("好") == "hǎo"
+
+    # Should return empty string for skippable segments
+    assert to_pinyin("") == ""
+    assert to_pinyin("   ") == ""
+    assert to_pinyin("，") == ""
+    assert to_pinyin("。") == ""
+    assert to_pinyin("123") == ""
+    assert to_pinyin("hello") == ""
+
+    # Multi-character words
+    assert to_pinyin("喜欢") == "xǐ huān"
+    assert to_pinyin("编程") == "biān chéng"
 
 
 def test_split_into_paragraphs():
@@ -240,7 +268,7 @@ def test_pipeline_forward_empty_input(mock_prediction):
     """Test pipeline handles empty input gracefully."""
     with patch('dspy.ChainOfThought') as mock_cot, patch('dspy.Predict') as mock_predict:
         empty_segmenter = Mock(return_value=mock_prediction(segments=[]))
-        empty_translator = Mock(return_value=mock_prediction(pinyin="", english=""))
+        empty_translator = Mock(return_value=mock_prediction(english=""))
 
         mock_cot.return_value = empty_segmenter
         mock_predict.return_value = empty_translator
@@ -259,12 +287,12 @@ def test_pipeline_uses_actual_prediction_objects(mock_prediction):
 
         mock_segmenter = Mock(return_value=segment_pred)
 
-        # Mock translator to return different values for each segment
+        # Mock translator to return English only (pinyin is deterministic)
         def translator_side_effect(segment, context):
             if segment == "你":
-                return mock_prediction(pinyin="nǐ", english="you")
+                return mock_prediction(english="you")
             else:
-                return mock_prediction(pinyin="hǎo", english="good")
+                return mock_prediction(english="good")
 
         mock_translator = Mock(side_effect=translator_side_effect)
 
@@ -278,6 +306,7 @@ def test_pipeline_uses_actual_prediction_objects(mock_prediction):
         assert mock_translator.call_count == 2
 
         # Result is correct list of tuples
+        # Pinyin comes from pypinyin deterministically
         assert len(result) == 2
         assert result[0] == ("你", "nǐ", "you")
         assert result[1] == ("好", "hǎo", "good")
@@ -320,13 +349,14 @@ def test_pipeline_skips_punctuation_and_symbols(mock_prediction):
         mock_seg = Mock(side_effect=custom_segmenter)
 
         # Mock translator - should only be called for actual Chinese words
+        # Pinyin is now deterministic, so only return English
         def custom_translator(segment, context):
             if segment == "你好":
-                return mock_prediction(pinyin="nǐ hǎo", english="hello")
+                return mock_prediction(english="hello")
             elif segment == "世界":
-                return mock_prediction(pinyin="shì jiè", english="world")
+                return mock_prediction(english="world")
             else:
-                return mock_prediction(pinyin="", english="")
+                return mock_prediction(english="")
 
         mock_trans = Mock(side_effect=custom_translator)
 
@@ -340,6 +370,7 @@ def test_pipeline_skips_punctuation_and_symbols(mock_prediction):
         assert len(result) == 5
 
         # Chinese words should have translations
+        # Pinyin comes from pypinyin deterministically
         assert result[0] == ("你好", "nǐ hǎo", "hello")
         assert result[2] == ("世界", "shì jiè", "world")
 
