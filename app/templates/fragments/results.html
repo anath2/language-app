@@ -5,7 +5,8 @@
     <div class="segments-container">
         {% set segment_index = namespace(value=0) %}
         {% for paragraph in paragraphs %}
-        <div class="paragraph flex flex-wrap gap-1.5" style="margin-bottom: {{ paragraph.separator.count('\n') * 0.5 }}rem;">
+        {% set margin_bottom = paragraph.separator.count('\n') * 0.5 %}
+        <div class="paragraph flex flex-wrap gap-1.5" data-margin-bottom="{{ margin_bottom }}">
             {% for item in paragraph.translations %}
             <span class="segment inline-block px-2.5 py-1.5 text-xl rounded-md cursor-pointer transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md border-2 border-transparent"
                   style="font-family: 'Noto Serif SC', serif;"
@@ -26,15 +27,24 @@
     </div>
 </div>
 
+<script id="paragraphs-data" type="application/json">{{ paragraphs | tojson }}</script>
 <script>
 (function() {
+    // Apply margin-bottom styles from data attributes
+    document.querySelectorAll('.paragraph[data-margin-bottom]').forEach(el => {
+        const marginBottom = el.dataset.marginBottom;
+        if (marginBottom) {
+            el.style.marginBottom = marginBottom + 'rem';
+        }
+    });
+
     const tooltip = document.getElementById('word-tooltip');
     const tooltipPinyin = document.getElementById('tooltip-pinyin');
     const tooltipEnglish = document.getElementById('tooltip-english');
 
     // Flatten paragraphs into a single results array for the table
-    const paragraphs = {{ paragraphs | tojson }};
-    const results = paragraphs.flatMap(p => p.translations);
+    const paragraphsData = JSON.parse(document.getElementById('paragraphs-data').textContent);
+    const results = paragraphsData.flatMap(p => p.translations);
 
     // Update translation table on the left
     const tableContainer = document.getElementById('translation-table');
