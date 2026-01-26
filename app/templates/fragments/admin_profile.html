@@ -1,0 +1,62 @@
+<div class="card p-6">
+    <h2 class="font-semibold text-lg mb-4" style="color: var(--text-primary);">Profile</h2>
+
+    {% if success_message %}
+    <div class="success-message mb-4">
+        {{ success_message }}
+    </div>
+    {% endif %}
+
+    <form hx-post="/admin/profile"
+          hx-target="#profile-section"
+          hx-swap="innerHTML"
+          class="space-y-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm font-medium mb-1" style="color: var(--text-primary);">Name</label>
+                <input type="text"
+                       name="name"
+                       value="{{ profile.name if profile else '' }}"
+                       placeholder="Your name"
+                       class="input-field w-full px-3 py-2 text-sm">
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-1" style="color: var(--text-primary);">Email</label>
+                <input type="email"
+                       name="email"
+                       value="{{ profile.email if profile else '' }}"
+                       placeholder="your@email.com"
+                       class="input-field w-full px-3 py-2 text-sm">
+            </div>
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium mb-1" style="color: var(--text-primary);">Learning Language</label>
+            <select name="language" class="input-field w-full px-3 py-2 text-sm">
+                <option value="zh-CN" {% if profile and profile.language == 'zh-CN' %}selected{% endif %}>Chinese (Simplified)</option>
+                <option value="zh-TW" {% if profile and profile.language == 'zh-TW' %}selected{% endif %}>Chinese (Traditional)</option>
+            </select>
+        </div>
+
+        <button type="submit" class="btn-primary px-4 py-2 text-sm">Save Profile</button>
+    </form>
+
+    <!-- Vocabulary Stats -->
+    <div class="mt-6 pt-6" style="border-top: 1px solid var(--border);">
+        <h3 class="text-sm font-semibold mb-3" style="color: var(--text-secondary);">Vocabulary Stats</h3>
+        <div class="grid grid-cols-3 gap-4">
+            <div class="stat-card">
+                <div class="stat-value">{{ known_count }}</div>
+                <div class="stat-label">Known</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ learning_count }}</div>
+                <div class="stat-label">Learning</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ total_count }}</div>
+                <div class="stat-label">Total</div>
+            </div>
+        </div>
+    </div>
+</div>

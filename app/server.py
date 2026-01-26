@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.auth import AuthMiddleware
 from app.persistence import init_db
-from app.routes import api_router, auth_router, translation_router
+from app.routes import admin_router, api_router, auth_router, translation_router
 
 
 @asynccontextmanager
@@ -49,6 +49,7 @@ app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 app.include_router(auth_router)
 app.include_router(translation_router)
 app.include_router(api_router)
+app.include_router(admin_router)
 
 
 @app.get("/health")

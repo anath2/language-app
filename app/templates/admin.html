@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Language App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #7C9EB2;
+            --primary-light: #A8C5D8;
+            --primary-dark: #5A7A8A;
+            --secondary: #E8B4BC;
+            --background: #FAFAFA;
+            --background-alt: #F5F5F5;
+            --surface: #FFFFFF;
+            --text-primary: #2D3436;
+            --text-secondary: #636E72;
+            --text-muted: #B2BEC3;
+            --border: #E0E0E0;
+            --success: #A8E6CF;
+            --font-body: "Inter", "SF Pro Display", system-ui, sans-serif;
+        }
+
+        body {
+            font-family: var(--font-body);
+            background: var(--background);
+        }
+
+        .card {
+            background: var(--surface);
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+            border: 1px solid var(--border);
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+            border-radius: 6px;
+            font-weight: 500;
+            transition: all 0.15s ease;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-weight: 500;
+            transition: all 0.15s ease;
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        .input-field {
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            transition: all 0.2s ease;
+        }
+
+        .input-field:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(124, 158, 178, 0.15);
+        }
+
+        .nav-link {
+            color: var(--text-secondary);
+            transition: color 0.15s ease;
+        }
+
+        .nav-link:hover {
+            color: var(--primary);
+        }
+
+        .nav-link.active {
+            color: var(--primary);
+            font-weight: 500;
+        }
+
+        .stat-card {
+            background: var(--background-alt);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .success-message {
+            background: var(--success);
+            color: var(--text-primary);
+            padding: 0.75rem 1rem;
+            border-radius: 6px;
+            font-size: 0.875rem;
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-4xl">
+        <!-- Navigation -->
+        <nav class="flex items-center justify-between mb-8">
+            <div class="flex items-center gap-6">
+                <a href="/" class="font-semibold text-lg" style="color: var(--text-primary);">Language App</a>
+                <div class="flex items-center gap-4">
+                    <a href="/" class="nav-link text-sm">Home</a>
+                    <a href="/admin" class="nav-link active text-sm">Admin</a>
+                </div>
+            </div>
+            <form action="/logout" method="POST">
+                <button type="submit" class="btn-secondary px-3 py-1.5 text-sm">Logout</button>
+            </form>
+        </nav>
+
+        <header class="mb-8">
+            <h1 class="font-semibold text-2xl" style="color: var(--text-primary);">Admin</h1>
+            <p class="text-sm mt-1" style="color: var(--text-secondary);">Manage your profile and learning progress</p>
+        </header>
+
+        <div class="space-y-6">
+            <!-- Profile Section -->
+            <div id="profile-section">
+                {% include 'fragments/admin_profile.html' %}
+            </div>
+
+            <!-- Progress Sync Section -->
+            <div class="card p-6">
+                <h2 class="font-semibold text-lg mb-4" style="color: var(--text-primary);">Progress Sync</h2>
+                <p class="text-sm mb-4" style="color: var(--text-secondary);">
+                    Download or upload your learning progress (SRS schedule + vocabulary status).
+                    This only affects vocabulary, SRS state, and lookup history — not texts or segments.
+                </p>
+
+                <div class="flex items-center gap-4">
+                    <a href="/admin/progress/export" class="btn-secondary px-4 py-2 text-sm inline-flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                        </svg>
+                        Download Progress
+                    </a>
+
+                    <button type="button"
+                            onclick="document.getElementById('upload-modal').classList.remove('hidden')"
+                            class="btn-secondary px-4 py-2 text-sm inline-flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                        </svg>
+                        Upload Progress
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upload Modal -->
+    <div id="upload-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background: rgba(0,0,0,0.4);">
+        <div class="card p-6 max-w-md w-full mx-4">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="font-semibold text-lg" style="color: var(--text-primary);">Upload Progress</h3>
+                <button type="button"
+                        onclick="document.getElementById('upload-modal').classList.add('hidden')"
+                        class="text-xl" style="color: var(--text-muted);">&times;</button>
+            </div>
+
+            <div class="p-3 rounded-md mb-4" style="background: #FFF3CD; border-left: 3px solid #FFC107;">
+                <p class="text-sm" style="color: #856404;">
+                    <strong>Warning:</strong> This will overwrite your current learning progress on this server.
+                </p>
+            </div>
+
+            <form id="upload-form"
+                  hx-post="/admin/progress/import"
+                  hx-encoding="multipart/form-data"
+                  hx-target="#upload-result"
+                  hx-swap="innerHTML">
+                <div class="mb-4">
+                    <label class="block text-sm font-medium mb-2" style="color: var(--text-primary);">
+                        Select progress file (.json)
+                    </label>
+                    <input type="file"
+                           name="file"
+                           accept=".json"
+                           required
+                           class="input-field w-full px-3 py-2 text-sm">
+                </div>
+
+                <div class="mb-4">
+                    <label class="flex items-center gap-2">
+                        <input type="checkbox" name="confirm" required class="rounded">
+                        <span class="text-sm" style="color: var(--text-secondary);">
+                            I understand this will overwrite server progress
+                        </span>
+                    </label>
+                </div>
+
+                <div id="upload-result" class="mb-4"></div>
+
+                <div class="flex items-center gap-3">
+                    <button type="submit" class="btn-primary px-4 py-2 text-sm">Upload</button>
+                    <button type="button"
+                            onclick="document.getElementById('upload-modal').classList.add('hidden')"
+                            class="btn-secondary px-4 py-2 text-sm">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

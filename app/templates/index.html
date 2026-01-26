@@ -463,10 +463,13 @@
                     Enter Chinese text to get word segmentation, pinyin, and English translation
                 </p>
             </div>
-            <button id="review-btn" class="btn-secondary px-3 py-1.5 flex items-center" onclick="openReviewPanel()">
-                Review
-                <span id="review-badge" class="review-badge hidden">0</span>
-            </button>
+            <div class="flex items-center gap-3">
+                <a href="/admin" class="btn-secondary px-3 py-1.5 text-sm">Admin</a>
+                <button id="review-btn" class="btn-secondary px-3 py-1.5 flex items-center" onclick="openReviewPanel()">
+                    Review
+                    <span id="review-badge" class="review-badge hidden">0</span>
+                </button>
+            </div>
         </header>
 
         <!-- Review Panel Overlay -->

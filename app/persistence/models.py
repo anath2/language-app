@@ -54,3 +54,25 @@ class ReviewCard:
     pinyin: str
     english: str
     snippets: list[str]
+
+
+@dataclass(frozen=True)
+class UserProfile:
+    """User profile data."""
+
+    name: str
+    email: str
+    language: str
+    created_at: str
+    updated_at: str
+
+@dataclass
+class ProgressBundle:
+    """Container for progress data."""
+
+    schema_version: int
+    exported_at: str
+    vocab_items: list[dict[str, Any]]
+    srs_state: list[dict[str, Any]]
+    vocab_lookups: list[dict[str, Any]]
+
