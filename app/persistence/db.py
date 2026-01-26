@@ -52,7 +52,43 @@ def db_conn() -> Iterator[sqlite3.Connection]:
         conn.close()
 
 
+def _get_migrations_dir() -> Path:
+    """Returns the path to the migrations folder."""
+    return Path(__file__).resolve().parent / "migrations"
+
+
+def _load_migrations() -> list[tuple[int, str]]:
+    """
+    Load all .sql migration files from the migrations folder.
+    Returns a sorted list of (version, sql_content) tuples.
+    
+    Files must be named: NNN_description.sql (e.g., 001_init.sql)
+    """
+    migrations_dir = _get_migrations_dir()
+    if not migrations_dir.exists():
+        return []
+    
+    migrations: list[tuple[int, str]] = []
+    for sql_file in sorted(migrations_dir.glob("*.sql")):
+        # Extract version number from filename (e.g., "001_init.sql" -> 1)
+        filename = sql_file.name
+        version_str = filename.split("_")[0]
+        try:
+            version = int(version_str)
+        except ValueError:
+            continue  # Skip files that don't start with a number
+        
+        sql_content = sql_file.read_text(encoding="utf-8")
+        migrations.append((version, sql_content))
+    
+    return sorted(migrations, key=lambda x: x[0])
+
+
 def init_db() -> None:
+    """
+    Initialize the database by running any pending migrations.
+    Migrations are loaded from app/persistence/migrations/*.sql files.
+    """
     with db_conn() as conn:
         conn.execute(
             "CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY)"
@@ -61,104 +97,9 @@ def init_db() -> None:
             "SELECT COALESCE(MAX(version), 0) AS v FROM schema_migrations"
         ).fetchone()["v"]
 
-        migrations: list[tuple[int, str]] = [
-            (1, _migration_001()),
-            (2, _migration_002()),
-        ]
+        migrations = _load_migrations()
 
         for version, sql in migrations:
             if version > int(current):
                 conn.executescript(sql)
                 conn.execute("INSERT INTO schema_migrations(version) VALUES (?)", (version,))
-
-
-def _migration_001() -> str:
-    # Keep it as executescript-friendly SQL.
-    return """
-CREATE TABLE IF NOT EXISTS texts (
-  id TEXT PRIMARY KEY,
-  created_at TEXT NOT NULL,
-  source_type TEXT NOT NULL, -- 'text' | 'ocr' | future
-  raw_text TEXT NOT NULL,
-  normalized_text TEXT NOT NULL,
-  metadata_json TEXT NOT NULL DEFAULT '{}'
-);
-
-CREATE TABLE IF NOT EXISTS segments (
-  id TEXT PRIMARY KEY,
-  text_id TEXT NOT NULL,
-  paragraph_idx INTEGER NOT NULL,
-  seg_idx INTEGER NOT NULL,
-  segment_text TEXT NOT NULL,
-  pinyin TEXT NOT NULL DEFAULT '',
-  english TEXT NOT NULL DEFAULT '',
-  provider_meta_json TEXT NOT NULL DEFAULT '{}',
-  created_at TEXT NOT NULL,
-  FOREIGN KEY(text_id) REFERENCES texts(id) ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS idx_segments_text_id ON segments(text_id);
-
-CREATE TABLE IF NOT EXISTS events (
-  id TEXT PRIMARY KEY,
-  ts TEXT NOT NULL,
-  text_id TEXT,
-  segment_id TEXT,
-  event_type TEXT NOT NULL,
-  payload_json TEXT NOT NULL DEFAULT '{}',
-  FOREIGN KEY(text_id) REFERENCES texts(id) ON DELETE SET NULL,
-  FOREIGN KEY(segment_id) REFERENCES segments(id) ON DELETE SET NULL
-);
-CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts);
-CREATE INDEX IF NOT EXISTS idx_events_text_id ON events(text_id);
-
-CREATE TABLE IF NOT EXISTS vocab_items (
-  id TEXT PRIMARY KEY,
-  headword TEXT NOT NULL,
-  pinyin TEXT NOT NULL DEFAULT '',
-  english TEXT NOT NULL DEFAULT '',
-  status TEXT NOT NULL DEFAULT 'unknown', -- unknown|learning|known
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-CREATE UNIQUE INDEX IF NOT EXISTS ux_vocab_items_key
-  ON vocab_items(headword, pinyin, english);
-
-CREATE TABLE IF NOT EXISTS vocab_occurrences (
-  id TEXT PRIMARY KEY,
-  vocab_item_id TEXT NOT NULL,
-  text_id TEXT,
-  segment_id TEXT,
-  snippet TEXT NOT NULL DEFAULT '',
-  created_at TEXT NOT NULL,
-  FOREIGN KEY(vocab_item_id) REFERENCES vocab_items(id) ON DELETE CASCADE,
-  FOREIGN KEY(text_id) REFERENCES texts(id) ON DELETE SET NULL,
-  FOREIGN KEY(segment_id) REFERENCES segments(id) ON DELETE SET NULL
-);
-CREATE INDEX IF NOT EXISTS idx_vocab_occ_vocab_item_id ON vocab_occurrences(vocab_item_id);
-CREATE INDEX IF NOT EXISTS idx_vocab_occ_text_id ON vocab_occurrences(text_id);
-
-CREATE TABLE IF NOT EXISTS srs_state (
-  vocab_item_id TEXT PRIMARY KEY,
-  due_at TEXT,
-  interval_days REAL NOT NULL DEFAULT 0,
-  ease REAL NOT NULL DEFAULT 2.5,
-  reps INTEGER NOT NULL DEFAULT 0,
-  lapses INTEGER NOT NULL DEFAULT 0,
-  last_reviewed_at TEXT,
-  FOREIGN KEY(vocab_item_id) REFERENCES vocab_items(id) ON DELETE CASCADE
-);
-"""
-
-
-def _migration_002() -> str:
-    """Add vocab_lookups table for tracking lookup history (struggle detection)."""
-    return """
-CREATE TABLE IF NOT EXISTS vocab_lookups (
-  id TEXT PRIMARY KEY,
-  vocab_item_id TEXT NOT NULL,
-  looked_up_at TEXT NOT NULL,
-  FOREIGN KEY(vocab_item_id) REFERENCES vocab_items(id) ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS idx_vocab_lookups_vocab_item_id ON vocab_lookups(vocab_item_id);
-CREATE INDEX IF NOT EXISTS idx_vocab_lookups_looked_up_at ON vocab_lookups(looked_up_at);
-"""
