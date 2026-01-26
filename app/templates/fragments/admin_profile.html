@@ -33,8 +33,7 @@
         <div>
             <label class="block text-sm font-medium mb-1" style="color: var(--text-primary);">Learning Language</label>
             <select name="language" class="input-field w-full px-3 py-2 text-sm">
-                <option value="zh-CN" {% if profile and profile.language == 'zh-CN' %}selected{% endif %}>Chinese (Simplified)</option>
-                <option value="zh-TW" {% if profile and profile.language == 'zh-TW' %}selected{% endif %}>Chinese (Traditional)</option>
+                <option value="zh-CN" {% if profile and profile.language =='zh-CN' %}selected{% endif %}>Chinese </option> <!-- TODO Add more languages -->
             </select>
         </div>
 
