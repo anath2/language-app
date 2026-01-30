@@ -16,12 +16,21 @@ class Segmenter(dspy.Signature):
 
 
 class Translator(dspy.Signature):
-    """Translate Chinese words to English"""
+    """Select the best English definition for a single Chinese word based on context.
 
-    segment: str = dspy.InputField(description="A segment of chinese text to translate")
-    context: str = dspy.InputField(description="Context of the translation task")
+    You are defining ONE WORD, not translating the whole sentence.
+    Use the dictionary entry to pick the most appropriate meaning for this context.
+    """
+
+    segment: str = dspy.InputField(description="Chinese word to define")
+    sentence_context: str = dspy.InputField(
+        description="Full sentence where this word appears (for disambiguation only)"
+    )
+    dictionary_entry: str = dspy.InputField(
+        description="CC-CEDICT definitions separated by ' / '. Pick the best one for this context. May be 'Not in dictionary' if word not found."
+    )
     english: str = dspy.OutputField(
-        description="English translation of the segment"
+        description="Best definition for this context (1-5 words). Pick from dictionary when available."
     )
 
 

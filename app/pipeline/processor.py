@@ -10,6 +10,7 @@ from threading import Lock
 
 import dspy
 
+from app.cedict import CedictDict, load_cedict, lookup
 from app.pipeline.signatures import FullTranslator, Segmenter, Translator
 from app.utils import should_skip_segment, to_pinyin
 
@@ -43,9 +44,11 @@ def get_full_translator():
 class Pipeline(dspy.Module):
     """Pipeline for Chinese text processing"""
 
-    def __init__(self):
+    def __init__(self, cedict: CedictDict | None = None):
         self.segment = dspy.ChainOfThought(Segmenter)
         self.translate = dspy.Predict(Translator)
+        # Load dictionary once on initialization
+        self.cedict = cedict if cedict is not None else load_cedict()
 
     def forward(self, text: str) -> list[tuple[str, str, str]]:
         """Sync: Segment and translate Chinese text"""
@@ -59,7 +62,13 @@ class Pipeline(dspy.Module):
             else:
                 # Pinyin is generated deterministically; LLM only provides English
                 pinyin = to_pinyin(segment)
-                translation = self.translate(segment=segment, context=text)
+                # Look up dictionary definition for context
+                dict_entry = lookup(self.cedict, segment) or "Not in dictionary"
+                translation = self.translate(
+                    segment=segment,
+                    sentence_context=text,
+                    dictionary_entry=dict_entry,
+                )
                 result.append((segment, pinyin, translation.english))
         return result
 
@@ -75,6 +84,12 @@ class Pipeline(dspy.Module):
             else:
                 # Pinyin is generated deterministically; LLM only provides English
                 pinyin = to_pinyin(segment)
-                translation = await self.translate.acall(segment=segment, context=text)
+                # Look up dictionary definition for context
+                dict_entry = lookup(self.cedict, segment) or "Not in dictionary"
+                translation = await self.translate.acall(
+                    segment=segment,
+                    sentence_context=text,
+                    dictionary_entry=dict_entry,
+                )
                 result.append((segment, pinyin, translation.english))
         return result

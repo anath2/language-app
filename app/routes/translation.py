@@ -21,6 +21,7 @@ from app.models import (
     TranslateResponse,
     TranslationResult,
 )
+from app.cedict import lookup
 from app.pipeline import get_full_translator, get_pipeline
 from app.templates_config import templates
 from app.utils import (
@@ -154,8 +155,14 @@ async def translate_stream(text: str = Form(...)):
                         # Pinyin is generated deterministically; LLM only provides English
                         pinyin = to_pinyin(segment)
                         # Use the original paragraph content as context
-                        context = paragraphs[para_idx]['content']
-                        translation = await pipe.translate.acall(segment=segment, context=context)
+                        sentence_context = paragraphs[para_idx]['content']
+                        # Look up dictionary definition
+                        dict_entry = lookup(pipe.cedict, segment) or "Not in dictionary"
+                        translation = await pipe.translate.acall(
+                            segment=segment,
+                            sentence_context=sentence_context,
+                            dictionary_entry=dict_entry,
+                        )
                         result = {
                             "segment": segment,
                             "pinyin": pinyin,
