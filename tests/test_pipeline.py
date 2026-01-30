@@ -17,6 +17,20 @@ import dspy
 from app.pipeline import Pipeline, Segmenter, Translator
 from app.utils import should_skip_segment, split_into_paragraphs, to_pinyin
 
+# Mock dictionary for testing
+MOCK_CEDICT = {
+    "你好": ["hello"],
+    "世界": ["world"],
+    "我": ["I; me"],
+    "喜欢": ["to like; to enjoy"],
+    "编程": ["programming"],
+    "测试": ["test"],
+    "你": ["you"],
+    "好": ["good; well"],
+    "默认": ["default"],
+    "段落": ["paragraph"],
+}
+
 
 # ============================================================================
 # FIXTURES
@@ -58,6 +72,7 @@ def mock_translator(mock_prediction):
 
     Note: Pinyin is now generated deterministically by to_pinyin(),
     so the translator only provides English translations.
+    The translator now receives dictionary_entry from CC-CEDICT.
     """
     # Mapping of Chinese segments to English translations
     translation_map = {
@@ -73,7 +88,7 @@ def mock_translator(mock_prediction):
         "好": "good",
     }
 
-    def _translator(segment: str, context: str):
+    def _translator(segment: str, sentence_context: str, dictionary_entry: str):
         english = translation_map.get(segment, "unknown")
         return mock_prediction(english=english)
 
@@ -226,12 +241,14 @@ def test_pipeline_initialization():
         mock_cot.return_value = Mock()
         mock_predict.return_value = Mock()
 
-        _pipeline = Pipeline()
+        _pipeline = Pipeline(cedict=MOCK_CEDICT)
 
         # Segmenter uses ChainOfThought
         mock_cot.assert_called_once_with(Segmenter)
         # Translator uses Predict
         mock_predict.assert_called_once_with(Translator)
+        # Dictionary should be set
+        assert _pipeline.cedict == MOCK_CEDICT
 
 
 def test_pipeline_forward_basic_text(mock_segmenter, mock_translator):
@@ -240,7 +257,7 @@ def test_pipeline_forward_basic_text(mock_segmenter, mock_translator):
         mock_cot.return_value = mock_segmenter
         mock_predict.return_value = mock_translator
 
-        pipeline = Pipeline()
+        pipeline = Pipeline(cedict=MOCK_CEDICT)
         result = pipeline.forward("你好世界")
 
         # Should return 2 results (你好, 世界)
@@ -255,7 +272,7 @@ def test_pipeline_forward_multiple_segments(mock_segmenter, mock_translator):
         mock_cot.return_value = mock_segmenter
         mock_predict.return_value = mock_translator
 
-        pipeline = Pipeline()
+        pipeline = Pipeline(cedict=MOCK_CEDICT)
         result = pipeline.forward("我喜欢编程")
 
         assert len(result) == 3
@@ -273,7 +290,7 @@ def test_pipeline_forward_empty_input(mock_prediction):
         mock_cot.return_value = empty_segmenter
         mock_predict.return_value = empty_translator
 
-        pipeline = Pipeline()
+        pipeline = Pipeline(cedict=MOCK_CEDICT)
         result = pipeline.forward("")
 
         assert len(result) == 0
@@ -288,7 +305,8 @@ def test_pipeline_uses_actual_prediction_objects(mock_prediction):
         mock_segmenter = Mock(return_value=segment_pred)
 
         # Mock translator to return English only (pinyin is deterministic)
-        def translator_side_effect(segment, context):
+        # Now accepts sentence_context and dictionary_entry
+        def translator_side_effect(segment, sentence_context, dictionary_entry):
             if segment == "你":
                 return mock_prediction(english="you")
             else:
@@ -299,7 +317,7 @@ def test_pipeline_uses_actual_prediction_objects(mock_prediction):
         mock_cot.return_value = mock_segmenter
         mock_predict.return_value = mock_translator
 
-        pipeline = Pipeline()
+        pipeline = Pipeline(cedict=MOCK_CEDICT)
         result = pipeline.forward("你好")
 
         # Translator called once per segment
@@ -318,20 +336,23 @@ def test_pipeline_translator_called_per_segment(mock_segmenter, mock_translator)
         mock_cot.return_value = mock_segmenter
         mock_predict.return_value = mock_translator
 
-        pipeline = Pipeline()
+        pipeline = Pipeline(cedict=MOCK_CEDICT)
         result = pipeline.forward("我喜欢编程")  # 3 segments
 
         # Translator should be called once per segment
         assert mock_translator.call_count == 3
 
-        # Verify translator called with each segment and context
+        # Verify translator called with each segment, sentence_context, and dictionary_entry
         calls = mock_translator.call_args_list
         assert calls[0][1]["segment"] == "我"
-        assert calls[0][1]["context"] == "我喜欢编程"
+        assert calls[0][1]["sentence_context"] == "我喜欢编程"
+        assert calls[0][1]["dictionary_entry"] == "I; me"
         assert calls[1][1]["segment"] == "喜欢"
-        assert calls[1][1]["context"] == "我喜欢编程"
+        assert calls[1][1]["sentence_context"] == "我喜欢编程"
+        assert calls[1][1]["dictionary_entry"] == "to like; to enjoy"
         assert calls[2][1]["segment"] == "编程"
-        assert calls[2][1]["context"] == "我喜欢编程"
+        assert calls[2][1]["sentence_context"] == "我喜欢编程"
+        assert calls[2][1]["dictionary_entry"] == "programming"
 
         # Verify results
         assert len(result) == 3
@@ -350,7 +371,8 @@ def test_pipeline_skips_punctuation_and_symbols(mock_prediction):
 
         # Mock translator - should only be called for actual Chinese words
         # Pinyin is now deterministic, so only return English
-        def custom_translator(segment, context):
+        # Now accepts sentence_context and dictionary_entry
+        def custom_translator(segment, sentence_context, dictionary_entry):
             if segment == "你好":
                 return mock_prediction(english="hello")
             elif segment == "世界":
@@ -363,7 +385,7 @@ def test_pipeline_skips_punctuation_and_symbols(mock_prediction):
         mock_cot.return_value = mock_seg
         mock_predict.return_value = mock_trans
 
-        pipeline = Pipeline()
+        pipeline = Pipeline(cedict=MOCK_CEDICT)
         result = pipeline.forward("你好，世界！123")
 
         # Should return all 5 segments
