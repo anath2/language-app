@@ -189,18 +189,21 @@ def test_split_into_paragraphs():
     # Empty string
     assert split_into_paragraphs("") == []
 
-    # Single line
+    # Single line (no indent)
     result = split_into_paragraphs("你好世界")
     assert len(result) == 1
     assert result[0]['content'] == "你好世界"
+    assert result[0]['indent'] == ""
     assert result[0]['separator'] == ""
 
     # Two lines with single newline
     result = split_into_paragraphs("你好\n世界")
     assert len(result) == 2
     assert result[0]['content'] == "你好"
+    assert result[0]['indent'] == ""
     assert result[0]['separator'] == "\n"
     assert result[1]['content'] == "世界"
+    assert result[1]['indent'] == ""
     assert result[1]['separator'] == ""
 
     # Two lines with double newline (paragraph break)
@@ -228,11 +231,21 @@ def test_split_into_paragraphs():
     assert result[0]['separator'] == "\n\n\n"  # Three newlines total
     assert result[1]['content'] == "世界"
 
-    # Lines with leading/trailing whitespace should be stripped
-    result = split_into_paragraphs("  你好  \n  世界  ")
+    # Lines with leading whitespace should preserve indent but strip from content
+    result = split_into_paragraphs("  你好  \n    世界  ")
     assert len(result) == 2
     assert result[0]['content'] == "你好"
+    assert result[0]['indent'] == "  "  # 2 spaces preserved
     assert result[1]['content'] == "世界"
+    assert result[1]['indent'] == "    "  # 4 spaces preserved
+
+    # Tab indentation
+    result = split_into_paragraphs("\t你好\n\t\t世界")
+    assert len(result) == 2
+    assert result[0]['content'] == "你好"
+    assert result[0]['indent'] == "\t"
+    assert result[1]['content'] == "世界"
+    assert result[1]['indent'] == "\t\t"
 
 
 def test_pipeline_initialization():

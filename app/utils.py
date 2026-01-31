@@ -108,8 +108,10 @@ def to_pinyin(segment: str) -> str:
 def split_into_paragraphs(text: str) -> list[dict[str, str]]:
     """
     Split text into paragraphs while preserving whitespace information.
-    Returns a list of dicts with 'content' and 'separator' keys.
-    The separator indicates what whitespace follows this paragraph.
+    Returns a list of dicts with 'content', 'indent', and 'separator' keys.
+    - content: the text content with leading/trailing whitespace stripped
+    - indent: the leading whitespace (spaces/tabs) preserved for formatting
+    - separator: the whitespace (newlines) that follows this paragraph
     """
     if not text:
         return []
@@ -133,8 +135,12 @@ def split_into_paragraphs(text: str) -> list[dict[str, str]]:
                 separator += '\n'
                 j += 1
 
+            # Extract leading whitespace (indent) before stripping
+            indent = line[:len(line) - len(line.lstrip())]
+
             paragraphs.append({
                 'content': line.strip(),
+                'indent': indent,
                 'separator': separator if i < len(lines) - 1 else ''
             })
 
