@@ -985,7 +985,8 @@
                 let globalIndex = 0;
                 paragraphs.forEach((para, paraIdx) => {
                     const marginBottom = para.separator ? para.separator.split('\n').length * 0.4 : 0;
-                    html += `<div class="paragraph flex flex-wrap gap-1" style="margin-bottom: ${marginBottom}rem;">`;
+                    const paddingLeft = para.indent ? para.indent.length * 0.5 : 0;
+                    html += `<div class="paragraph flex flex-wrap gap-1" style="margin-bottom: ${marginBottom}rem; padding-left: ${paddingLeft}rem;">`;
 
                     // Create placeholder segments based on segment_count
                     for (let i = 0; i < para.segment_count; i++) {

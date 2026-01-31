@@ -30,6 +30,7 @@ class TranslationResult(BaseModel):
 
 class ParagraphResult(BaseModel):
     translations: list[TranslationResult]
+    indent: str = ""
     separator: str
 
 

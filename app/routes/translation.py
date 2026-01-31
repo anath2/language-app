@@ -52,7 +52,11 @@ async def translate_text(request: TranslateRequest):
             for seg, pinyin, english in results
         ]
         paragraph_results.append(
-            ParagraphResult(translations=translations, separator=para['separator'])
+            ParagraphResult(
+                translations=translations,
+                indent=para.get('indent', ''),
+                separator=para['separator']
+            )
         )
 
     return TranslateResponse(paragraphs=paragraph_results)
@@ -84,6 +88,7 @@ async def translate_html(request: Request, text: str = Form(...)):
             ]
             paragraph_results.append({
                 "translations": translations,
+                "indent": para.get('indent', ''),
                 "separator": para['separator']
             })
 
@@ -126,13 +131,14 @@ async def translate_stream(text: str = Form(...)):
                 segmentation = await pipe.segment.acall(text=para['content'])
                 all_paragraph_segments.append({
                     'segments': segmentation.segments,
+                    'indent': para.get('indent', ''),
                     'separator': para['separator']
                 })
 
             total_segments = sum(len(p['segments']) for p in all_paragraph_segments)
 
             # Send initial info with paragraph structure
-            paragraph_info = [{'segment_count': len(p['segments']), 'separator': p['separator']} for p in all_paragraph_segments]
+            paragraph_info = [{'segment_count': len(p['segments']), 'indent': p['indent'], 'separator': p['separator']} for p in all_paragraph_segments]
             yield f"data: {json.dumps({'type': 'start', 'total': total_segments, 'paragraphs': paragraph_info, 'fullTranslation': full_translation})}\n\n"
 
             # Step 2: Translate each segment in each paragraph
@@ -178,6 +184,7 @@ async def translate_stream(text: str = Form(...)):
 
                 all_results.append({
                     'translations': para_results,
+                    'indent': para_data['indent'],
                     'separator': para_data['separator']
                 })
 
@@ -254,7 +261,11 @@ async def translate_image(file: UploadFile = File(...)):
             for seg, pinyin, english in results
         ]
         paragraph_results.append(
-            ParagraphResult(translations=translations, separator=para['separator'])
+            ParagraphResult(
+                translations=translations,
+                indent=para.get('indent', ''),
+                separator=para['separator']
+            )
         )
 
     return TranslateResponse(paragraphs=paragraph_results)
@@ -298,6 +309,7 @@ async def translate_image_html(request: Request, file: UploadFile = File(...)):
             ]
             paragraph_results.append({
                 "translations": translations,
+                "indent": para.get('indent', ''),
                 "separator": para['separator']
             })
 

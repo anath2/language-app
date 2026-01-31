@@ -6,7 +6,8 @@
         {% set segment_index = namespace(value=0) %}
         {% for paragraph in paragraphs %}
         {% set margin_bottom = paragraph.separator.count('\n') * 0.5 %}
-        <div class="paragraph flex flex-wrap gap-1.5" data-margin-bottom="{{ margin_bottom }}">
+        {% set indent_chars = paragraph.indent | default('') | length %}
+        <div class="paragraph flex flex-wrap gap-1.5" data-margin-bottom="{{ margin_bottom }}" data-indent="{{ indent_chars }}">
             {% for item in paragraph.translations %}
             <span class="segment inline-block px-2.5 py-1.5 text-xl rounded-md cursor-pointer transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md border-2 border-transparent"
                   style="font-family: 'Noto Serif SC', serif;"
@@ -30,11 +31,15 @@
 <script id="paragraphs-data" type="application/json">{{ paragraphs | tojson }}</script>
 <script>
 (function() {
-    // Apply margin-bottom styles from data attributes
+    // Apply margin-bottom and indent styles from data attributes
     document.querySelectorAll('.paragraph[data-margin-bottom]').forEach(el => {
         const marginBottom = el.dataset.marginBottom;
         if (marginBottom) {
             el.style.marginBottom = marginBottom + 'rem';
+        }
+        const indent = el.dataset.indent;
+        if (indent && parseInt(indent) > 0) {
+            el.style.paddingLeft = (parseInt(indent) * 0.5) + 'rem';
         }
     });
 
