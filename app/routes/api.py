@@ -32,6 +32,9 @@ from app.models import (
     SaveVocabRequest,
     SaveVocabResponse,
     TextResponse,
+    TranslateBatchRequest,
+    TranslateBatchResponse,
+    TranslationResult,
     UpdateVocabStatusRequest,
     VocabSRSInfoListResponse,
     VocabSRSInfoResponse,
@@ -213,3 +216,48 @@ async def api_record_review_answer(request: ReviewAnswerRequest):
 async def api_get_due_count():
     """Get count of vocab items due for review."""
     return DueCountResponse(due_count=get_due_count())
+
+
+# --- Segment Editing ---
+
+
+@router.post("/segments/translate-batch", response_model=TranslateBatchResponse)
+async def api_translate_batch(request: TranslateBatchRequest):
+    """
+    Translate a batch of segment texts.
+
+    Used after split/join operations to get proper translations for modified segments.
+    Uses pypinyin for pinyin generation, CEDICT for dictionary lookup,
+    and falls back to LLM for words not in CEDICT.
+    """
+    from app.cedict import lookup
+    from app.pipeline import get_pipeline
+    from app.utils import should_skip_segment, to_pinyin
+
+    pipe = get_pipeline()
+    translations = []
+
+    for segment_text in request.segments:
+        if should_skip_segment(segment_text):
+            translations.append(
+                TranslationResult(segment=segment_text, pinyin="", english="")
+            )
+            continue
+
+        pinyin = to_pinyin(segment_text)
+        english = lookup(pipe.cedict, segment_text)
+
+        if not english:
+            # LLM fallback for CEDICT miss
+            result = await pipe.translate.acall(  # type: ignore[attr-defined]
+                segment=segment_text,
+                sentence_context=request.context or segment_text,
+                dictionary_entry="Not in dictionary",
+            )
+            english = result.english
+
+        translations.append(
+            TranslationResult(segment=segment_text, pinyin=pinyin, english=english)
+        )
+
+    return TranslateBatchResponse(translations=translations)

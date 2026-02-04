@@ -390,7 +390,17 @@
                 <div class="section-divider my-3">
                     <span>Segmented Text</span>
                 </div>
-
+                <div class="flex items-center justify-between mb-3">
+                    <h2 class="font-semibold" style="color: var(--text-primary); font-size: var(--text-lg);">Segmented Text</h2>
+                    <button id="edit-segments-btn" class="btn-edit" type="button">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                        Edit
+                    </button>
+                </div>
+ 
                 <div class="progress-container">
                     <div class="flex justify-between mb-1.5" style="font-size: var(--text-xs);">
                         <span id="progress-label" style="color: var(--text-secondary);">Segmenting...</span>
@@ -400,8 +410,7 @@
                         <div id="progress-bar" class="progress-bar-fill" style="width: 0%"></div>
                     </div>
                 </div>
-                <h2 class="font-semibold mb-3" style="color: var(--text-primary); font-size: var(--text-lg);">Segmented Text</h2>
-                <div id="segments-container">
+               <div id="segments-container">
         `;
 
         let globalIndex = 0;
@@ -426,37 +435,22 @@
         html += `
                 </div>
                 <!-- Floating tooltip overlay -->
-                <div id="word-tooltip" class="hidden absolute z-50 rounded-md shadow-lg p-2 min-w-[160px] pointer-events-auto" style="background: var(--tooltip-bg);">
-                    <div class="font-semibold mb-0.5" style="color: var(--tooltip-text); font-size: var(--text-sm);" id="tooltip-pinyin"></div>
-                    <div style="color: var(--tooltip-text); opacity: 0.8; font-size: var(--text-xs);" id="tooltip-english"></div>
-                    <div class="mt-2 flex items-center gap-2">
-                        <button id="save-word-btn"
-                                type="button"
-                                class="px-2 py-1 rounded"
-                                style="background: rgba(255,255,255,0.12); color: var(--tooltip-text); font-size: var(--text-xs);">
+                <div id="word-tooltip" class="word-tooltip hidden">
+                    <div class="tooltip-pinyin" id="tooltip-pinyin"></div>
+                    <div class="tooltip-english" id="tooltip-english"></div>
+                    <div class="tooltip-actions">
+                        <button id="save-word-btn" type="button" class="tooltip-btn">
                             Save to Learn
                         </button>
-                        <button id="mark-known-btn"
-                                type="button"
-                                class="hidden px-2 py-1 rounded"
-                                style="background: rgba(255,255,255,0.12); color: var(--tooltip-text); font-size: var(--text-xs);">
+                        <button id="mark-known-btn" type="button" class="tooltip-btn hidden">
                             Mark as Known
                         </button>
-                        <button id="resume-learning-btn"
-                                type="button"
-                                class="hidden px-2 py-1 rounded"
-                                style="background: rgba(255,255,255,0.12); color: var(--tooltip-text); font-size: var(--text-xs);">
+                        <button id="resume-learning-btn" type="button" class="tooltip-btn hidden">
                             Resume Learning
                         </button>
-                        <button id="edit-segment-btn"
-                                type="button"
-                                class="px-2 py-1 rounded"
-                                style="background: rgba(255,255,255,0.12); color: var(--tooltip-text); font-size: var(--text-xs);">
-                            Edit
-                        </button>
-                        <span id="save-word-status" style="color: rgba(255,255,255,0.75); font-size: var(--text-xs);"></span>
+                        <span id="save-word-status" class="tooltip-status"></span>
                     </div>
-                    <div class="absolute w-2 h-2 transform rotate-45 -bottom-1 left-1/2 -translate-x-1/2" style="background: var(--tooltip-bg);"></div>
+                    <div class="tooltip-arrow"></div>
                 </div>
             </div>
         `;
@@ -521,13 +515,11 @@
             const saveBtn = document.getElementById('save-word-btn');
             const markKnownBtn = document.getElementById('mark-known-btn');
             const resumeLearningBtn = document.getElementById('resume-learning-btn');
-            const editBtn = document.getElementById('edit-segment-btn');
 
             if (!seg.dataset.pinyin && !seg.dataset.english) {
                 saveBtn.classList.add('hidden');
                 markKnownBtn.classList.add('hidden');
                 resumeLearningBtn.classList.add('hidden');
-                if (editBtn) editBtn.classList.add('hidden');
             } else {
                 const info = savedVocabMap.get(seg.textContent);
 
@@ -548,10 +540,6 @@
                     markKnownBtn.classList.add('hidden');
                     resumeLearningBtn.classList.add('hidden');
                 }
-
-                if (editBtn) {
-                    editBtn.classList.remove('hidden');
-                }
             }
 
             const segRect = seg.getBoundingClientRect();
@@ -560,7 +548,7 @@
             tooltip.classList.remove('hidden');
 
             const left = segRect.left - containerRect.left + (segRect.width / 2) - (tooltip.offsetWidth / 2);
-            const top = segRect.top - containerRect.top - tooltip.offsetHeight - 8;
+            const top = segRect.top - containerRect.top - tooltip.offsetHeight - 4;
 
             tooltip.style.left = Math.max(0, left) + 'px';
             tooltip.style.top = top + 'px';
@@ -872,17 +860,11 @@
             }
         });
 
-        // Edit segment button handler
+        // Global Edit button handler (from header)
         document.addEventListener('click', (e) => {
-            if (e.target && e.target.id === 'edit-segment-btn') {
+            if (e.target && (e.target.id === 'edit-segments-btn' || e.target.closest('#edit-segments-btn'))) {
                 e.stopPropagation();
-                if (activeSegment) {
-                    const tooltip = document.getElementById('word-tooltip');
-                    if (tooltip) tooltip.classList.add('hidden');
-                    isClickActive = false;
-
-                    SegmentEditor.enterEditMode(activeSegment);
-                }
+                SegmentEditor.enterGlobalEditMode();
             }
         });
 
@@ -961,7 +943,7 @@
         document.addEventListener('click', (e) => {
             const tooltip = document.getElementById('word-tooltip');
             const clickedInTooltip = tooltip && tooltip.contains(e.target);
-            if (isClickActive && !clickedInTooltip && !e.target.classList.contains('segment')) {
+            if (isClickActive && !clickedInTooltip && !e.target.closest('.segment')) {
                 isClickActive = false;
                 activeSegment = null;
                 if (tooltip) {
@@ -983,6 +965,68 @@
     }
 
     // ========================================
+    // Segment Rebuild Function (for edit mode cancel)
+    // ========================================
+
+    function rebuildSegments() {
+        // Clear stale tooltip state to prevent issues with old DOM references
+        isClickActive = false;
+        activeSegment = null;
+        const tooltip = document.getElementById('word-tooltip');
+        if (tooltip) tooltip.classList.add('hidden');
+
+        // Re-render segments from translationResults
+        const segments = document.querySelectorAll('.segment');
+        if (segments.length !== translationResults.length) {
+            // Structure changed, need full rebuild within paragraphs
+            document.querySelectorAll('.paragraph').forEach(para => {
+                para.innerHTML = '';
+            });
+
+            let index = 0;
+            const paragraphs = document.querySelectorAll('.paragraph');
+
+            translationResults.forEach((result, idx) => {
+                // Find appropriate paragraph (use first one if structure is unclear)
+                const para = paragraphs[0] || document.querySelector('#segments-container');
+                if (!para) return;
+
+                const span = document.createElement('span');
+                span.className = 'segment inline-block px-2 py-1 rounded border-2 border-transparent';
+                span.style.fontFamily = 'var(--font-chinese)';
+                span.style.fontSize = 'var(--text-chinese)';
+                span.style.color = 'var(--text-primary)';
+                span.dataset.index = idx;
+                span.dataset.paragraph = '0';
+                span.dataset.pinyin = result.pinyin;
+                span.dataset.english = result.english;
+                span.textContent = result.segment;
+                span.style.background = getPastelColor(idx);
+                span.style.cursor = 'pointer';
+                span.classList.add('transition-all', 'duration-150', 'hover:-translate-y-px', 'hover:shadow-sm');
+                addSegmentInteraction(span);
+
+                para.appendChild(span);
+            });
+        } else {
+            // Same count, just update content and styling
+            segments.forEach((seg, idx) => {
+                const result = translationResults[idx];
+                if (result) {
+                    seg.textContent = result.segment;
+                    seg.dataset.pinyin = result.pinyin;
+                    seg.dataset.english = result.english;
+                    seg.classList.remove('segment-pending', 'editing');
+                    seg.style.background = getPastelColor(idx);
+                }
+            });
+        }
+
+        // Re-apply SRS styling
+        applyPostStreamStyling();
+    }
+
+    // ========================================
     // Initialization
     // ========================================
 
@@ -998,7 +1042,9 @@
         loadReviewQueue: loadReviewQueue,
         revealAnswer: revealAnswer,
         gradeCard: gradeCard,
-        clearPreview: clearPreview
+        clearPreview: clearPreview,
+        rebuildSegments: rebuildSegments,
+        get currentRawText() { return currentRawText; }
     };
 
 })();

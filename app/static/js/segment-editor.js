@@ -1,14 +1,14 @@
 /**
- * Segment Editor - Split/Join Functionality
- * Handles segment editing, splitting, joining, and undo operations
+ * Segment Editor - Global Edit Mode for Split/Join Operations
+ * Provides a global edit mode where all segments can be split/joined
  */
 const SegmentEditor = (function() {
     'use strict';
 
     // State
-    let editingSegment = null;
-    let lastUndoOperation = null;
-    let activeEditPopover = null;
+    let isEditModeActive = false;
+    let modifiedSegmentIndices = new Set();
+    let originalSegments = [];  // Snapshot for cancel
 
     // Dependencies (set by init)
     let getPastelColor = null;
@@ -26,37 +26,85 @@ const SegmentEditor = (function() {
         getTranslationResults = deps.getTranslationResults;
         setTranslationResults = deps.setTranslationResults;
 
-        // Delegate events for split/join functionality (click-based, no hover)
+        // Delegate events for split/join functionality
         document.addEventListener('click', handleEditClick, true);
         document.addEventListener('keydown', handleEditKeydown);
     }
 
     // ========================================
-    // Edit Mode Functions
+    // Global Edit Mode
     // ========================================
 
-    function enterSegmentEditMode(segment) {
-        if (editingSegment) {
-            exitSegmentEditMode();
+    function enterGlobalEditMode() {
+        if (isEditModeActive) return;
+        isEditModeActive = true;
+
+        // Capture original state for cancel
+        captureOriginalState();
+
+        // Hide the Edit button
+        const editBtn = document.getElementById('edit-segments-btn');
+        if (editBtn) editBtn.style.display = 'none';
+
+        // Add editing class to results container
+        const resultsContainer = document.getElementById('results');
+        if (resultsContainer) {
+            resultsContainer.classList.add('edit-mode-active');
         }
 
-        // Don't allow editing single-character segments (can't split)
-        const text = segment.textContent.trim();
-        if (text.length < 1) return;
+        // Transform all segments to show split points
+        document.querySelectorAll('.segment').forEach(seg => {
+            addSplitPointsToSegment(seg);
+        });
 
-        editingSegment = segment;
+        // Add join indicators between all adjacent segments
+        addAllJoinIndicators();
+
+        // Show control bar
+        showEditBar();
+    }
+
+    function exitGlobalEditMode() {
+        if (!isEditModeActive) return;
+        isEditModeActive = false;
+
+        // Remove split points from all segments
+        document.querySelectorAll('.segment').forEach(seg => {
+            removeSplitPointsFromSegment(seg);
+        });
+
+        // Remove all join indicators
+        document.querySelectorAll('.join-indicator').forEach(el => el.remove());
+
+        // Remove editing class from results container
+        const resultsContainer = document.getElementById('results');
+        if (resultsContainer) {
+            resultsContainer.classList.remove('edit-mode-active');
+        }
+
+        // Show the Edit button again
+        const editBtn = document.getElementById('edit-segments-btn');
+        if (editBtn) editBtn.style.display = '';
+
+        // Hide control bar
+        hideEditBar();
+    }
+
+    function addSplitPointsToSegment(segment) {
+        const text = segment.textContent.trim();
+        if (text.length <= 1) return; // Can't split single character
+
         const originalBg = segment.style.background || getPastelColor(parseInt(segment.dataset.index) || 0);
 
         // Store original state
         segment.dataset.originalText = text;
         segment.dataset.originalBg = originalBg;
 
-        // Build character wrappers with clickable split points between them
+        // Build character wrappers with clickable split points
         let html = '';
         for (let i = 0; i < text.length; i++) {
             html += `<span class="char-wrapper" data-char-index="${i}" style="background: ${originalBg}; border-radius: 3px; padding: 0.25rem 0.15rem;">${text[i]}`;
             if (i < text.length - 1) {
-                // Clickable split point between characters
                 html += `<span class="split-point" data-split-after="${i}" title="Split here"></span>`;
             }
             html += `</span>`;
@@ -64,208 +112,192 @@ const SegmentEditor = (function() {
 
         segment.innerHTML = html;
         segment.classList.add('editing');
-
-        // Add join indicators on both sides
-        addEditModeJoinIndicators(segment);
-
-        // Add Done button below the segment
-        addDoneButton(segment);
     }
 
-    function exitSegmentEditMode() {
-        if (!editingSegment) return;
+    function removeSplitPointsFromSegment(segment) {
+        if (!segment.classList.contains('editing')) return;
 
-        const segment = editingSegment;
         const originalText = segment.dataset.originalText;
         const originalBg = segment.dataset.originalBg;
 
-        segment.innerHTML = originalText;
+        if (originalText) {
+            segment.innerHTML = originalText;
+            segment.style.background = originalBg;
+        }
         segment.classList.remove('editing');
-        segment.style.background = originalBg;
-
-        // Remove join indicators and done button
-        removeEditModeUI();
-
-        editingSegment = null;
     }
 
-    function addEditModeJoinIndicators(segment) {
-        const paragraph = segment.parentNode;
-
-        // Find previous valid segment
-        let prevEl = segment.previousElementSibling;
-        while (prevEl && (prevEl.classList.contains('join-indicator') || prevEl.classList.contains('edit-done-btn'))) {
-            prevEl = prevEl.previousElementSibling;
-        }
-
-        // Add join indicator BEFORE segment (to join with previous)
-        if (prevEl && prevEl.classList.contains('segment') && !prevEl.classList.contains('segment-pending')) {
-            const joinLeft = document.createElement('span');
-            joinLeft.className = 'join-indicator join-left visible';
-            joinLeft.innerHTML = '⊕';
-            joinLeft.dataset.direction = 'left';
-            joinLeft.dataset.targetIndex = segment.dataset.index;
-            joinLeft.title = 'Join with previous';
-            paragraph.insertBefore(joinLeft, segment);
-        }
-
-        // Find next valid segment
-        let nextEl = segment.nextElementSibling;
-        while (nextEl && (nextEl.classList.contains('join-indicator') || nextEl.classList.contains('edit-done-btn'))) {
-            nextEl = nextEl.nextElementSibling;
-        }
-
-        // Add join indicator AFTER segment (to join with next)
-        if (nextEl && nextEl.classList.contains('segment') && !nextEl.classList.contains('segment-pending')) {
-            const joinRight = document.createElement('span');
-            joinRight.className = 'join-indicator join-right visible';
-            joinRight.innerHTML = '⊕';
-            joinRight.dataset.direction = 'right';
-            joinRight.dataset.targetIndex = segment.dataset.index;
-            joinRight.title = 'Join with next';
-            paragraph.insertBefore(joinRight, segment.nextSibling);
-        }
+    function addAllJoinIndicators() {
+        document.querySelectorAll('.paragraph').forEach(para => {
+            const segments = para.querySelectorAll('.segment');
+            segments.forEach((seg, i) => {
+                if (i < segments.length - 1) {
+                    const nextSeg = segments[i + 1];
+                    // Add join indicator between this segment and next
+                    const joinIndicator = document.createElement('span');
+                    joinIndicator.className = 'join-indicator visible';
+                    joinIndicator.innerHTML = '⊕';
+                    joinIndicator.dataset.leftIndex = seg.dataset.index;
+                    joinIndicator.dataset.rightIndex = nextSeg.dataset.index;
+                    joinIndicator.title = 'Join segments';
+                    seg.parentNode.insertBefore(joinIndicator, nextSeg);
+                }
+            });
+        });
     }
 
-    function addDoneButton(segment) {
-        const doneBtn = document.createElement('button');
-        doneBtn.className = 'edit-done-btn';
-        doneBtn.innerHTML = '✓ Done';
-        doneBtn.type = 'button';
+    function refreshEditModeUI() {
+        if (!isEditModeActive) return;
 
-        // Position it after the segment (and any join indicator)
-        let insertAfter = segment.nextElementSibling;
-        if (insertAfter && insertAfter.classList.contains('join-indicator')) {
-            insertAfter = insertAfter.nextElementSibling;
-        }
-
-        if (insertAfter) {
-            segment.parentNode.insertBefore(doneBtn, insertAfter);
-        } else {
-            segment.parentNode.appendChild(doneBtn);
-        }
-    }
-
-    function removeEditModeUI() {
-        // Remove all join indicators
+        // Remove old join indicators
         document.querySelectorAll('.join-indicator').forEach(el => el.remove());
-        // Remove done button
-        document.querySelectorAll('.edit-done-btn').forEach(el => el.remove());
+
+        // Re-add split points to new segments
+        document.querySelectorAll('.segment').forEach(seg => {
+            if (!seg.classList.contains('editing')) {
+                addSplitPointsToSegment(seg);
+            }
+        });
+
+        // Re-add join indicators
+        addAllJoinIndicators();
     }
 
     // ========================================
-    // Undo Support
+    // Edit Bar (Save/Cancel Controls)
     // ========================================
 
-    function showUndoButton(targetSegmentIndex) {
-        // Remove any existing undo button
-        hideUndoButton();
+    function showEditBar() {
+        if (document.querySelector('.segment-edit-bar')) return;
 
-        if (!lastUndoOperation) return;
+        const resultsContainer = document.getElementById('results');
+        if (!resultsContainer) return;
 
-        // Find the segment to position undo below
-        const targetSegment = document.querySelector(`.segment[data-index="${targetSegmentIndex}"]`);
-        if (!targetSegment) return;
+        const bar = document.createElement('div');
+        bar.className = 'segment-edit-bar';
+        bar.innerHTML = `
+            <span class="edit-bar-status">
+                <span class="pending-count">${modifiedSegmentIndices.size}</span> changes
+            </span>
+            <div class="edit-bar-actions">
+                <button class="btn-cancel" type="button">Cancel</button>
+                <button class="btn-save" type="button">Save Changes</button>
+            </div>
+        `;
 
-        const undoBtn = document.createElement('button');
-        undoBtn.className = 'undo-edit-btn';
-        undoBtn.innerHTML = '↩';
-        undoBtn.type = 'button';
-        undoBtn.title = 'Undo';
-        undoBtn.addEventListener('click', performUndo);
+        // Add event listeners
+        bar.querySelector('.btn-cancel').addEventListener('click', cancelEdits);
+        bar.querySelector('.btn-save').addEventListener('click', saveEdits);
 
-        // Add to the paragraph (which has position: relative)
-        const paragraph = targetSegment.closest('.paragraph');
-        if (paragraph) {
-            paragraph.style.position = 'relative';
-            paragraph.appendChild(undoBtn);
+        resultsContainer.appendChild(bar);
+    }
 
-            // Position below the target segment
-            const segRect = targetSegment.getBoundingClientRect();
-            const paraRect = paragraph.getBoundingClientRect();
+    function hideEditBar() {
+        document.querySelector('.segment-edit-bar')?.remove();
+    }
 
-            undoBtn.style.left = (segRect.left - paraRect.left + segRect.width / 2 - 14) + 'px';
-            undoBtn.style.top = (segRect.bottom - paraRect.top + 4) + 'px';
+    function updateEditBar() {
+        const countEl = document.querySelector('.pending-count');
+        if (countEl) {
+            countEl.textContent = modifiedSegmentIndices.size;
+        }
+    }
+
+    // ========================================
+    // Original State Management
+    // ========================================
+
+    function captureOriginalState() {
+        const results = getTranslationResults();
+        originalSegments = results.map(r => ({
+            segment: r.segment,
+            pinyin: r.pinyin,
+            english: r.english
+        }));
+    }
+
+    function cancelEdits() {
+        // Restore original segments
+        setTranslationResults([...originalSegments]);
+
+        // Re-render segments from original
+        rebuildSegmentDisplay();
+
+        modifiedSegmentIndices.clear();
+        exitGlobalEditMode();
+    }
+
+    async function saveEdits() {
+        if (modifiedSegmentIndices.size === 0) {
+            exitGlobalEditMode();
+            return;
         }
 
-        // Auto-hide after 8 seconds
-        setTimeout(() => {
-            if (lastUndoOperation) {
-                hideUndoButton();
-                lastUndoOperation = null;
+        const saveBtn = document.querySelector('.btn-save');
+        if (saveBtn) {
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Saving...';
+        }
+
+        // Collect segment texts in order
+        const indices = [...modifiedSegmentIndices].sort((a, b) => a - b);
+        const segmentTexts = indices.map(idx => {
+            const seg = document.querySelector(`.segment[data-index="${idx}"]`);
+            return seg ? (seg.dataset.originalText || seg.textContent.trim()) : '';
+        }).filter(t => t);
+
+        try {
+            const response = await fetch('/api/segments/translate-batch', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    segments: segmentTexts,
+                    context: window.App?.currentRawText || null
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Translation failed');
             }
-        }, 8000);
-    }
 
-    function hideUndoButton() {
-        document.querySelectorAll('.undo-edit-btn').forEach(el => el.remove());
-    }
+            const { translations } = await response.json();
 
-    async function performUndo() {
-        if (!lastUndoOperation) return;
-
-        const undo = lastUndoOperation;
-        lastUndoOperation = null;
-        hideUndoButton();
-
-        if (undo.type === 'split') {
-            // Undo split = join the two segments back together
-            const segments = document.querySelectorAll(`.segment[data-paragraph="${undo.paragraphIndex}"]`);
-            let leftSeg = null, rightSeg = null;
-
-            for (const seg of segments) {
-                const idx = parseInt(seg.dataset.index);
-                if (idx === undo.segmentIndex) {
-                    leftSeg = seg;
-                } else if (idx === undo.segmentIndex + 1) {
-                    rightSeg = seg;
+            // Update translation results
+            const translationResults = getTranslationResults();
+            indices.forEach((idx, i) => {
+                if (translations[i] && translationResults[idx]) {
+                    translationResults[idx] = translations[i];
                 }
-            }
+            });
+            setTranslationResults(translationResults);
 
-            if (leftSeg && rightSeg) {
-                leftSeg.classList.add('loading');
-                rightSeg.classList.add('loading');
-
-                try {
-                    const result = await stubJoinSegments(leftSeg.textContent, rightSeg.textContent);
-                    updateSegmentsAfterJoin(leftSeg, rightSeg, {
-                        text: undo.originalText,
-                        pinyin: undo.pinyin || result.segment.pinyin,
-                        english: undo.english || result.segment.english
-                    }, undo.paragraphIndex);
-                    console.log('Undo split completed');
-                } catch (error) {
-                    console.error('Undo split failed:', error);
-                    leftSeg.classList.remove('loading');
-                    rightSeg.classList.remove('loading');
+            // Update DOM segments with new translations BEFORE exiting edit mode
+            // This ensures originalText gets the real translation, not placeholder
+            indices.forEach((idx, i) => {
+                const seg = document.querySelector(`.segment[data-index="${idx}"]`);
+                if (seg && translations[i]) {
+                    seg.dataset.pinyin = translations[i].pinyin;
+                    seg.dataset.english = translations[i].english;
+                    // Update originalText so exitGlobalEditMode restores correct text
+                    if (seg.dataset.originalText) {
+                        seg.dataset.originalText = translations[i].segment;
+                    }
                 }
-            }
-        } else if (undo.type === 'join') {
-            // Undo join = split the merged segment back
-            const mergedSeg = document.querySelector(`.segment[data-index="${undo.leftIndex}"]`);
+            });
 
-            if (mergedSeg) {
-                mergedSeg.classList.add('loading');
+            modifiedSegmentIndices.clear();
+            exitGlobalEditMode();
+            rebuildSegmentDisplay();
+            rebuildTranslationTable();
 
-                try {
-                    updateSegmentsAfterSplit(mergedSeg, [
-                        {
-                            text: undo.leftText,
-                            pinyin: undo.leftPinyin || generateStubPinyin(undo.leftText),
-                            english: undo.leftEnglish || `[${undo.leftText}]`
-                        },
-                        {
-                            text: undo.rightText,
-                            pinyin: undo.rightPinyin || generateStubPinyin(undo.rightText),
-                            english: undo.rightEnglish || `[${undo.rightText}]`
-                        }
-                    ], undo.paragraphIndex);
-                    console.log('Undo join completed');
-                } catch (error) {
-                    console.error('Undo join failed:', error);
-                    mergedSeg.classList.remove('loading');
-                }
+            console.log('Save completed:', translations);
+        } catch (error) {
+            console.error('Save failed:', error);
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Save Changes';
             }
+            alert('Failed to translate segments. Please try again.');
         }
     }
 
@@ -274,17 +306,9 @@ const SegmentEditor = (function() {
     // ========================================
 
     function handleEditClick(e) {
-        // Handle Done button click
-        const doneBtn = e.target.closest('.edit-done-btn');
-        if (doneBtn) {
-            e.stopPropagation();
-            exitSegmentEditMode();
-            return;
-        }
-
-        // Handle split point click - DIRECT ACTION (no popover)
+        // Handle split point click
         const splitPoint = e.target.closest('.split-point');
-        if (splitPoint) {
+        if (splitPoint && isEditModeActive) {
             e.stopPropagation();
             const segment = splitPoint.closest('.segment');
             const splitAfter = parseInt(splitPoint.dataset.splitAfter);
@@ -292,242 +316,113 @@ const SegmentEditor = (function() {
             return;
         }
 
-        // Handle join indicator click - DIRECT ACTION (no popover)
+        // Handle join indicator click
         const joinIndicator = e.target.closest('.join-indicator');
-        if (joinIndicator) {
+        if (joinIndicator && isEditModeActive) {
             e.stopPropagation();
-            const direction = joinIndicator.dataset.direction;
-            const targetIndex = parseInt(joinIndicator.dataset.targetIndex);
-            const targetSegment = document.querySelector(`.segment[data-index="${targetIndex}"]`);
-
-            if (targetSegment) {
-                performJoinFromEditMode(targetSegment, direction);
-            }
+            const leftIndex = parseInt(joinIndicator.dataset.leftIndex);
+            const rightIndex = parseInt(joinIndicator.dataset.rightIndex);
+            performJoin(leftIndex, rightIndex);
             return;
-        }
-
-        // Handle popover button clicks (legacy)
-        const popoverBtn = e.target.closest('.edit-popover-btn');
-        if (popoverBtn) {
-            e.stopPropagation();
-            if (popoverBtn.classList.contains('cancel-btn')) {
-                closeEditPopover();
-            }
-            return;
-        }
-
-        // Click outside editing segment - exit edit mode
-        if (editingSegment && !e.target.closest('.segment.editing') &&
-            !e.target.closest('.join-indicator') && !e.target.closest('.edit-done-btn')) {
-            exitSegmentEditMode();
-        }
-
-        // Click outside popover - close it (legacy)
-        if (activeEditPopover && !e.target.closest('.edit-popover')) {
-            closeEditPopover();
         }
     }
 
     function handleEditKeydown(e) {
         // Escape exits edit mode
-        if (e.key === 'Escape') {
-            if (editingSegment) {
-                exitSegmentEditMode();
-            }
-            if (activeEditPopover) {
-                closeEditPopover();
-            }
+        if (e.key === 'Escape' && isEditModeActive) {
+            cancelEdits();
         }
     }
 
     // ========================================
-    // Join Helper
+    // Local Split/Join (no API call, placeholders)
     // ========================================
 
-    function performJoinFromEditMode(segment, direction) {
-        let leftSegment, rightSegment;
-
-        if (direction === 'left') {
-            rightSegment = segment;
-            let prevEl = segment.previousElementSibling;
-            while (prevEl && !prevEl.classList.contains('segment')) {
-                prevEl = prevEl.previousElementSibling;
-            }
-            leftSegment = prevEl;
-        } else {
-            leftSegment = segment;
-            let nextEl = segment.nextElementSibling;
-            while (nextEl && !nextEl.classList.contains('segment')) {
-                nextEl = nextEl.nextElementSibling;
-            }
-            rightSegment = nextEl;
-        }
-
-        if (leftSegment && rightSegment) {
-            performJoin(
-                parseInt(leftSegment.dataset.index),
-                parseInt(rightSegment.dataset.index)
-            );
-        }
-    }
-
-    // ========================================
-    // Legacy Popover Functions
-    // ========================================
-
-    function closeEditPopover() {
-        if (activeEditPopover) {
-            activeEditPopover.remove();
-            activeEditPopover = null;
-        }
-
-        if (editingSegment) {
-            exitSegmentEditMode();
-        }
-    }
-
-    // ========================================
-    // Stubbed API Calls
-    // ========================================
-
-    async function stubSplitSegment(segmentText, splitAfter) {
-        await new Promise(resolve => setTimeout(resolve, 300));
-
+    function splitSegmentLocal(segmentText, splitAfter) {
         const leftText = segmentText.substring(0, splitAfter + 1);
         const rightText = segmentText.substring(splitAfter + 1);
 
         return {
             segments: [
-                {
-                    text: leftText,
-                    pinyin: generateStubPinyin(leftText),
-                    english: `[${leftText}]`
-                },
-                {
-                    text: rightText,
-                    pinyin: generateStubPinyin(rightText),
-                    english: `[${rightText}]`
-                }
-            ],
-            pending_translation: [0, 1]
+                { text: leftText, pinyin: '...', english: `[${leftText}]` },
+                { text: rightText, pinyin: '...', english: `[${rightText}]` }
+            ]
         };
     }
 
-    async function stubJoinSegments(leftText, rightText) {
-        await new Promise(resolve => setTimeout(resolve, 300));
-
+    function joinSegmentsLocal(leftText, rightText) {
         const mergedText = leftText + rightText;
-
         return {
-            segment: {
-                text: mergedText,
-                pinyin: generateStubPinyin(mergedText),
-                english: `[${mergedText}]`
-            },
-            pending_translation: true
+            segment: { text: mergedText, pinyin: '...', english: `[${mergedText}]` }
         };
-    }
-
-    function generateStubPinyin(text) {
-        return `pinyin(${text})`;
     }
 
     // ========================================
     // Split/Join Operations
     // ========================================
 
-    async function performSplit(segment, splitAfter) {
+    function performSplit(segment, splitAfter) {
         const segmentIndex = parseInt(segment.dataset.index);
         const paragraphIndex = parseInt(segment.dataset.paragraph);
         const originalText = segment.dataset.originalText || segment.textContent.trim();
 
-        const undoData = {
-            type: 'split',
-            originalText: originalText,
-            segmentIndex: segmentIndex,
-            paragraphIndex: paragraphIndex,
-            pinyin: segment.dataset.pinyin,
-            english: segment.dataset.english
-        };
-
-        exitSegmentEditMode();
+        // Remove split points before splitting
+        removeSplitPointsFromSegment(segment);
 
         const targetSegment = document.querySelector(`.segment[data-index="${segmentIndex}"]`);
         if (!targetSegment) return;
 
-        targetSegment.classList.add('loading');
+        // Local split (no API call)
+        const result = splitSegmentLocal(originalText, splitAfter);
+        updateSegmentsAfterSplit(targetSegment, result.segments, paragraphIndex, true);
 
-        try {
-            const result = await stubSplitSegment(originalText, splitAfter);
-            closeEditPopover();
-            updateSegmentsAfterSplit(targetSegment, result.segments, paragraphIndex);
+        // Refresh edit mode UI for new segments
+        refreshEditModeUI();
 
-            lastUndoOperation = undoData;
-            showUndoButton(segmentIndex);
-
-            console.log('Split completed:', result);
-        } catch (error) {
-            console.error('Split failed:', error);
-            targetSegment.classList.remove('loading');
-        }
+        console.log('Split completed (pending translation):', result);
     }
 
-    async function performJoin(leftIndex, rightIndex) {
+    function performJoin(leftIndex, rightIndex) {
         let leftSegment = document.querySelector(`.segment[data-index="${leftIndex}"]`);
         let rightSegment = document.querySelector(`.segment[data-index="${rightIndex}"]`);
 
         if (!leftSegment || !rightSegment) return;
 
+        // Get text from original or current
         const leftText = leftSegment.dataset.originalText || leftSegment.textContent.trim();
         const rightText = rightSegment.dataset.originalText || rightSegment.textContent.trim();
         const paragraphIndex = parseInt(leftSegment.dataset.paragraph);
 
-        const undoData = {
-            type: 'join',
-            leftText: leftText,
-            rightText: rightText,
-            leftIndex: leftIndex,
-            rightIndex: rightIndex,
-            paragraphIndex: paragraphIndex,
-            leftPinyin: leftSegment.dataset.pinyin,
-            leftEnglish: leftSegment.dataset.english,
-            rightPinyin: rightSegment.dataset.pinyin,
-            rightEnglish: rightSegment.dataset.english
-        };
+        // Remove split points before joining
+        removeSplitPointsFromSegment(leftSegment);
+        removeSplitPointsFromSegment(rightSegment);
 
-        exitSegmentEditMode();
-
+        // Re-query after removing split points
         leftSegment = document.querySelector(`.segment[data-index="${leftIndex}"]`);
         rightSegment = document.querySelector(`.segment[data-index="${rightIndex}"]`);
 
         if (!leftSegment || !rightSegment) return;
 
-        leftSegment.classList.add('loading');
-        rightSegment.classList.add('loading');
+        // Local join (no API call)
+        const result = joinSegmentsLocal(leftText, rightText);
+        updateSegmentsAfterJoin(leftSegment, rightSegment, result.segment, paragraphIndex, true);
 
-        try {
-            const result = await stubJoinSegments(leftText, rightText);
-            closeEditPopover();
-            updateSegmentsAfterJoin(leftSegment, rightSegment, result.segment, paragraphIndex);
+        // Refresh edit mode UI
+        refreshEditModeUI();
 
-            lastUndoOperation = undoData;
-            showUndoButton(leftIndex);
-
-            console.log('Join completed:', result);
-        } catch (error) {
-            console.error('Join failed:', error);
-            leftSegment.classList.remove('loading');
-            rightSegment.classList.remove('loading');
-        }
+        console.log('Join completed (pending translation):', result);
     }
 
     // ========================================
     // UI Update Functions
     // ========================================
 
-    function updateSegmentsAfterSplit(originalSegment, newSegments, paragraphIndex) {
+    function updateSegmentsAfterSplit(originalSegment, newSegments, paragraphIndex, isPending = false) {
         const segmentIndex = parseInt(originalSegment.dataset.index);
         const paragraph = originalSegment.parentNode;
+
+        // Remove from modified set if it was there
+        modifiedSegmentIndices.delete(segmentIndex);
 
         const fragment = document.createDocumentFragment();
 
@@ -548,8 +443,12 @@ const SegmentEditor = (function() {
             span.style.cursor = 'pointer';
             span.classList.add('transition-all', 'duration-150', 'hover:-translate-y-px', 'hover:shadow-sm');
 
-            addSegmentInteraction(span);
+            if (isPending) {
+                span.classList.add('segment-pending');
+                modifiedSegmentIndices.add(newIndex);
+            }
 
+            addSegmentInteraction(span);
             fragment.appendChild(span);
         });
 
@@ -558,10 +457,16 @@ const SegmentEditor = (function() {
 
         reindexSegments();
         updateTranslationResultsAfterSplit(segmentIndex, newSegments);
+        updateEditBar();
     }
 
-    function updateSegmentsAfterJoin(leftSegment, rightSegment, newSegment, paragraphIndex) {
+    function updateSegmentsAfterJoin(leftSegment, rightSegment, newSegment, paragraphIndex, isPending = false) {
         const leftIndex = parseInt(leftSegment.dataset.index);
+        const rightIndex = parseInt(rightSegment.dataset.index);
+
+        // Remove both indices from modified set
+        modifiedSegmentIndices.delete(leftIndex);
+        modifiedSegmentIndices.delete(rightIndex);
 
         const span = document.createElement('span');
         span.className = 'segment inline-block px-2 py-1 rounded border-2 border-transparent';
@@ -578,29 +483,58 @@ const SegmentEditor = (function() {
         span.style.cursor = 'pointer';
         span.classList.add('transition-all', 'duration-150', 'hover:-translate-y-px', 'hover:shadow-sm');
 
+        if (isPending) {
+            span.classList.add('segment-pending');
+            modifiedSegmentIndices.add(leftIndex);
+        }
+
         addSegmentInteraction(span);
+
+        // Remove join indicator between the two segments
+        let el = leftSegment.nextElementSibling;
+        while (el && el !== rightSegment) {
+            const next = el.nextElementSibling;
+            if (el.classList.contains('join-indicator')) {
+                el.remove();
+            }
+            el = next;
+        }
 
         leftSegment.parentNode.insertBefore(span, leftSegment);
         leftSegment.remove();
         rightSegment.remove();
 
-        removeEditModeUI();
         reindexSegments();
         updateTranslationResultsAfterJoin(leftIndex, newSegment);
+        updateEditBar();
     }
 
     function reindexSegments() {
+        const oldToNew = new Map();
         let index = 0;
+
         document.querySelectorAll('.paragraph').forEach((para, paraIdx) => {
             para.querySelectorAll('.segment').forEach(seg => {
+                const oldIndex = parseInt(seg.dataset.index);
+                oldToNew.set(oldIndex, index);
+
                 seg.dataset.index = index;
                 seg.dataset.paragraph = paraIdx;
-                if (!seg.classList.contains('saved') && seg.dataset.pinyin) {
+                if (!seg.classList.contains('saved') && !seg.classList.contains('segment-pending') && !seg.classList.contains('editing')) {
                     seg.style.background = getPastelColor(index);
                 }
                 index++;
             });
         });
+
+        // Update modifiedSegmentIndices with new indices
+        const newModified = new Set();
+        modifiedSegmentIndices.forEach(oldIdx => {
+            if (oldToNew.has(oldIdx)) {
+                newModified.add(oldToNew.get(oldIdx));
+            }
+        });
+        modifiedSegmentIndices = newModified;
     }
 
     function updateTranslationResultsAfterSplit(originalIndex, newSegments) {
@@ -623,6 +557,13 @@ const SegmentEditor = (function() {
         });
         setTranslationResults(translationResults);
         rebuildTranslationTable();
+    }
+
+    function rebuildSegmentDisplay() {
+        // This will be called by app.js to re-render segments
+        if (window.App && window.App.rebuildSegments) {
+            window.App.rebuildSegments();
+        }
     }
 
     function rebuildTranslationTable() {
@@ -668,22 +609,15 @@ const SegmentEditor = (function() {
         `;
         tableContainer.innerHTML = tableHtml;
 
-        document.getElementById('toggle-details-btn').addEventListener('click', () => {
+        document.getElementById('toggle-details-btn')?.addEventListener('click', () => {
             const content = document.getElementById('details-content');
             const icon = document.getElementById('toggle-icon');
-            content.classList.toggle('hidden');
-            icon.textContent = content.classList.contains('hidden') ? '+' : '−';
+            if (content && icon) {
+                content.classList.toggle('hidden');
+                icon.textContent = content.classList.contains('hidden') ? '+' : '−';
+            }
         });
     }
-
-    // ========================================
-    // Legacy Aliases
-    // ========================================
-
-    function enterSplitMode(segment) { enterSegmentEditMode(segment); }
-    function exitSplitMode(segment) { if (editingSegment === segment) exitSegmentEditMode(); }
-    function addJoinIndicators(segment) { addEditModeJoinIndicators(segment); }
-    function removeJoinIndicators() { removeEditModeUI(); }
 
     // ========================================
     // Public API
@@ -691,12 +625,10 @@ const SegmentEditor = (function() {
 
     return {
         init: init,
-        enterEditMode: enterSegmentEditMode,
-        exitEditMode: exitSegmentEditMode,
-        // Legacy
-        enterSplitMode: enterSplitMode,
-        exitSplitMode: exitSplitMode,
-        addJoinIndicators: addJoinIndicators,
-        removeJoinIndicators: removeJoinIndicators
+        enterGlobalEditMode: enterGlobalEditMode,
+        exitGlobalEditMode: exitGlobalEditMode,
+        cancelEdits: cancelEdits,
+        saveEdits: saveEdits,
+        isEditModeActive: () => isEditModeActive
     };
 })();
