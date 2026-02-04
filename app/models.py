@@ -38,6 +38,19 @@ class TranslateResponse(BaseModel):
     paragraphs: list[ParagraphResult]
 
 
+class TranslateBatchRequest(BaseModel):
+    """Request to translate a batch of segment texts."""
+
+    segments: list[str]  # Chinese text strings to translate
+    context: str | None = None  # Optional full text for context
+
+
+class TranslateBatchResponse(BaseModel):
+    """Response with translated segments."""
+
+    translations: list[TranslationResult]
+
+
 # =============================================================================
 # Text Persistence Models
 # =============================================================================
