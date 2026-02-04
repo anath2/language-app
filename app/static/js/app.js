@@ -493,6 +493,10 @@
     }
 
     function addSegmentInteraction(segment) {
+        // Prevent duplicate event listeners
+        if (segment.dataset.hasInteraction === 'true') return;
+        segment.dataset.hasInteraction = 'true';
+
         const tooltip = document.getElementById('word-tooltip');
         const tooltipPinyin = document.getElementById('tooltip-pinyin');
         const tooltipEnglish = document.getElementById('tooltip-english');

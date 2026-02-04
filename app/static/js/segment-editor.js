@@ -7,7 +7,7 @@ const SegmentEditor = (function() {
 
     // State
     let isEditModeActive = false;
-    let modifiedSegmentIndices = new Set();
+    let pendingSegments = new Set();  // DOM element references for segments needing translation
     let originalSegments = [];  // Snapshot for cancel
 
     // Dependencies (set by init)
@@ -177,7 +177,7 @@ const SegmentEditor = (function() {
         bar.className = 'segment-edit-bar';
         bar.innerHTML = `
             <span class="edit-bar-status">
-                <span class="pending-count">${modifiedSegmentIndices.size}</span> changes
+                <span class="pending-count">${pendingSegments.size}</span> changes
             </span>
             <div class="edit-bar-actions">
                 <button class="btn-cancel" type="button">Cancel</button>
@@ -199,7 +199,7 @@ const SegmentEditor = (function() {
     function updateEditBar() {
         const countEl = document.querySelector('.pending-count');
         if (countEl) {
-            countEl.textContent = modifiedSegmentIndices.size;
+            countEl.textContent = pendingSegments.size;
         }
     }
 
@@ -223,12 +223,12 @@ const SegmentEditor = (function() {
         // Re-render segments from original
         rebuildSegmentDisplay();
 
-        modifiedSegmentIndices.clear();
+        pendingSegments.clear();
         exitGlobalEditMode();
     }
 
     async function saveEdits() {
-        if (modifiedSegmentIndices.size === 0) {
+        if (pendingSegments.size === 0) {
             exitGlobalEditMode();
             return;
         }
@@ -239,12 +239,12 @@ const SegmentEditor = (function() {
             saveBtn.textContent = 'Saving...';
         }
 
-        // Collect segment texts in order
-        const indices = [...modifiedSegmentIndices].sort((a, b) => a - b);
-        const segmentTexts = indices.map(idx => {
-            const seg = document.querySelector(`.segment[data-index="${idx}"]`);
-            return seg ? (seg.dataset.originalText || seg.textContent.trim()) : '';
-        }).filter(t => t);
+        // Collect segments by DOM reference, filter out any removed elements, sort by index
+        const segments = [...pendingSegments].filter(seg => document.body.contains(seg));
+        segments.sort((a, b) => parseInt(a.dataset.index) - parseInt(b.dataset.index));
+        const segmentTexts = segments.map(seg =>
+            seg.dataset.originalText || seg.textContent.trim()
+        ).filter(t => t);
 
         try {
             const response = await fetch('/api/segments/translate-batch', {
@@ -262,9 +262,10 @@ const SegmentEditor = (function() {
 
             const { translations } = await response.json();
 
-            // Update translation results
+            // Update translation results using current segment indices
             const translationResults = getTranslationResults();
-            indices.forEach((idx, i) => {
+            segments.forEach((seg, i) => {
+                const idx = parseInt(seg.dataset.index);
                 if (translations[i] && translationResults[idx]) {
                     translationResults[idx] = translations[i];
                 }
@@ -273,8 +274,7 @@ const SegmentEditor = (function() {
 
             // Update DOM segments with new translations BEFORE exiting edit mode
             // This ensures originalText gets the real translation, not placeholder
-            indices.forEach((idx, i) => {
-                const seg = document.querySelector(`.segment[data-index="${idx}"]`);
+            segments.forEach((seg, i) => {
                 if (seg && translations[i]) {
                     seg.dataset.pinyin = translations[i].pinyin;
                     seg.dataset.english = translations[i].english;
@@ -285,7 +285,7 @@ const SegmentEditor = (function() {
                 }
             });
 
-            modifiedSegmentIndices.clear();
+            pendingSegments.clear();
             exitGlobalEditMode();
             rebuildSegmentDisplay();
             rebuildTranslationTable();
@@ -421,8 +421,8 @@ const SegmentEditor = (function() {
         const segmentIndex = parseInt(originalSegment.dataset.index);
         const paragraph = originalSegment.parentNode;
 
-        // Remove from modified set if it was there
-        modifiedSegmentIndices.delete(segmentIndex);
+        // Remove original segment from pending set if it was there
+        pendingSegments.delete(originalSegment);
 
         const fragment = document.createDocumentFragment();
 
@@ -445,7 +445,7 @@ const SegmentEditor = (function() {
 
             if (isPending) {
                 span.classList.add('segment-pending');
-                modifiedSegmentIndices.add(newIndex);
+                pendingSegments.add(span);
             }
 
             addSegmentInteraction(span);
@@ -464,9 +464,9 @@ const SegmentEditor = (function() {
         const leftIndex = parseInt(leftSegment.dataset.index);
         const rightIndex = parseInt(rightSegment.dataset.index);
 
-        // Remove both indices from modified set
-        modifiedSegmentIndices.delete(leftIndex);
-        modifiedSegmentIndices.delete(rightIndex);
+        // Remove both segments from pending set if they were there
+        pendingSegments.delete(leftSegment);
+        pendingSegments.delete(rightSegment);
 
         const span = document.createElement('span');
         span.className = 'segment inline-block px-2 py-1 rounded border-2 border-transparent';
@@ -485,7 +485,7 @@ const SegmentEditor = (function() {
 
         if (isPending) {
             span.classList.add('segment-pending');
-            modifiedSegmentIndices.add(leftIndex);
+            pendingSegments.add(span);
         }
 
         addSegmentInteraction(span);
@@ -510,14 +510,10 @@ const SegmentEditor = (function() {
     }
 
     function reindexSegments() {
-        const oldToNew = new Map();
         let index = 0;
 
         document.querySelectorAll('.paragraph').forEach((para, paraIdx) => {
             para.querySelectorAll('.segment').forEach(seg => {
-                const oldIndex = parseInt(seg.dataset.index);
-                oldToNew.set(oldIndex, index);
-
                 seg.dataset.index = index;
                 seg.dataset.paragraph = paraIdx;
                 if (!seg.classList.contains('saved') && !seg.classList.contains('segment-pending') && !seg.classList.contains('editing')) {
@@ -526,15 +522,7 @@ const SegmentEditor = (function() {
                 index++;
             });
         });
-
-        // Update modifiedSegmentIndices with new indices
-        const newModified = new Set();
-        modifiedSegmentIndices.forEach(oldIdx => {
-            if (oldToNew.has(oldIdx)) {
-                newModified.add(oldToNew.get(oldIdx));
-            }
-        });
-        modifiedSegmentIndices = newModified;
+        // No need to update pendingSegments - it tracks DOM elements directly
     }
 
     function updateTranslationResultsAfterSplit(originalIndex, newSegments) {
