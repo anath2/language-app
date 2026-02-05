@@ -36,20 +36,24 @@ MOCK_CEDICT = {
 # FIXTURES
 # ============================================================================
 
+
 @pytest.fixture
 def mock_prediction():
     """Factory fixture for creating mock Prediction objects."""
+
     def _create_prediction(**kwargs):
         prediction = Mock(spec=dspy.Prediction)
         for key, value in kwargs.items():
             setattr(prediction, key, value)
         return prediction
+
     return _create_prediction
 
 
 @pytest.fixture
 def mock_segmenter(mock_prediction):
     """Mock segmenter that returns predefined segments based on input."""
+
     def _segmenter(text: str):
         # Map input text to expected segments
         segment_map = {
@@ -100,6 +104,7 @@ def mock_translator(mock_prediction):
 # ============================================================================
 # TEST CASES
 # ============================================================================
+
 
 def test_should_skip_segment():
     """Test the should_skip_segment helper function."""
@@ -192,65 +197,68 @@ def test_split_into_paragraphs():
     # Single line (no indent)
     result = split_into_paragraphs("你好世界")
     assert len(result) == 1
-    assert result[0]['content'] == "你好世界"
-    assert result[0]['indent'] == ""
-    assert result[0]['separator'] == ""
+    assert result[0]["content"] == "你好世界"
+    assert result[0]["indent"] == ""
+    assert result[0]["separator"] == ""
 
     # Two lines with single newline
     result = split_into_paragraphs("你好\n世界")
     assert len(result) == 2
-    assert result[0]['content'] == "你好"
-    assert result[0]['indent'] == ""
-    assert result[0]['separator'] == "\n"
-    assert result[1]['content'] == "世界"
-    assert result[1]['indent'] == ""
-    assert result[1]['separator'] == ""
+    assert result[0]["content"] == "你好"
+    assert result[0]["indent"] == ""
+    assert result[0]["separator"] == "\n"
+    assert result[1]["content"] == "世界"
+    assert result[1]["indent"] == ""
+    assert result[1]["separator"] == ""
 
     # Two lines with double newline (paragraph break)
     result = split_into_paragraphs("你好\n\n世界")
     assert len(result) == 2
-    assert result[0]['content'] == "你好"
-    assert result[0]['separator'] == "\n\n"
-    assert result[1]['content'] == "世界"
-    assert result[1]['separator'] == ""
+    assert result[0]["content"] == "你好"
+    assert result[0]["separator"] == "\n\n"
+    assert result[1]["content"] == "世界"
+    assert result[1]["separator"] == ""
 
     # Three paragraphs with varying separators
     result = split_into_paragraphs("第一段\n第二段\n\n第三段")
     assert len(result) == 3
-    assert result[0]['content'] == "第一段"
-    assert result[0]['separator'] == "\n"
-    assert result[1]['content'] == "第二段"
-    assert result[1]['separator'] == "\n\n"
-    assert result[2]['content'] == "第三段"
-    assert result[2]['separator'] == ""
+    assert result[0]["content"] == "第一段"
+    assert result[0]["separator"] == "\n"
+    assert result[1]["content"] == "第二段"
+    assert result[1]["separator"] == "\n\n"
+    assert result[2]["content"] == "第三段"
+    assert result[2]["separator"] == ""
 
     # Whitespace-only lines should be skipped in content but counted in separators
     result = split_into_paragraphs("你好\n  \n\n世界")
     assert len(result) == 2
-    assert result[0]['content'] == "你好"
-    assert result[0]['separator'] == "\n\n\n"  # Three newlines total
-    assert result[1]['content'] == "世界"
+    assert result[0]["content"] == "你好"
+    assert result[0]["separator"] == "\n\n\n"  # Three newlines total
+    assert result[1]["content"] == "世界"
 
     # Lines with leading whitespace should preserve indent but strip from content
     result = split_into_paragraphs("  你好  \n    世界  ")
     assert len(result) == 2
-    assert result[0]['content'] == "你好"
-    assert result[0]['indent'] == "  "  # 2 spaces preserved
-    assert result[1]['content'] == "世界"
-    assert result[1]['indent'] == "    "  # 4 spaces preserved
+    assert result[0]["content"] == "你好"
+    assert result[0]["indent"] == "  "  # 2 spaces preserved
+    assert result[1]["content"] == "世界"
+    assert result[1]["indent"] == "    "  # 4 spaces preserved
 
     # Tab indentation
     result = split_into_paragraphs("\t你好\n\t\t世界")
     assert len(result) == 2
-    assert result[0]['content'] == "你好"
-    assert result[0]['indent'] == "\t"
-    assert result[1]['content'] == "世界"
-    assert result[1]['indent'] == "\t\t"
+    assert result[0]["content"] == "你好"
+    assert result[0]["indent"] == "\t"
+    assert result[1]["content"] == "世界"
+    assert result[1]["indent"] == "\t\t"
 
 
 def test_pipeline_initialization():
     """Verify Pipeline initializes with correct DSPy modules."""
-    with patch('dspy.ChainOfThought') as mock_cot, patch('dspy.Predict') as mock_predict:
+    with (
+        patch("dspy.ChainOfThought") as mock_cot,
+        patch("dspy.Predict") as mock_predict,
+    ):
         mock_cot.return_value = Mock()
         mock_predict.return_value = Mock()
 
@@ -266,7 +274,10 @@ def test_pipeline_initialization():
 
 def test_pipeline_forward_basic_text(mock_segmenter, mock_translator):
     """Test pipeline with basic Chinese text '你好世界'."""
-    with patch('dspy.ChainOfThought') as mock_cot, patch('dspy.Predict') as mock_predict:
+    with (
+        patch("dspy.ChainOfThought") as mock_cot,
+        patch("dspy.Predict") as mock_predict,
+    ):
         mock_cot.return_value = mock_segmenter
         mock_predict.return_value = mock_translator
 
@@ -281,7 +292,10 @@ def test_pipeline_forward_basic_text(mock_segmenter, mock_translator):
 
 def test_pipeline_forward_multiple_segments(mock_segmenter, mock_translator):
     """Test pipeline segments text into multiple words correctly."""
-    with patch('dspy.ChainOfThought') as mock_cot, patch('dspy.Predict') as mock_predict:
+    with (
+        patch("dspy.ChainOfThought") as mock_cot,
+        patch("dspy.Predict") as mock_predict,
+    ):
         mock_cot.return_value = mock_segmenter
         mock_predict.return_value = mock_translator
 
@@ -296,7 +310,10 @@ def test_pipeline_forward_multiple_segments(mock_segmenter, mock_translator):
 
 def test_pipeline_forward_empty_input(mock_prediction):
     """Test pipeline handles empty input gracefully."""
-    with patch('dspy.ChainOfThought') as mock_cot, patch('dspy.Predict') as mock_predict:
+    with (
+        patch("dspy.ChainOfThought") as mock_cot,
+        patch("dspy.Predict") as mock_predict,
+    ):
         empty_segmenter = Mock(return_value=mock_prediction(segments=[]))
         empty_translator = Mock(return_value=mock_prediction(english=""))
 
@@ -311,7 +328,10 @@ def test_pipeline_forward_empty_input(mock_prediction):
 
 def test_pipeline_uses_actual_prediction_objects(mock_prediction):
     """Test with actual DSPy Prediction objects."""
-    with patch('dspy.ChainOfThought') as mock_cot, patch('dspy.Predict') as mock_predict:
+    with (
+        patch("dspy.ChainOfThought") as mock_cot,
+        patch("dspy.Predict") as mock_predict,
+    ):
         # Use real Prediction objects
         segment_pred = dspy.Prediction(segments=["你", "好"])
 
@@ -345,7 +365,10 @@ def test_pipeline_uses_actual_prediction_objects(mock_prediction):
 
 def test_pipeline_translator_called_per_segment(mock_segmenter, mock_translator):
     """Verify translator is called once per segment (not batched)."""
-    with patch('dspy.ChainOfThought') as mock_cot, patch('dspy.Predict') as mock_predict:
+    with (
+        patch("dspy.ChainOfThought") as mock_cot,
+        patch("dspy.Predict") as mock_predict,
+    ):
         mock_cot.return_value = mock_segmenter
         mock_predict.return_value = mock_translator
 
@@ -373,7 +396,10 @@ def test_pipeline_translator_called_per_segment(mock_segmenter, mock_translator)
 
 def test_pipeline_skips_punctuation_and_symbols(mock_prediction):
     """Verify pipeline skips translation for symbols, numbers, and punctuation."""
-    with patch('dspy.ChainOfThought') as mock_cot, patch('dspy.Predict') as mock_predict:
+    with (
+        patch("dspy.ChainOfThought") as mock_cot,
+        patch("dspy.Predict") as mock_predict,
+    ):
         # Create a segmenter that returns mixed segments (Chinese words and punctuation)
         def custom_segmenter(text):
             # Simulate segmentation of: "你好，世界！123"

@@ -19,7 +19,31 @@ from app.persistence.crud import (
     update_vocab_status,
 )
 from app.persistence.db import db_conn, get_db_path, init_db
-from app.persistence.models import ReviewCard, SRSState, TextRecord, VocabSRSInfo
+from app.persistence.jobs import (
+    complete_job,
+    create_job,
+    delete_job,
+    fail_job,
+    get_job,
+    get_job_segment_count,
+    get_job_segments,
+    get_job_with_results,
+    list_jobs,
+    save_job_paragraph,
+    save_job_segment,
+    update_job_segments,
+    update_job_status,
+)
+from app.persistence.models import (
+    JobParagraphRecord,
+    JobRecord,
+    JobSegmentRecord,
+    JobWithResults,
+    ReviewCard,
+    SRSState,
+    TextRecord,
+    VocabSRSInfo,
+)
 from app.persistence.profile import (
     UserProfile,
     count_known_vocab,
@@ -59,12 +83,30 @@ __all__ = [
     "VocabSRSInfo",
     "ReviewCard",
     "UserProfile",
+    "JobRecord",
+    "JobSegmentRecord",
+    "JobParagraphRecord",
+    "JobWithResults",
     # CRUD
     "create_text",
     "get_text",
     "create_event",
     "save_vocab_item",
     "update_vocab_status",
+    # Jobs
+    "create_job",
+    "get_job",
+    "get_job_with_results",
+    "get_job_segments",
+    "get_job_segment_count",
+    "update_job_status",
+    "complete_job",
+    "fail_job",
+    "save_job_paragraph",
+    "save_job_segment",
+    "update_job_segments",
+    "list_jobs",
+    "delete_job",
     # Profile
     "get_user_profile",
     "upsert_user_profile",

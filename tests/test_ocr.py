@@ -128,7 +128,9 @@ class TestExtractTextFromImage:
     @patch("app.utils.PILImage")
     @patch("dspy.ChainOfThought")
     @patch("dspy.Image")
-    def test_returns_empty_string_for_no_text(self, mock_image_class, mock_cot, mock_pil):
+    def test_returns_empty_string_for_no_text(
+        self, mock_image_class, mock_cot, mock_pil
+    ):
         """Return empty string when no text found in image."""
         # Mock PIL image processing
         mock_pil_image = MagicMock()
@@ -276,7 +278,9 @@ class TestTranslateImageHtmlEndpoint:
             "/translate-image-html",
             files={"file": ("test.pdf", b"fake data", "application/pdf")},
         )
-        assert response.status_code == 200  # HTML endpoint returns 200 with error fragment
+        assert (
+            response.status_code == 200
+        )  # HTML endpoint returns 200 with error fragment
         assert "Unsupported file type" in response.text
 
     @patch("app.routes.translation.extract_text_from_image", new_callable=AsyncMock)
@@ -307,5 +311,7 @@ class TestTranslateImageHtmlEndpoint:
             files={"file": ("test.png", b"fake image", "image/png")},
         )
 
-        assert response.status_code == 200  # HTML endpoint returns 200 with error fragment
+        assert (
+            response.status_code == 200
+        )  # HTML endpoint returns 200 with error fragment
         assert "No Chinese text found" in response.text

@@ -63,7 +63,9 @@ async def api_create_text(request: CreateTextRequest):
     if not request.raw_text.strip():
         raise HTTPException(status_code=400, detail="raw_text is required")
     record = create_text(
-        raw_text=request.raw_text, source_type=request.source_type, metadata=request.metadata
+        raw_text=request.raw_text,
+        source_type=request.source_type,
+        metadata=request.metadata,
     )
     return CreateTextResponse(id=record.id)
 
@@ -229,8 +231,11 @@ async def api_translate_batch(request: TranslateBatchRequest):
     Used after split/join operations to get proper translations for modified segments.
     Uses pypinyin for pinyin generation, CEDICT for dictionary lookup,
     and falls back to LLM for words not in CEDICT.
+
+    If job_id and paragraph_idx are provided, updates the job_segments table.
     """
     from app.cedict import lookup
+    from app.persistence.jobs import update_job_segments
     from app.pipeline import get_pipeline
     from app.utils import should_skip_segment, to_pinyin
 
@@ -259,5 +264,17 @@ async def api_translate_batch(request: TranslateBatchRequest):
         translations.append(
             TranslationResult(segment=segment_text, pinyin=pinyin, english=english)
         )
+
+    # Persist to job_segments table if job_id is provided
+    if request.job_id is not None and request.paragraph_idx is not None:
+        segments_data = [
+            {
+                "segment_text": t.segment,
+                "pinyin": t.pinyin,
+                "english": t.english,
+            }
+            for t in translations
+        ]
+        update_job_segments(request.job_id, request.paragraph_idx, segments_data)
 
     return TranslateBatchResponse(translations=translations)

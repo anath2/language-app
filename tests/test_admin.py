@@ -211,11 +211,14 @@ class TestProgressExport:
         """Export works on empty database."""
         bundle = export_progress()
 
-        assert bundle.schema_version == 1
+        assert bundle.schema_version == 2
         assert bundle.exported_at != ""
         assert bundle.vocab_items == []
         assert bundle.srs_state == []
         assert bundle.vocab_lookups == []
+        assert bundle.jobs == []
+        assert bundle.job_segments == []
+        assert bundle.job_paragraphs == []
 
     def test_export_with_data(self, temp_db):
         """Export includes saved vocabulary and SRS data."""
@@ -338,23 +341,25 @@ class TestProgressImport:
 
     def test_import_json_string(self, temp_db):
         """import_progress_json works with JSON string."""
-        json_str = json.dumps({
-            "schema_version": 1,
-            "exported_at": "2024-01-01T00:00:00Z",
-            "vocab_items": [
-                {
-                    "id": "test123",
-                    "headword": "测试",
-                    "pinyin": "cè shì",
-                    "english": "test",
-                    "status": "learning",
-                    "created_at": "2024-01-01T00:00:00Z",
-                    "updated_at": "2024-01-01T00:00:00Z",
-                },
-            ],
-            "srs_state": [],
-            "vocab_lookups": [],
-        })
+        json_str = json.dumps(
+            {
+                "schema_version": 1,
+                "exported_at": "2024-01-01T00:00:00Z",
+                "vocab_items": [
+                    {
+                        "id": "test123",
+                        "headword": "测试",
+                        "pinyin": "cè shì",
+                        "english": "test",
+                        "status": "learning",
+                        "created_at": "2024-01-01T00:00:00Z",
+                        "updated_at": "2024-01-01T00:00:00Z",
+                    },
+                ],
+                "srs_state": [],
+                "vocab_lookups": [],
+            }
+        )
 
         counts = import_progress_json(json_str)
         assert counts["vocab_items"] == 1
@@ -366,58 +371,72 @@ class TestProgressValidation:
     def test_missing_schema_version(self, temp_db):
         """Validation fails if schema_version is missing."""
         with pytest.raises(ProgressImportError, match="Missing 'schema_version'"):
-            validate_progress_bundle({
-                "vocab_items": [],
-                "srs_state": [],
-                "vocab_lookups": [],
-            })
+            validate_progress_bundle(
+                {
+                    "vocab_items": [],
+                    "srs_state": [],
+                    "vocab_lookups": [],
+                }
+            )
 
     def test_unsupported_schema_version(self, temp_db):
         """Validation fails if schema_version is too high."""
         with pytest.raises(ProgressImportError, match="Unsupported schema version"):
-            validate_progress_bundle({
-                "schema_version": 999,
-                "vocab_items": [],
-                "srs_state": [],
-                "vocab_lookups": [],
-            })
+            validate_progress_bundle(
+                {
+                    "schema_version": 999,
+                    "vocab_items": [],
+                    "srs_state": [],
+                    "vocab_lookups": [],
+                }
+            )
 
     def test_missing_vocab_items(self, temp_db):
         """Validation fails if vocab_items is missing."""
         with pytest.raises(ProgressImportError, match="Missing 'vocab_items'"):
-            validate_progress_bundle({
-                "schema_version": 1,
-                "srs_state": [],
-                "vocab_lookups": [],
-            })
+            validate_progress_bundle(
+                {
+                    "schema_version": 1,
+                    "srs_state": [],
+                    "vocab_lookups": [],
+                }
+            )
 
     def test_missing_srs_state(self, temp_db):
         """Validation fails if srs_state is missing."""
         with pytest.raises(ProgressImportError, match="Missing 'srs_state'"):
-            validate_progress_bundle({
-                "schema_version": 1,
-                "vocab_items": [],
-                "vocab_lookups": [],
-            })
+            validate_progress_bundle(
+                {
+                    "schema_version": 1,
+                    "vocab_items": [],
+                    "vocab_lookups": [],
+                }
+            )
 
     def test_missing_vocab_lookups(self, temp_db):
         """Validation fails if vocab_lookups is missing."""
         with pytest.raises(ProgressImportError, match="Missing 'vocab_lookups'"):
-            validate_progress_bundle({
-                "schema_version": 1,
-                "vocab_items": [],
-                "srs_state": [],
-            })
+            validate_progress_bundle(
+                {
+                    "schema_version": 1,
+                    "vocab_items": [],
+                    "srs_state": [],
+                }
+            )
 
     def test_vocab_item_missing_fields(self, temp_db):
         """Validation fails if vocab_item is missing required fields."""
-        with pytest.raises(ProgressImportError, match="vocab_items\\[0\\] missing fields"):
-            validate_progress_bundle({
-                "schema_version": 1,
-                "vocab_items": [{"id": "test"}],  # Missing other fields
-                "srs_state": [],
-                "vocab_lookups": [],
-            })
+        with pytest.raises(
+            ProgressImportError, match="vocab_items\\[0\\] missing fields"
+        ):
+            validate_progress_bundle(
+                {
+                    "schema_version": 1,
+                    "vocab_items": [{"id": "test"}],  # Missing other fields
+                    "srs_state": [],
+                    "vocab_lookups": [],
+                }
+            )
 
     def test_invalid_json(self, temp_db):
         """Import fails with invalid JSON."""

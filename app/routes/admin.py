@@ -8,7 +8,6 @@ Endpoints:
 - POST /admin/progress/import - Upload progress JSON
 """
 
-import json
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Form, Request, UploadFile
@@ -100,7 +99,7 @@ async def export_progress():
 async def import_progress(request: Request, file: UploadFile):
     """
     Import learning progress from uploaded JSON file.
-    
+
     Overwrites existing vocab_items, srs_state, and vocab_lookups.
     """
     # Validate file size

@@ -46,7 +46,7 @@ async def translate_text(request: TranslateRequest):
     # Process each paragraph through the pipeline
     paragraph_results = []
     for para in paragraphs:
-        results = await pipe.aforward(para['content'])
+        results = await pipe.aforward(para["content"])
         translations = [
             TranslationResult(segment=seg, pinyin=pinyin, english=english)
             for seg, pinyin, english in results
@@ -54,8 +54,8 @@ async def translate_text(request: TranslateRequest):
         paragraph_results.append(
             ParagraphResult(
                 translations=translations,
-                indent=para.get('indent', ''),
-                separator=para['separator']
+                indent=para.get("indent", ""),
+                separator=para["separator"],
             )
         )
 
@@ -81,16 +81,18 @@ async def translate_html(request: Request, text: str = Form(...)):
         # Process each paragraph through the pipeline
         paragraph_results = []
         for para in paragraphs:
-            results = await pipe.aforward(para['content'])
+            results = await pipe.aforward(para["content"])
             translations = [
                 {"segment": seg, "pinyin": pinyin, "english": english}
                 for seg, pinyin, english in results
             ]
-            paragraph_results.append({
-                "translations": translations,
-                "indent": para.get('indent', ''),
-                "separator": para['separator']
-            })
+            paragraph_results.append(
+                {
+                    "translations": translations,
+                    "indent": para.get("indent", ""),
+                    "separator": para["separator"],
+                }
+            )
 
         return templates.TemplateResponse(
             request=request,
@@ -128,17 +130,26 @@ async def translate_stream(text: str = Form(...)):
             # Count total segments across all paragraphs
             all_paragraph_segments = []
             for para in paragraphs:
-                segmentation = await pipe.segment.acall(text=para['content'])
-                all_paragraph_segments.append({
-                    'segments': segmentation.segments,
-                    'indent': para.get('indent', ''),
-                    'separator': para['separator']
-                })
+                segmentation = await pipe.segment.acall(text=para["content"])
+                all_paragraph_segments.append(
+                    {
+                        "segments": segmentation.segments,
+                        "indent": para.get("indent", ""),
+                        "separator": para["separator"],
+                    }
+                )
 
-            total_segments = sum(len(p['segments']) for p in all_paragraph_segments)
+            total_segments = sum(len(p["segments"]) for p in all_paragraph_segments)
 
             # Send initial info with paragraph structure
-            paragraph_info = [{'segment_count': len(p['segments']), 'indent': p['indent'], 'separator': p['separator']} for p in all_paragraph_segments]
+            paragraph_info = [
+                {
+                    "segment_count": len(p["segments"]),
+                    "indent": p["indent"],
+                    "separator": p["separator"],
+                }
+                for p in all_paragraph_segments
+            ]
             yield f"data: {json.dumps({'type': 'start', 'total': total_segments, 'paragraphs': paragraph_info, 'fullTranslation': full_translation})}\n\n"
 
             # Step 2: Translate each segment in each paragraph
@@ -147,7 +158,7 @@ async def translate_stream(text: str = Form(...)):
 
             for para_idx, para_data in enumerate(all_paragraph_segments):
                 para_results = []
-                for seg_idx, segment in enumerate(para_data['segments']):
+                for seg_idx, segment in enumerate(para_data["segments"]):
                     # Skip translation for segments with only symbols, numbers, and punctuation
                     if should_skip_segment(segment):
                         result = {
@@ -161,7 +172,7 @@ async def translate_stream(text: str = Form(...)):
                         # Pinyin is generated deterministically; LLM only provides English
                         pinyin = to_pinyin(segment)
                         # Use the original paragraph content as context
-                        sentence_context = paragraphs[para_idx]['content']
+                        sentence_context = paragraphs[para_idx]["content"]
                         # Look up dictionary definition
                         dict_entry = lookup(pipe.cedict, segment) or "Not in dictionary"
                         translation = await pipe.translate.acall(
@@ -182,11 +193,13 @@ async def translate_stream(text: str = Form(...)):
                     # Send progress update
                     yield f"data: {json.dumps({'type': 'progress', 'current': global_index, 'total': total_segments, 'result': result})}\n\n"
 
-                all_results.append({
-                    'translations': para_results,
-                    'indent': para_data['indent'],
-                    'separator': para_data['separator']
-                })
+                all_results.append(
+                    {
+                        "translations": para_results,
+                        "indent": para_data["indent"],
+                        "separator": para_data["separator"],
+                    }
+                )
 
             # Send completion with paragraph structure
             yield f"data: {json.dumps({'type': 'complete', 'paragraphs': all_results, 'fullTranslation': full_translation})}\n\n"
@@ -255,7 +268,7 @@ async def translate_image(file: UploadFile = File(...)):
     # Process each paragraph through the pipeline
     paragraph_results = []
     for para in paragraphs:
-        results = await pipe.aforward(para['content'])
+        results = await pipe.aforward(para["content"])
         translations = [
             TranslationResult(segment=seg, pinyin=pinyin, english=english)
             for seg, pinyin, english in results
@@ -263,8 +276,8 @@ async def translate_image(file: UploadFile = File(...)):
         paragraph_results.append(
             ParagraphResult(
                 translations=translations,
-                indent=para.get('indent', ''),
-                separator=para['separator']
+                indent=para.get("indent", ""),
+                separator=para["separator"],
             )
         )
 
@@ -302,16 +315,18 @@ async def translate_image_html(request: Request, file: UploadFile = File(...)):
         # Process each paragraph through the pipeline
         paragraph_results = []
         for para in paragraphs:
-            results = await pipe.aforward(para['content'])
+            results = await pipe.aforward(para["content"])
             translations = [
                 {"segment": seg, "pinyin": pinyin, "english": english}
                 for seg, pinyin, english in results
             ]
-            paragraph_results.append({
-                "translations": translations,
-                "indent": para.get('indent', ''),
-                "separator": para['separator']
-            })
+            paragraph_results.append(
+                {
+                    "translations": translations,
+                    "indent": para.get("indent", ""),
+                    "separator": para["separator"],
+                }
+            )
 
         return templates.TemplateResponse(
             request=request,

@@ -13,9 +13,7 @@ from pathlib import Path
 
 # Regex to parse CC-CEDICT entries
 # Format: Traditional Simplified [pinyin] /definitions/
-ENTRY_PATTERN = re.compile(
-    r"^(\S+)\s+(\S+)\s+\[([^\]]+)\]\s+/(.+)/$"
-)
+ENTRY_PATTERN = re.compile(r"^(\S+)\s+(\S+)\s+\[([^\]]+)\]\s+/(.+)/$")
 
 # Type alias for the dictionary
 CedictDict = dict[str, list[str]]
