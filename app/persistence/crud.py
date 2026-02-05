@@ -16,7 +16,9 @@ def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def create_text(*, raw_text: str, source_type: str, metadata: dict[str, Any] | None) -> TextRecord:
+def create_text(
+    *, raw_text: str, source_type: str, metadata: dict[str, Any] | None
+) -> TextRecord:
     text_id = uuid.uuid4().hex
     created_at = _utc_now_iso()
     normalized_text = raw_text.strip()
@@ -28,7 +30,14 @@ def create_text(*, raw_text: str, source_type: str, metadata: dict[str, Any] | N
             INSERT INTO texts (id, created_at, source_type, raw_text, normalized_text, metadata_json)
             VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (text_id, created_at, source_type, raw_text, normalized_text, metadata_json),
+            (
+                text_id,
+                created_at,
+                source_type,
+                raw_text,
+                normalized_text,
+                metadata_json,
+            ),
         )
 
     return TextRecord(
