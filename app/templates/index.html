@@ -26,6 +26,7 @@
                 </p>
             </div>
             <div class="flex items-center gap-3">
+                <a href="/translations" class="btn-secondary px-3 py-1.5 text-sm">Translations</a>
                 <a href="/admin" class="btn-secondary px-3 py-1.5 text-sm">Admin</a>
                 <button id="review-btn" class="btn-secondary px-3 py-1.5 flex items-center" onclick="window.App.openReviewPanel()">
                     Review
@@ -136,10 +137,52 @@
                 <div id="translation-table"></div>
             </div>
 
-            <!-- Right Column: Segmented Output -->
-            <div id="results" class="input-card h-[100%] overflow-y-auto p-5">
-                <div class="h-full flex items-center justify-center">
-                    <p class="text-center italic" style="color: var(--text-muted); font-size: var(--text-sm);">Translation results will appear here</p>
+            <!-- Right Column: Job Queue / Translation Results -->
+            <div class="space-y-4">
+                <!-- Job Queue Panel (default view) -->
+                <div id="job-queue-panel" class="input-card p-5">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="font-semibold" style="color: var(--text-primary); font-size: var(--text-base);">Translation Queue</h2>
+                        <span id="queue-count" class="text-xs px-2 py-0.5 rounded-full" style="background: var(--pastel-3); color: var(--text-primary);">0 jobs</span>
+                    </div>
+                    <div id="job-list" class="space-y-3">
+                        <!-- Jobs will be rendered here -->
+                        <div class="text-center py-8">
+                            <p class="italic" style="color: var(--text-muted); font-size: var(--text-sm);">No translation jobs yet</p>
+                            <p class="mt-1" style="color: var(--text-muted); font-size: var(--text-xs);">Submit text on the left to start</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Expanded Job View (hidden by default) -->
+                <div id="expanded-job-view" class="hidden">
+                    <!-- Back button -->
+                    <button id="back-to-queue-btn" onclick="window.App.backToQueue()" class="mb-3 flex items-center gap-1 hover:underline" style="color: var(--primary); font-size: var(--text-sm);">
+                        <span>&larr;</span> Back to Queue
+                    </button>
+
+                    <!-- Original text (read-only) -->
+                    <div id="original-text-panel" class="input-card p-4 mb-4">
+                        <label class="block font-medium mb-1.5" style="color: var(--text-secondary); font-size: var(--text-xs);">Original Text</label>
+                        <div id="original-text-content" class="font-chinese p-2 rounded" style="background: var(--pastel-7); color: var(--text-primary); font-size: var(--text-chinese); min-height: 60px; white-space: pre-wrap;"></div>
+                    </div>
+
+                    <!-- Translation results -->
+                    <div id="results" class="input-card p-5 overflow-y-auto" style="max-height: 60vh;">
+                        <div class="h-full flex items-center justify-center">
+                            <p class="text-center italic" style="color: var(--text-muted); font-size: var(--text-sm);">Translation results will appear here</p>
+                        </div>
+                    </div>
+
+                    <!-- Mini queue preview -->
+                    <div id="mini-queue-preview" class="mt-4 hidden">
+                        <button onclick="window.App.backToQueue()" class="w-full input-card p-3 text-left hover:shadow-md transition-shadow">
+                            <div class="flex items-center justify-between">
+                                <span style="color: var(--text-secondary); font-size: var(--text-sm);">Queue</span>
+                                <span id="mini-queue-count" class="text-xs px-2 py-0.5 rounded-full" style="background: var(--pastel-4); color: var(--text-primary);">0 more</span>
+                            </div>
+                        </button>
+                    </div>
                 </div>
             </div>
         </main>
