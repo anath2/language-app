@@ -187,7 +187,16 @@
             </div>
         </main>
 
-        <!-- Application JavaScript -->
+        <!-- Application JavaScript - Modules (load in dependency order) -->
+        <script src="/static/js/modules/utils.js"></script>
+        <script src="/static/js/modules/state.js"></script>
+        <script src="/static/js/modules/api.js"></script>
+        <script src="/static/js/modules/srs.js"></script>
+        <script src="/static/js/modules/segment-interactions.js"></script>
+        <script src="/static/js/modules/translation-ui.js"></script>
+        <script src="/static/js/modules/job-queue.js"></script>
+        <script src="/static/js/modules/review-panel.js"></script>
+        <!-- Main modules -->
         <script src="/static/js/segment-editor.js"></script>
         <script src="/static/js/app.js"></script>
     </div>
