@@ -29,7 +29,9 @@ def get_db_path() -> Path:
     env = os.getenv("LANGUAGE_APP_DB_PATH")
     if env:
         return Path(env).expanduser().resolve()
-    return (Path(__file__).resolve().parent.parent / "data" / "language_app.db").resolve()
+    return (
+        Path(__file__).resolve().parent.parent / "data" / "language_app.db"
+    ).resolve()
 
 
 def _ensure_parent_dir(path: Path) -> None:
@@ -61,13 +63,13 @@ def _load_migrations() -> list[tuple[int, str]]:
     """
     Load all .sql migration files from the migrations folder.
     Returns a sorted list of (version, sql_content) tuples.
-    
+
     Files must be named: NNN_description.sql (e.g., 001_init.sql)
     """
     migrations_dir = _get_migrations_dir()
     if not migrations_dir.exists():
         return []
-    
+
     migrations: list[tuple[int, str]] = []
     for sql_file in sorted(migrations_dir.glob("*.sql")):
         # Extract version number from filename (e.g., "001_init.sql" -> 1)
@@ -77,10 +79,10 @@ def _load_migrations() -> list[tuple[int, str]]:
             version = int(version_str)
         except ValueError:
             continue  # Skip files that don't start with a number
-        
+
         sql_content = sql_file.read_text(encoding="utf-8")
         migrations.append((version, sql_content))
-    
+
     return sorted(migrations, key=lambda x: x[0])
 
 
@@ -102,4 +104,6 @@ def init_db() -> None:
         for version, sql in migrations:
             if version > int(current):
                 conn.executescript(sql)
-                conn.execute("INSERT INTO schema_migrations(version) VALUES (?)", (version,))
+                conn.execute(
+                    "INSERT INTO schema_migrations(version) VALUES (?)", (version,)
+                )

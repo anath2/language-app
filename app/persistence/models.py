@@ -66,6 +66,57 @@ class UserProfile:
     created_at: str
     updated_at: str
 
+
+@dataclass(frozen=True)
+class JobRecord:
+    """Job queue record."""
+
+    id: str
+    created_at: str
+    updated_at: str
+    status: str  # pending, processing, completed, failed
+    job_type: str
+    source_type: str
+    input_text: str
+    full_translation: str | None
+    error_message: str | None
+    metadata: dict[str, Any]
+    text_id: str | None
+
+
+@dataclass(frozen=True)
+class JobSegmentRecord:
+    """Individual segment translation result within a job."""
+
+    id: str
+    job_id: str
+    paragraph_idx: int
+    seg_idx: int
+    segment_text: str
+    pinyin: str
+    english: str
+    created_at: str
+
+
+@dataclass(frozen=True)
+class JobParagraphRecord:
+    """Paragraph metadata for a job."""
+
+    id: str
+    job_id: str
+    paragraph_idx: int
+    indent: str
+    separator: str
+
+
+@dataclass(frozen=True)
+class JobWithResults:
+    """Job with full translation results for API responses."""
+
+    job: JobRecord
+    paragraphs: list[dict[str, Any]]  # [{translations: [...], indent, separator}]
+
+
 @dataclass
 class ProgressBundle:
     """Container for progress data."""
@@ -75,4 +126,7 @@ class ProgressBundle:
     vocab_items: list[dict[str, Any]]
     srs_state: list[dict[str, Any]]
     vocab_lookups: list[dict[str, Any]]
-
+    # Job queue data for translation history
+    jobs: list[dict[str, Any]] | None = None
+    job_segments: list[dict[str, Any]] | None = None
+    job_paragraphs: list[dict[str, Any]] | None = None
