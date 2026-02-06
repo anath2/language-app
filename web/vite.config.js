@@ -9,6 +9,16 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    strictPort: true
+    strictPort: true,
+    proxy: {
+      "/api": "http://localhost:8000",
+      "/jobs": "http://localhost:8000",
+      "/extract-text": "http://localhost:8000",
+      "/login": "http://localhost:8000",
+      "/logout": "http://localhost:8000",
+      "/translations": "http://localhost:8000",
+      "/admin": "http://localhost:8000",
+      "/health": "http://localhost:8000",
+    }
   }
 });
