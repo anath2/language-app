@@ -1,4 +1,4 @@
-export async function getJson(url) {
+export async function getJson<T = unknown>(url: string): Promise<T> {
   const res = await fetch(url, {
     headers: { "Accept": "application/json" }
   });
@@ -9,7 +9,7 @@ export async function getJson(url) {
   return res.json();
 }
 
-export async function postJson(url, body) {
+export async function postJson<T = unknown>(url: string, body: unknown): Promise<T> {
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json", "Accept": "application/json" },
@@ -22,7 +22,7 @@ export async function postJson(url, body) {
   return res.json();
 }
 
-export async function deleteRequest(url) {
+export async function deleteRequest<T = unknown>(url: string): Promise<T> {
   const res = await fetch(url, { method: "DELETE" });
   if (!res.ok) {
     const message = await safeErrorMessage(res);
@@ -31,7 +31,7 @@ export async function deleteRequest(url) {
   return res.json();
 }
 
-async function safeErrorMessage(res) {
+async function safeErrorMessage(res: Response): Promise<string> {
   try {
     const data = await res.json();
     return data?.detail || data?.message;
