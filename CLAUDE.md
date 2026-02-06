@@ -26,9 +26,17 @@ uv run pytest
 cd server
 uv run pytest tests/test_pipeline.py -v
 
-# Type checking
+# Type checking (backend)
 cd server
 uv run pyright
+
+# Type checking (frontend)
+cd web
+npm run typecheck
+
+# Frontend production build
+cd web
+npm run build
 
 # Linting
 cd server
@@ -65,40 +73,58 @@ uv run ruff format .
 ```
 server/
 ├── app/
-│   ├── static/
-│   │   ├── css/
-│   │   │   ├── variables.css    # CSS custom properties (colors, fonts, sizes)
-│   │   │   ├── base.css         # Body, buttons, forms, inputs, spinners
-│   │   │   └── segments.css     # Segments, editing UI, review panel, tooltips
-│   │   └── js/
-│   │       ├── segment-editor.js # Split/join segment functionality (IIFE)
-│   │       └── app.js            # Core app logic, translation, SRS
+│   ├── static/        # Legacy HTMX frontend (still served)
 │   └── templates/
-│       └── index.html            # HTML structure only (~150 lines)
-web/
-└── src/
-    └── ...                       # Svelte migration workspace
+web/                   # Svelte 5 SPA (primary frontend)
+├── public/css/        # Global CSS (variables, base, segments)
+├── src/
+│   ├── App.svelte     # Root orchestrator (~500 lines — state, API, layout)
+│   ├── main.ts        # Entry point (mount API)
+│   ├── app.css        # Minimal reset
+│   ├── lib/
+│   │   ├── api.ts     # Typed fetch wrappers (getJson, postJson, deleteRequest)
+│   │   ├── utils.ts   # Pure helpers (getPastelColor, formatTimeAgo)
+│   │   └── types.ts   # Shared interfaces/types for all components
+│   └── components/
+│       ├── ReviewPanel.svelte        # SRS review slide-out panel (~110 lines)
+│       ├── TranslateForm.svelte      # Text input + OCR upload form (~130 lines)
+│       ├── JobQueue.svelte           # Job card list (~70 lines, stateless)
+│       ├── SegmentDisplay.svelte     # Segments + tooltip + progress (~250 lines)
+│       └── TranslationTable.svelte   # Collapsible details table (~40 lines)
+├── vite.config.js     # Dev proxy to FastAPI on :8000
+├── tsconfig.json      # Strict TS, verbatimModuleSyntax
+└── package.json       # Svelte 5.49.2, Vite 7.3.1, TS 5.6
 ```
 
-**JavaScript Modules**:
+**Svelte 5 Conventions**:
 
-`segment-editor.js` - IIFE exposing `SegmentEditor` object:
-- `init(deps)` - Initialize with dependencies (getPastelColor, addSegmentInteraction, etc.)
-- `enterEditMode(segment)` - Enter segment editing mode (shows split points, join indicators)
-- `exitEditMode()` - Exit editing mode
-- Handles split/join operations with undo support
+*Runes (reactivity)*:
+- `$state()` for all mutable reactive state — typed inline (e.g. `let x = $state<Foo[]>([])`)
+- `$derived()` / `$derived.by()` for computed values. Prefer `$derived` over `$effect` for state synchronization.
+- `$effect()` only for true side effects (fetching data on mount, DOM interactions). Keep effects minimal.
+- `$props()` for component props (replaces `export let`). Destructure with an interface type.
+- `$bindable()` for two-way bindable props.
 
-`app.js` - Main application logic:
-- Translation streaming via SSE (`/translate-stream`)
-- SRS tracking (savedVocabMap, opacity updates)
-- Review panel (flashcard system)
-- Segment interactions (tooltips, click-to-pin)
-- Exposes `window.App` for inline onclick handlers
+*Event handling*:
+- Use `onclick`, `oninput` etc. (properties, not `on:click` directives) — Svelte 5 convention.
+- Use callback props instead of `createEventDispatcher`. No event modifier support; wrap handlers manually (e.g. `preventDefault`).
 
-**CSS Organization**:
-- `variables.css` - All CSS custom properties (--primary, --pastel-*, --text-*, etc.)
-- `base.css` - Base typography, buttons (.btn-primary, .btn-secondary), form inputs, spinners
-- `segments.css` - Segment colors, states (.segment-pending, .saved, .editing), review panel
+*Snippets & children*:
+- Use `{#snippet name(params)}` / `{@render name()}` instead of slots.
+- Content inside component tags becomes the `children` snippet prop.
+
+*Component patterns*:
+- TypeScript in `<script lang="ts">` — no preprocessor needed for type-only features in Svelte 5.
+- Interfaces for all data shapes defined at the top of the component script.
+- `mount()` API for entry point (not `new App()`).
+
+*State sharing (when components are split)*:
+- For cross-component state, use `.svelte.ts` files with `$state` wrapped in object getters/setters or classes (raw exported `$state` vars lose reactivity across modules).
+- For deeply nested component trees, use type-safe context (`setContext`/`getContext` with a `createContext` helper).
+
+*Styling*:
+- Global CSS in `web/public/css/` (variables, base, segments) — loaded via `index.html`.
+- Component-scoped styles via `<style>` blocks where appropriate.
 
 **Segment Editing UX**:
 - Click segment → tooltip with Edit button
@@ -123,7 +149,10 @@ Tests mock DSPy's `ChainOfThought` and `Predict` at the module level to avoid AP
 
 ## Key Conventions
 
+- API layer in `web/src/lib/api.ts` — generic typed fetch wrappers; all endpoints proxied through Vite dev server
+- SSE streaming for real-time translation progress (implemented directly in App.svelte via `EventSource`)
+- No routing library — SPA uses conditional rendering (`isExpandedView` boolean) for view switching
+- No external state management library — all state is local `$state` runes in App.svelte
 - Segment editing uses stub API calls (`stubSplitSegment`, `stubJoinSegments`) - replace with real backend endpoints when implemented
-- Translation results stored in `translationResults` array, synced between app.js and segment-editor.js via getter/setter
 - SRS opacity: 1.0 = new/struggling word (full color), 0 = known word (no highlight)
 - Pastel colors cycle through 8 options based on segment index

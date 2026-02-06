@@ -49,7 +49,7 @@ uv run ruff format .
 ### Frontend
 - Frontend workspace lives in `web/` with Svelte + Vite tooling.
 - Server-rendered templates and legacy static assets live in `server/app/templates` and `server/app/static`.
-- CSS is split across `variables.css`, `base.css`, and `segments.css` under `server/app/static/css`.
+- CSS is split across `variables.css`, `base.css`, and `segments.css` under `web/public/css`.
 
 ## Environment Variables
 Required in `.env`:
