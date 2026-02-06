@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Translations - Language App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/variables.css">
+    <link rel="stylesheet" href="/static/css/base.css">
+    <link rel="stylesheet" href="/static/css/segments.css">
+</head>
+<body class="min-h-screen" style="background: var(--background);">
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
+        <!-- Navigation -->
+        <nav class="flex items-center justify-between mb-8">
+            <div class="flex items-center gap-6">
+                <a href="/" class="font-semibold" style="color: var(--text-primary); font-size: var(--text-lg);">Language App</a>
+                <div class="flex items-center gap-4">
+                    <a href="/" class="nav-link" style="color: var(--text-secondary); font-size: var(--text-sm);">Home</a>
+                    <a href="/translations" class="nav-link" style="color: var(--primary); font-size: var(--text-sm); font-weight: 500;">Translations</a>
+                    <a href="/admin" class="nav-link" style="color: var(--text-secondary); font-size: var(--text-sm);">Admin</a>
+                </div>
+            </div>
+            <form action="/logout" method="POST">
+                <button type="submit" class="btn-secondary px-3 py-1.5 text-sm">Logout</button>
+            </form>
+        </nav>
+
+        <header class="mb-6">
+            <h1 class="font-semibold" style="color: var(--text-primary); font-size: var(--text-2xl);">Translation History</h1>
+            <p class="mt-1" style="color: var(--text-secondary); font-size: var(--text-sm);">Browse and edit your past translations</p>
+        </header>
+
+        <!-- Filter Controls -->
+        <div class="flex items-center gap-4 mb-6">
+            <div class="flex items-center gap-2">
+                <label style="color: var(--text-secondary); font-size: var(--text-sm);">Status:</label>
+                <select id="status-filter" class="input-field px-3 py-1.5 text-sm" style="border-radius: 6px;">
+                    <option value="">All</option>
+                    <option value="completed">Completed</option>
+                    <option value="processing">Processing</option>
+                    <option value="pending">Pending</option>
+                    <option value="failed">Failed</option>
+                </select>
+            </div>
+            <div class="flex-1">
+                <input type="text"
+                       id="search-input"
+                       placeholder="Search translations..."
+                       class="input-field w-full px-3 py-1.5 text-sm"
+                       style="border-radius: 6px; max-width: 300px;">
+            </div>
+            <button id="refresh-btn" class="btn-secondary px-3 py-1.5 text-sm">
+                Refresh
+            </button>
+        </div>
+
+        <!-- Jobs Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6" id="jobs-container">
+            <!-- Jobs will be loaded here -->
+            <div class="col-span-2 text-center py-12">
+                <div class="spinner mx-auto mb-3" style="width: 24px; height: 24px;"></div>
+                <p style="color: var(--text-muted); font-size: var(--text-sm);">Loading translations...</p>
+            </div>
+        </div>
+
+        <!-- Pagination -->
+        <div id="pagination-container" class="flex items-center justify-center gap-4 hidden">
+            <button id="prev-page-btn" class="btn-secondary px-4 py-2 text-sm" disabled>
+                Previous
+            </button>
+            <span id="page-info" style="color: var(--text-secondary); font-size: var(--text-sm);">Page 1</span>
+            <button id="next-page-btn" class="btn-secondary px-4 py-2 text-sm">
+                Next
+            </button>
+        </div>
+
+        <!-- Job Detail Modal -->
+        <div id="job-modal" class="hidden fixed inset-0 z-50 overflow-y-auto" style="background: rgba(0,0,0,0.5);">
+            <div class="min-h-screen flex items-start justify-center py-8 px-4">
+                <div class="input-card w-full max-w-4xl relative">
+                    <!-- Modal Header -->
+                    <div class="flex items-center justify-between p-5 border-b" style="border-color: var(--border);">
+                        <div>
+                            <h2 class="font-semibold" style="color: var(--text-primary); font-size: var(--text-lg);">Translation Details</h2>
+                            <p id="modal-job-date" style="color: var(--text-muted); font-size: var(--text-xs);"></p>
+                        </div>
+                        <button onclick="closeJobModal()" style="color: var(--text-muted); font-size: var(--text-xl);">&times;</button>
+                    </div>
+
+                    <!-- Modal Body -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 p-5">
+                        <!-- Original Text -->
+                        <div>
+                            <label class="block font-medium mb-2" style="color: var(--text-secondary); font-size: var(--text-xs);">Original Text</label>
+                            <div id="modal-original-text" class="font-chinese p-3 rounded" style="background: var(--pastel-7); color: var(--text-primary); font-size: var(--text-chinese); min-height: 100px; white-space: pre-wrap;"></div>
+
+                            <label class="block font-medium mt-4 mb-2" style="color: var(--text-secondary); font-size: var(--text-xs);">Full Translation</label>
+                            <div id="modal-full-translation" class="p-3 rounded" style="background: var(--background-alt); color: var(--text-primary); font-size: var(--text-sm); min-height: 60px;"></div>
+                        </div>
+
+                        <!-- Segments -->
+                        <div>
+                            <div class="flex items-center justify-between mb-2">
+                                <label class="font-medium" style="color: var(--text-secondary); font-size: var(--text-xs);">Segmented Text</label>
+                                <button id="modal-edit-btn" class="btn-edit" type="button">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                    </svg>
+                                    Edit
+                                </button>
+                            </div>
+                            <div id="modal-segments-container" class="relative p-3 rounded overflow-y-auto" style="background: var(--surface); border: 1px solid var(--border); max-height: 400px;">
+                                <!-- Segments loaded here -->
+                            </div>
+
+                            <!-- Floating tooltip overlay -->
+                            <div id="word-tooltip" class="word-tooltip hidden">
+                                <div class="tooltip-pinyin" id="tooltip-pinyin"></div>
+                                <div class="tooltip-english" id="tooltip-english"></div>
+                                <div class="tooltip-actions">
+                                    <button id="save-word-btn" type="button" class="tooltip-btn">Save to Learn</button>
+                                    <button id="mark-known-btn" type="button" class="tooltip-btn hidden">Mark as Known</button>
+                                    <button id="resume-learning-btn" type="button" class="tooltip-btn hidden">Resume Learning</button>
+                                    <span id="save-word-status" class="tooltip-status"></span>
+                                </div>
+                                <div class="tooltip-arrow"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Modal Footer -->
+                    <div class="flex items-center justify-between p-5 border-t" style="border-color: var(--border);">
+                        <button onclick="deleteCurrentJob()" class="text-sm hover:underline" style="color: var(--error);">
+                            Delete Translation
+                        </button>
+                        <button onclick="closeJobModal()" class="btn-secondary px-4 py-2 text-sm">
+                            Close
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="/static/js/segment-editor.js"></script>
+    <script>
+    (function() {
+        'use strict';
+
+        // State
+        let jobs = [];
+        let currentPage = 1;
+        let totalJobs = 0;
+        const pageSize = 10;
+        let currentJobId = null;
+        let translationResults = [];
+        let savedVocabMap = new Map();
+        let isClickActive = false;
+        let activeSegment = null;
+        let lastTooltipData = null;
+
+        const pastelColors = [
+            '#FFB3BA', '#BAFFC9', '#BAE1FF', '#FFFFBA',
+            '#FFD9BA', '#E0BBE4', '#C9F0FF', '#FFDAB3'
+        ];
+
+        function getPastelColor(index) {
+            return pastelColors[index % pastelColors.length];
+        }
+
+        // Load jobs
+        async function loadJobs(page = 1) {
+            const statusFilter = document.getElementById('status-filter').value;
+            const searchQuery = document.getElementById('search-input').value.trim();
+
+            let url = `/api/jobs?limit=${pageSize}&offset=${(page - 1) * pageSize}`;
+            if (statusFilter) url += `&status=${statusFilter}`;
+
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error('Failed to load jobs');
+                const data = await response.json();
+
+                jobs = data.jobs;
+                totalJobs = data.total;
+                currentPage = page;
+
+                // Filter by search locally
+                if (searchQuery) {
+                    jobs = jobs.filter(j =>
+                        j.input_preview.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                        (j.full_translation_preview || '').toLowerCase().includes(searchQuery.toLowerCase())
+                    );
+                }
+
+                renderJobs();
+                updatePagination();
+            } catch (e) {
+                console.error('Failed to load jobs:', e);
+                document.getElementById('jobs-container').innerHTML = `
+                    <div class="col-span-2 text-center py-12">
+                        <p style="color: var(--error);">Failed to load translations</p>
+                    </div>
+                `;
+            }
+        }
+
+        function renderJobs() {
+            const container = document.getElementById('jobs-container');
+
+            if (jobs.length === 0) {
+                container.innerHTML = `
+                    <div class="col-span-2 text-center py-12">
+                        <svg class="mx-auto h-12 w-12 mb-3" style="color: var(--text-muted);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                        <p style="color: var(--text-muted); font-size: var(--text-sm);">No translations found</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = jobs.map(job => {
+                const date = new Date(job.created_at).toLocaleDateString('en-US', {
+                    month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                });
+
+                const statusColors = {
+                    pending: 'var(--pastel-4)',
+                    processing: 'var(--pastel-3)',
+                    completed: 'var(--pastel-1)',
+                    failed: 'var(--error)'
+                };
+
+                return `
+                    <div class="translation-card input-card p-4 cursor-pointer hover:shadow-md transition-shadow"
+                         onclick="openJobModal('${job.id}')"
+                         style="border-left: 4px solid ${statusColors[job.status] || 'var(--border)'};">
+                        <div class="flex items-start justify-between mb-2">
+                            <span class="text-xs px-2 py-0.5 rounded-full"
+                                  style="background: ${statusColors[job.status]}; color: var(--text-primary);">
+                                ${job.status}
+                            </span>
+                            <span style="color: var(--text-muted); font-size: var(--text-xs);">${date}</span>
+                        </div>
+                        <div class="font-chinese mb-2" style="color: var(--text-primary); font-size: var(--text-base); line-height: 1.6;">
+                            ${escapeHtml(job.input_preview)}
+                        </div>
+                        ${job.full_translation_preview ? `
+                            <div class="text-sm" style="color: var(--text-secondary); font-style: italic;">
+                                "${escapeHtml(job.full_translation_preview)}"
+                            </div>
+                        ` : ''}
+                        <div class="mt-2 flex items-center justify-between">
+                            <span style="color: var(--text-muted); font-size: var(--text-xs);">
+                                ${job.segment_count !== null ? `${job.segment_count} segments` : ''}
+                            </span>
+                            <button onclick="event.stopPropagation(); deleteJob('${job.id}');"
+                                    class="text-xs hover:underline" style="color: var(--text-muted);">
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function updatePagination() {
+            const container = document.getElementById('pagination-container');
+            const totalPages = Math.ceil(totalJobs / pageSize);
+
+            if (totalPages <= 1) {
+                container.classList.add('hidden');
+                return;
+            }
+
+            container.classList.remove('hidden');
+            document.getElementById('page-info').textContent = `Page ${currentPage} of ${totalPages}`;
+            document.getElementById('prev-page-btn').disabled = currentPage <= 1;
+            document.getElementById('next-page-btn').disabled = currentPage >= totalPages;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text || '';
+            return div.innerHTML;
+        }
+
+        // Job modal
+        async function openJobModal(jobId) {
+            currentJobId = jobId;
+            const modal = document.getElementById('job-modal');
+            modal.classList.remove('hidden');
+
+            // Reset state
+            isClickActive = false;
+            activeSegment = null;
+
+            try {
+                const response = await fetch(`/api/jobs/${jobId}`);
+                if (!response.ok) throw new Error('Failed to load job');
+                const job = await response.json();
+
+                const date = new Date(job.created_at).toLocaleDateString('en-US', {
+                    weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'
+                });
+
+                document.getElementById('modal-job-date').textContent = date;
+                document.getElementById('modal-original-text').textContent = job.input_text;
+                document.getElementById('modal-full-translation').textContent = job.full_translation || 'Translation not available';
+
+                // Build translation results
+                translationResults = [];
+                if (job.paragraphs) {
+                    job.paragraphs.forEach(para => {
+                        para.translations.forEach(t => {
+                            translationResults.push({
+                                segment: t.segment,
+                                pinyin: t.pinyin,
+                                english: t.english
+                            });
+                        });
+                    });
+                }
+
+                renderModalSegments(job.paragraphs);
+                await fetchAndApplySRSInfo();
+
+                // Setup edit button
+                document.getElementById('modal-edit-btn').onclick = () => {
+                    SegmentEditor.enterGlobalEditMode();
+                };
+
+            } catch (e) {
+                console.error('Failed to load job:', e);
+                alert('Failed to load translation details');
+                closeJobModal();
+            }
+        }
+
+        function renderModalSegments(paragraphs) {
+            const container = document.getElementById('modal-segments-container');
+
+            if (!paragraphs || paragraphs.length === 0) {
+                container.innerHTML = '<p style="color: var(--text-muted); font-style: italic;">No segments available</p>';
+                return;
+            }
+
+            let html = '';
+            let globalIndex = 0;
+
+            paragraphs.forEach((para, paraIdx) => {
+                const marginBottom = para.separator ? para.separator.split('\n').length * 0.4 : 0;
+                const paddingLeft = para.indent ? para.indent.length * 0.5 : 0;
+                html += `<div class="paragraph flex flex-wrap gap-1" style="margin-bottom: ${marginBottom}rem; padding-left: ${paddingLeft}rem;">`;
+
+                para.translations.forEach(t => {
+                    html += `
+                        <span class="segment inline-block px-2 py-1 rounded border-2 border-transparent transition-all duration-150 hover:-translate-y-px hover:shadow-sm"
+                              style="font-family: var(--font-chinese); font-size: var(--text-chinese); color: var(--text-primary); cursor: pointer; background: ${getPastelColor(globalIndex)};"
+                              data-index="${globalIndex}"
+                              data-paragraph="${paraIdx}"
+                              data-pinyin="${escapeHtml(t.pinyin)}"
+                              data-english="${escapeHtml(t.english)}">${escapeHtml(t.segment)}</span>
+                    `;
+                    globalIndex++;
+                });
+
+                html += `</div>`;
+            });
+
+            container.innerHTML = html;
+
+            // Add interactions
+            container.querySelectorAll('.segment').forEach(seg => {
+                addSegmentInteraction(seg);
+            });
+        }
+
+        function addSegmentInteraction(segment) {
+            if (segment.dataset.hasInteraction === 'true') return;
+            segment.dataset.hasInteraction = 'true';
+
+            const tooltip = document.getElementById('word-tooltip');
+            const tooltipPinyin = document.getElementById('tooltip-pinyin');
+            const tooltipEnglish = document.getElementById('tooltip-english');
+
+            function showTooltip(seg) {
+                document.querySelectorAll('.segment').forEach(s => {
+                    s.classList.remove('border-gray-800', 'shadow-lg');
+                });
+
+                tooltipPinyin.textContent = seg.dataset.pinyin;
+                tooltipEnglish.textContent = seg.dataset.english;
+                lastTooltipData = {
+                    headword: seg.textContent,
+                    pinyin: seg.dataset.pinyin || '',
+                    english: seg.dataset.english || ''
+                };
+
+                const saveStatus = document.getElementById('save-word-status');
+                if (saveStatus) saveStatus.textContent = '';
+
+                const saveBtn = document.getElementById('save-word-btn');
+                const markKnownBtn = document.getElementById('mark-known-btn');
+                const resumeLearningBtn = document.getElementById('resume-learning-btn');
+
+                if (!seg.dataset.pinyin && !seg.dataset.english) {
+                    saveBtn.classList.add('hidden');
+                    markKnownBtn.classList.add('hidden');
+                    resumeLearningBtn.classList.add('hidden');
+                } else {
+                    const info = savedVocabMap.get(seg.textContent);
+                    if (!info) {
+                        saveBtn.classList.remove('hidden');
+                        markKnownBtn.classList.add('hidden');
+                        resumeLearningBtn.classList.add('hidden');
+                    } else if (info.status === 'learning') {
+                        saveBtn.classList.add('hidden');
+                        markKnownBtn.classList.remove('hidden');
+                        resumeLearningBtn.classList.add('hidden');
+                    } else if (info.status === 'known') {
+                        saveBtn.classList.add('hidden');
+                        markKnownBtn.classList.add('hidden');
+                        resumeLearningBtn.classList.remove('hidden');
+                    }
+                }
+
+                const segRect = seg.getBoundingClientRect();
+                const containerRect = seg.closest('.relative') ?
+                    seg.closest('.relative').getBoundingClientRect() :
+                    document.getElementById('modal-segments-container').getBoundingClientRect();
+
+                tooltip.classList.remove('hidden');
+
+                const left = segRect.left - containerRect.left + (segRect.width / 2) - (tooltip.offsetWidth / 2);
+                const top = segRect.top - containerRect.top - tooltip.offsetHeight - 4;
+
+                tooltip.style.left = Math.max(0, left) + 'px';
+                tooltip.style.top = Math.max(0, top) + 'px';
+
+                seg.classList.add('border-gray-800', 'shadow-lg');
+            }
+
+            function hideTooltip() {
+                tooltip.classList.add('hidden');
+                document.querySelectorAll('.segment').forEach(s => {
+                    s.classList.remove('border-gray-800', 'shadow-lg');
+                });
+            }
+
+            segment.addEventListener('mouseenter', () => {
+                if (!isClickActive) showTooltip(segment);
+            });
+
+            segment.addEventListener('mouseleave', () => {
+                if (!isClickActive) hideTooltip();
+            });
+
+            segment.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (isClickActive && activeSegment === segment) {
+                    isClickActive = false;
+                    activeSegment = null;
+                    hideTooltip();
+                } else {
+                    isClickActive = true;
+                    activeSegment = segment;
+                    showTooltip(segment);
+                }
+            });
+        }
+
+        async function fetchAndApplySRSInfo() {
+            const segments = document.querySelectorAll('#modal-segments-container .segment');
+            const headwords = [...new Set([...segments]
+                .filter(s => s.dataset.pinyin || s.dataset.english)
+                .map(s => s.textContent)
+            )];
+            if (headwords.length === 0) return;
+
+            try {
+                const params = new URLSearchParams();
+                params.set('headwords', headwords.join(','));
+                const res = await fetch('/api/vocab/srs-info?' + params.toString());
+                if (!res.ok) return;
+                const data = await res.json();
+
+                savedVocabMap.clear();
+                data.items.forEach(info => {
+                    const opacity = info.status === 'known' ? 0 : info.opacity;
+                    savedVocabMap.set(info.headword, {
+                        vocabItemId: info.vocab_item_id,
+                        opacity: opacity,
+                        isStruggling: info.is_struggling,
+                        status: info.status
+                    });
+                });
+
+                segments.forEach(seg => {
+                    const info = savedVocabMap.get(seg.textContent);
+                    if (info) {
+                        const originalColor = getPastelColor(parseInt(seg.dataset.index) || 0);
+                        seg.classList.add('saved');
+                        seg.style.background = '';
+                        seg.style.setProperty('--segment-color', originalColor);
+                        seg.style.setProperty('--segment-opacity', info.opacity);
+                        seg.dataset.vocabItemId = info.vocabItemId;
+                        if (info.isStruggling) {
+                            seg.classList.add('struggling');
+                        }
+                    }
+                });
+            } catch (e) {
+                console.error('Failed to fetch SRS info:', e);
+            }
+        }
+
+        function closeJobModal() {
+            const modal = document.getElementById('job-modal');
+            modal.classList.add('hidden');
+            currentJobId = null;
+            isClickActive = false;
+            activeSegment = null;
+        }
+
+        async function deleteJob(jobId) {
+            if (!confirm('Delete this translation?')) return;
+
+            try {
+                const response = await fetch(`/api/jobs/${jobId}`, { method: 'DELETE' });
+                if (!response.ok) throw new Error('Failed to delete');
+
+                if (currentJobId === jobId) closeJobModal();
+                loadJobs(currentPage);
+            } catch (e) {
+                console.error('Failed to delete job:', e);
+                alert('Failed to delete translation');
+            }
+        }
+
+        function deleteCurrentJob() {
+            if (currentJobId) deleteJob(currentJobId);
+        }
+
+        // Event handlers
+        document.getElementById('status-filter').addEventListener('change', () => loadJobs(1));
+        document.getElementById('search-input').addEventListener('input', debounce(() => loadJobs(1), 300));
+        document.getElementById('refresh-btn').addEventListener('click', () => loadJobs(currentPage));
+        document.getElementById('prev-page-btn').addEventListener('click', () => loadJobs(currentPage - 1));
+        document.getElementById('next-page-btn').addEventListener('click', () => loadJobs(currentPage + 1));
+
+        // Click outside to close tooltip
+        document.addEventListener('click', (e) => {
+            const tooltip = document.getElementById('word-tooltip');
+            if (isClickActive && !tooltip.contains(e.target) && !e.target.closest('.segment')) {
+                isClickActive = false;
+                activeSegment = null;
+                tooltip.classList.add('hidden');
+                document.querySelectorAll('.segment').forEach(s => {
+                    s.classList.remove('border-gray-800', 'shadow-lg');
+                });
+            }
+        });
+
+        // Close modal on escape
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && currentJobId) closeJobModal();
+        });
+
+        // Close modal on backdrop click
+        document.getElementById('job-modal').addEventListener('click', (e) => {
+            if (e.target === e.currentTarget) closeJobModal();
+        });
+
+        function debounce(fn, delay) {
+            let timeout;
+            return function(...args) {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => fn.apply(this, args), delay);
+            };
+        }
+
+        // Initialize segment editor
+        SegmentEditor.init({
+            getPastelColor: getPastelColor,
+            addSegmentInteraction: addSegmentInteraction,
+            getTranslationResults: () => translationResults,
+            setTranslationResults: (results) => { translationResults = results; },
+            getJobId: () => currentJobId
+        });
+
+        // Expose functions globally
+        window.openJobModal = openJobModal;
+        window.closeJobModal = closeJobModal;
+        window.deleteJob = deleteJob;
+        window.deleteCurrentJob = deleteCurrentJob;
+
+        // Load jobs on page load
+        loadJobs();
+    })();
+    </script>
+</body>
+</html>

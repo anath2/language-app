@@ -68,7 +68,7 @@ def should_skip_segment(segment: str) -> bool:
 
         # Check if it's a full-width number or symbol (Unicode category)
         category = unicodedata.category(char)
-        if category in ('Nd', 'No', 'Po', 'Ps', 'Pe', 'Pd', 'Pc', 'Sk', 'Sm', 'So'):
+        if category in ("Nd", "No", "Po", "Ps", "Pe", "Pd", "Pc", "Sk", "Sm", "So"):
             # Nd: Decimal number, No: Other number
             # Po: Other punctuation, Ps: Open punctuation, Pe: Close punctuation
             # Pd: Dash punctuation, Pc: Connector punctuation
@@ -117,7 +117,7 @@ def split_into_paragraphs(text: str) -> list[dict[str, str]]:
         return []
 
     # Split by newlines while keeping track of the separators
-    lines = text.split('\n')
+    lines = text.split("\n")
     paragraphs = []
 
     for i, line in enumerate(lines):
@@ -129,20 +129,22 @@ def split_into_paragraphs(text: str) -> list[dict[str, str]]:
         if line.strip():
             # Determine the separator by looking ahead
             # Count consecutive newlines after this line
-            separator = '\n'
+            separator = "\n"
             j = i + 1
             while j < len(lines) and not lines[j].strip():
-                separator += '\n'
+                separator += "\n"
                 j += 1
 
             # Extract leading whitespace (indent) before stripping
-            indent = line[:len(line) - len(line.lstrip())]
+            indent = line[: len(line) - len(line.lstrip())]
 
-            paragraphs.append({
-                'content': line.strip(),
-                'indent': indent,
-                'separator': separator if i < len(lines) - 1 else ''
-            })
+            paragraphs.append(
+                {
+                    "content": line.strip(),
+                    "indent": indent,
+                    "separator": separator if i < len(lines) - 1 else "",
+                }
+            )
 
     return paragraphs
 

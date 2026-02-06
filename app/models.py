@@ -43,6 +43,8 @@ class TranslateBatchRequest(BaseModel):
 
     segments: list[str]  # Chinese text strings to translate
     context: str | None = None  # Optional full text for context
+    job_id: str | None = None  # Optional job ID for persistence
+    paragraph_idx: int | None = None  # Required if job_id is provided
 
 
 class TranslateBatchResponse(BaseModel):
@@ -176,3 +178,64 @@ class ReviewAnswerResponse(BaseModel):
 
 class DueCountResponse(BaseModel):
     due_count: int
+
+
+# =============================================================================
+# Job Queue Models
+# =============================================================================
+
+
+class CreateJobRequest(BaseModel):
+    """Request to create a new translation job."""
+
+    input_text: str
+    source_type: str = "text"  # text, ocr
+
+
+class CreateJobResponse(BaseModel):
+    """Response after creating a job."""
+
+    job_id: str
+    status: str
+
+
+class JobSummary(BaseModel):
+    """Summary of a job for list views."""
+
+    id: str
+    created_at: str
+    status: str  # pending, processing, completed, failed
+    source_type: str
+    input_preview: str  # First 100 chars of input_text
+    full_translation_preview: str | None  # First 100 chars of full translation
+    segment_count: int | None  # Completed segments
+    total_segments: int | None  # Total segments
+
+
+class ListJobsResponse(BaseModel):
+    """Response for listing jobs."""
+
+    jobs: list[JobSummary]
+    total: int
+
+
+class JobDetailResponse(BaseModel):
+    """Full job details with translation results."""
+
+    id: str
+    created_at: str
+    status: str
+    source_type: str
+    input_text: str
+    full_translation: str | None
+    error_message: str | None
+    paragraphs: list[ParagraphResult] | None
+
+
+class JobStatusResponse(BaseModel):
+    """Quick job status check response."""
+
+    job_id: str
+    status: str
+    progress: int | None  # Completed segment count
+    total: int | None  # Total segment count

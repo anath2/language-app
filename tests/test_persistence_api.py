@@ -52,7 +52,11 @@ class TestTextsApi:
         """GET /api/texts/{id} retrieves a created text."""
         create_resp = client.post(
             "/api/texts",
-            json={"raw_text": "测试文本", "source_type": "ocr", "metadata": {"key": "val"}},
+            json={
+                "raw_text": "测试文本",
+                "source_type": "ocr",
+                "metadata": {"key": "val"},
+            },
         )
         text_id = create_resp.json()["id"]
 

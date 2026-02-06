@@ -2,7 +2,6 @@
 User profile CRUD operations.
 """
 
-from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from app.persistence.db import db_conn
@@ -11,7 +10,6 @@ from app.persistence.models import UserProfile
 
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
-
 
 
 def get_user_profile() -> UserProfile | None:

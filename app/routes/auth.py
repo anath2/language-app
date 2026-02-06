@@ -55,3 +55,9 @@ async def logout():
 async def homepage(request: Request):
     """Serve the main page with the translation form"""
     return templates.TemplateResponse(request=request, name="index.html")
+
+
+@router.get("/translations", response_class=HTMLResponse)
+async def translations_page(request: Request):
+    """Serve the translations history page"""
+    return templates.TemplateResponse(request=request, name="translations.html")

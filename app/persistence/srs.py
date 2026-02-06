@@ -69,7 +69,9 @@ def _get_srs_state(conn: sqlite3.Connection, vocab_item_id: str) -> SRSState | N
 
 def _count_recent_lookups(conn: sqlite3.Connection, vocab_item_id: str) -> int:
     """Count lookups in the last 7 days for struggle detection."""
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=STRUGGLE_WINDOW_DAYS)).isoformat()
+    cutoff = (
+        datetime.now(timezone.utc) - timedelta(days=STRUGGLE_WINDOW_DAYS)
+    ).isoformat()
     row = conn.execute(
         """
         SELECT COUNT(*) as cnt FROM vocab_lookups
@@ -199,7 +201,9 @@ def get_vocab_srs_info(headwords: list[str]) -> list[VocabSRSInfo]:
             vocab_item_id = row["id"]
             last_reviewed_at = row["last_reviewed_at"]
             status = row["status"]
-            struggling = _count_recent_lookups(conn, vocab_item_id) >= STRUGGLE_THRESHOLD
+            struggling = (
+                _count_recent_lookups(conn, vocab_item_id) >= STRUGGLE_THRESHOLD
+            )
             opacity = compute_opacity(last_reviewed_at, struggling)
 
             results.append(
@@ -292,7 +296,15 @@ def record_review_grade(vocab_item_id: str, grade: int) -> SRSState | None:
             SET due_at = ?, interval_days = ?, ease = ?, reps = ?, lapses = ?, last_reviewed_at = ?
             WHERE vocab_item_id = ?
             """,
-            (new_due_at, new_interval, new_ease, new_reps, new_lapses, now, vocab_item_id),
+            (
+                new_due_at,
+                new_interval,
+                new_ease,
+                new_reps,
+                new_lapses,
+                now,
+                vocab_item_id,
+            ),
         )
 
         return SRSState(
