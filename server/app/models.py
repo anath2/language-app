@@ -38,6 +38,10 @@ class TranslateResponse(BaseModel):
     paragraphs: list[ParagraphResult]
 
 
+class ExtractTextResponse(BaseModel):
+    text: str
+
+
 class TranslateBatchRequest(BaseModel):
     """Request to translate a batch of segment texts."""
 

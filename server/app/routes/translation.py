@@ -17,6 +17,7 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 
 from app.models import (
     ParagraphResult,
+    ExtractTextResponse,
     TranslateRequest,
     TranslateResponse,
     TranslationResult,
@@ -244,6 +245,23 @@ async def extract_text_html(request: Request, file: UploadFile = File(...)):
             name="fragments/error.html",
             context={"message": f"OCR error: {e}"},
         )
+
+
+@router.post("/extract-text", response_model=ExtractTextResponse)
+async def extract_text_json(file: UploadFile = File(...)):
+    """JSON endpoint for OCR extraction only."""
+    file_bytes = await file.read()
+
+    valid, error = validate_image_file(file_bytes, file.filename or "image.png")
+    if not valid:
+        raise HTTPException(status_code=400, detail=error)
+
+    extracted_text = await extract_text_from_image(file_bytes)
+
+    if not extracted_text.strip():
+        raise HTTPException(status_code=400, detail="No Chinese text found in image")
+
+    return ExtractTextResponse(text=extracted_text)
 
 
 @router.post("/translate-image", response_model=TranslateResponse)

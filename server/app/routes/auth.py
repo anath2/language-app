@@ -8,6 +8,8 @@ Endpoints:
 - GET / - Homepage
 """
 
+import os
+
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
@@ -54,7 +56,12 @@ async def logout():
 @router.get("/", response_class=HTMLResponse)
 async def homepage(request: Request):
     """Serve the main page with the translation form"""
-    return templates.TemplateResponse(request=request, name="index.html")
+    vite_dev_server = os.getenv("VITE_DEV_SERVER")
+    return templates.TemplateResponse(
+        request=request,
+        name="index.html",
+        context={"vite_dev_server": vite_dev_server},
+    )
 
 
 @router.get("/translations", response_class=HTMLResponse)
