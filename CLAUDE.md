@@ -10,21 +10,32 @@ Language App - A FastAPI web application that segments Chinese text into words, 
 
 ```bash
 # Run development server
+cd server
 uv run uvicorn app.server:app --reload
 
+# Run frontend dev server
+cd web
+npm install
+npm run dev
+
 # Run all tests
+cd server
 uv run pytest
 
 # Run specific test file
+cd server
 uv run pytest tests/test_pipeline.py -v
 
 # Type checking
+cd server
 uv run pyright
 
 # Linting
+cd server
 uv run ruff check .
 
 # Format code
+cd server
 uv run ruff format .
 ```
 
@@ -52,17 +63,21 @@ uv run ruff format .
 
 **File Structure**:
 ```
-app/
-├── static/
-│   ├── css/
-│   │   ├── variables.css    # CSS custom properties (colors, fonts, sizes)
-│   │   ├── base.css         # Body, buttons, forms, inputs, spinners
-│   │   └── segments.css     # Segments, editing UI, review panel, tooltips
-│   └── js/
-│       ├── segment-editor.js # Split/join segment functionality (IIFE)
-│       └── app.js            # Core app logic, translation, SRS
-└── templates/
-    └── index.html            # HTML structure only (~150 lines)
+server/
+├── app/
+│   ├── static/
+│   │   ├── css/
+│   │   │   ├── variables.css    # CSS custom properties (colors, fonts, sizes)
+│   │   │   ├── base.css         # Body, buttons, forms, inputs, spinners
+│   │   │   └── segments.css     # Segments, editing UI, review panel, tooltips
+│   │   └── js/
+│   │       ├── segment-editor.js # Split/join segment functionality (IIFE)
+│   │       └── app.js            # Core app logic, translation, SRS
+│   └── templates/
+│       └── index.html            # HTML structure only (~150 lines)
+web/
+└── src/
+    └── ...                       # Svelte migration workspace
 ```
 
 **JavaScript Modules**:
