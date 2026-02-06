@@ -49,6 +49,9 @@ app.add_middleware(AuthMiddleware)
 
 # Configure static files
 BASE_DIR = Path(__file__).resolve().parent
+ROOT_DIR = BASE_DIR.parent.parent
+WEB_PUBLIC_DIR = ROOT_DIR / "web" / "public"
+app.mount("/css", StaticFiles(directory=WEB_PUBLIC_DIR / "css"), name="css")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 
 # Register routers
