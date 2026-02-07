@@ -342,7 +342,7 @@
         <!-- svelte-ignore a11y_label_has_associated_control -->
         <div id="original-text-panel" class="input-card p-4 sticky-top">
           <label class="block font-medium mb-2" style="color: var(--text-secondary); font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.05em;">Original Text</label>
-          <div class="font-chinese p-3 rounded" style="background: var(--background-alt); color: var(--text-primary); font-size: var(--text-chinese); line-height: 1.8; white-space: pre-wrap;">{currentRawText}</div>
+          <div class="font-chinese p-3 rounded" style="color: var(--text-primary); font-size: var(--text-chinese); line-height: 1.8; white-space: pre-wrap;">{currentRawText}</div>
         </div>
       </div>
 
@@ -427,7 +427,7 @@
   /* Translation Detail: 2-Column Layout */
   .translation-layout {
     display: grid;
-    grid-template-columns: 360px 1fr;
+    grid-template-columns: 1fr 1fr;
     gap: 1.5rem;
     align-items: start;
   }
