@@ -26,7 +26,7 @@
 
   async function loadProfile() {
     try {
-      const response = await getJson<AdminProfileResponse>("/admin/profile");
+      const response = await getJson<AdminProfileResponse>("/admin/api/profile");
       profile = response.profile;
       vocabStats = response.vocabStats;
 
@@ -53,7 +53,7 @@
       data.append("email", email);
       data.append("language", language);
 
-      const response = await postJsonForm<{ profile: UserProfile }>("/admin/profile", data);
+      const response = await postJsonForm<{ profile: UserProfile }>("/admin/api/profile", data);
       profile = response.profile;
       message = { type: "success", text: "Profile saved successfully" };
     } catch (error) {
