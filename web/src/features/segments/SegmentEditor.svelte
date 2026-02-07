@@ -11,7 +11,7 @@
     displayParagraphs,
     translationResults,
     paragraphMeta,
-    currentJobId,
+    currentTranslationId,
     currentRawText,
     onSave,
     onCancel,
@@ -19,7 +19,7 @@
     displayParagraphs: DisplayParagraph[];
     translationResults: SegmentResult[];
     paragraphMeta: ParagraphMeta[];
-    currentJobId: string | null;
+    currentTranslationId: string | null;
     currentRawText: string;
     onSave: (results: SegmentResult[], meta: ParagraphMeta[]) => void;
     onCancel: () => void;
@@ -197,7 +197,7 @@
       const data = await translateBatch(
         pendingSegmentTexts,
         currentRawText || null,
-        currentJobId,
+        currentTranslationId,
         paragraphIdx,
       );
 

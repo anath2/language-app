@@ -5,12 +5,17 @@ Tables included in the progress bundle:
 - vocab_items
 - srs_state
 - vocab_lookups
-- jobs (schema v2+)
-- job_segments (schema v2+)
-- job_paragraphs (schema v2+)
+- translations (schema v3+)
+- translation_segments (schema v3+)
+- translation_paragraphs (schema v3+)
 
 The import uses overwrite semantics: all existing data in these tables
 is replaced with the uploaded data in a single transaction.
+
+Backward compatibility:
+- v3 bundles use translation_* table names
+- v2 bundles use job_* table names (automatically converted on import)
+- v1 bundles have no translation/job data
 """
 
 import json
@@ -24,7 +29,8 @@ from app.persistence.models import ProgressBundle
 # Current schema version for progress exports
 # v1: vocab_items, srs_state, vocab_lookups
 # v2: added jobs, job_segments, job_paragraphs
-PROGRESS_SCHEMA_VERSION = 2
+# v3: renamed jobs->translations, job_segments->translation_segments, job_paragraphs->translation_paragraphs
+PROGRESS_SCHEMA_VERSION = 3
 
 
 def export_progress() -> ProgressBundle:
@@ -95,24 +101,24 @@ def export_progress() -> ProgressBundle:
                 }
             )
 
-        # Export jobs
-        jobs = []
+        # Export translations
+        translations = []
         rows = conn.execute(
             """
-            SELECT id, created_at, updated_at, status, job_type, source_type,
+            SELECT id, created_at, updated_at, status, translation_type, source_type,
                    input_text, full_translation, error_message, metadata_json, text_id
-            FROM jobs
+            FROM translations
             ORDER BY created_at
             """
         ).fetchall()
         for row in rows:
-            jobs.append(
+            translations.append(
                 {
                     "id": row["id"],
                     "created_at": row["created_at"],
                     "updated_at": row["updated_at"],
                     "status": row["status"],
-                    "job_type": row["job_type"],
+                    "translation_type": row["translation_type"],
                     "source_type": row["source_type"],
                     "input_text": row["input_text"],
                     "full_translation": row["full_translation"],
@@ -122,20 +128,20 @@ def export_progress() -> ProgressBundle:
                 }
             )
 
-        # Export job_segments
-        job_segments = []
+        # Export translation_segments
+        translation_segments = []
         rows = conn.execute(
             """
-            SELECT id, job_id, paragraph_idx, seg_idx, segment_text, pinyin, english, created_at
-            FROM job_segments
-            ORDER BY job_id, paragraph_idx, seg_idx
+            SELECT id, translation_id, paragraph_idx, seg_idx, segment_text, pinyin, english, created_at
+            FROM translation_segments
+            ORDER BY translation_id, paragraph_idx, seg_idx
             """
         ).fetchall()
         for row in rows:
-            job_segments.append(
+            translation_segments.append(
                 {
                     "id": row["id"],
-                    "job_id": row["job_id"],
+                    "translation_id": row["translation_id"],
                     "paragraph_idx": row["paragraph_idx"],
                     "seg_idx": row["seg_idx"],
                     "segment_text": row["segment_text"],
@@ -145,20 +151,20 @@ def export_progress() -> ProgressBundle:
                 }
             )
 
-        # Export job_paragraphs
-        job_paragraphs = []
+        # Export translation_paragraphs
+        translation_paragraphs = []
         rows = conn.execute(
             """
-            SELECT id, job_id, paragraph_idx, indent, separator
-            FROM job_paragraphs
-            ORDER BY job_id, paragraph_idx
+            SELECT id, translation_id, paragraph_idx, indent, separator
+            FROM translation_paragraphs
+            ORDER BY translation_id, paragraph_idx
             """
         ).fetchall()
         for row in rows:
-            job_paragraphs.append(
+            translation_paragraphs.append(
                 {
                     "id": row["id"],
-                    "job_id": row["job_id"],
+                    "translation_id": row["translation_id"],
                     "paragraph_idx": row["paragraph_idx"],
                     "indent": row["indent"],
                     "separator": row["separator"],
@@ -171,9 +177,9 @@ def export_progress() -> ProgressBundle:
         vocab_items=vocab_items,
         srs_state=srs_state,
         vocab_lookups=vocab_lookups,
-        jobs=jobs,
-        job_segments=job_segments,
-        job_paragraphs=job_paragraphs,
+        translations=translations,
+        translation_segments=translation_segments,
+        translation_paragraphs=translation_paragraphs,
     )
 
 
@@ -270,39 +276,89 @@ def validate_progress_bundle(data: dict[str, Any]) -> ProgressBundle:
         if missing:
             raise ImportError(f"vocab_lookups[{i}] missing fields: {missing}")
 
-    # Optional job tables (v2+)
-    jobs = data.get("jobs")
-    job_segments = data.get("job_segments")
-    job_paragraphs = data.get("job_paragraphs")
+    # Handle job tables - v3 uses new names, v2 uses old names
+    # For backward compatibility, accept both formats
+    translations = data.get("translations")
+    translation_segments = data.get("translation_segments")
+    translation_paragraphs = data.get("translation_paragraphs")
 
-    # Validate jobs if present
-    if jobs is not None:
-        if not isinstance(jobs, list):
-            raise ImportError("'jobs' must be a list")
-        required_job_fields = {
+    # Also accept v2 format with old names (convert on import)
+    old_jobs = data.get("jobs")
+    old_job_segments = data.get("job_segments")
+    old_job_paragraphs = data.get("job_paragraphs")
+
+    if schema_version <= 2:
+        # Convert old format to new format
+        if old_jobs is not None:
+            translations = []
+            for item in old_jobs:
+                translations.append({
+                    "id": item["id"],
+                    "created_at": item["created_at"],
+                    "updated_at": item["updated_at"],
+                    "status": item["status"],
+                    "translation_type": item.get("job_type", "translation"),
+                    "source_type": item["source_type"],
+                    "input_text": item["input_text"],
+                    "full_translation": item.get("full_translation"),
+                    "error_message": item.get("error_message"),
+                    "metadata_json": item["metadata_json"],
+                    "text_id": item.get("text_id"),
+                })
+
+        if old_job_segments is not None:
+            translation_segments = []
+            for item in old_job_segments:
+                translation_segments.append({
+                    "id": item["id"],
+                    "translation_id": item["job_id"],
+                    "paragraph_idx": item["paragraph_idx"],
+                    "seg_idx": item["seg_idx"],
+                    "segment_text": item["segment_text"],
+                    "pinyin": item["pinyin"],
+                    "english": item["english"],
+                    "created_at": item["created_at"],
+                })
+
+        if old_job_paragraphs is not None:
+            translation_paragraphs = []
+            for item in old_job_paragraphs:
+                translation_paragraphs.append({
+                    "id": item["id"],
+                    "translation_id": item["job_id"],
+                    "paragraph_idx": item["paragraph_idx"],
+                    "indent": item["indent"],
+                    "separator": item["separator"],
+                })
+
+    # Validate translations if present
+    if translations is not None:
+        if not isinstance(translations, list):
+            raise ImportError("'translations' must be a list")
+        required_translation_fields = {
             "id",
             "created_at",
             "updated_at",
             "status",
-            "job_type",
+            "translation_type",
             "source_type",
             "input_text",
             "metadata_json",
         }
-        for i, item in enumerate(jobs):
+        for i, item in enumerate(translations):
             if not isinstance(item, dict):
-                raise ImportError(f"jobs[{i}] must be an object")
-            missing = required_job_fields - set(item.keys())
+                raise ImportError(f"translations[{i}] must be an object")
+            missing = required_translation_fields - set(item.keys())
             if missing:
-                raise ImportError(f"jobs[{i}] missing fields: {missing}")
+                raise ImportError(f"translations[{i}] missing fields: {missing}")
 
-    # Validate job_segments if present
-    if job_segments is not None:
-        if not isinstance(job_segments, list):
-            raise ImportError("'job_segments' must be a list")
+    # Validate translation_segments if present
+    if translation_segments is not None:
+        if not isinstance(translation_segments, list):
+            raise ImportError("'translation_segments' must be a list")
         required_seg_fields = {
             "id",
-            "job_id",
+            "translation_id",
             "paragraph_idx",
             "seg_idx",
             "segment_text",
@@ -310,24 +366,24 @@ def validate_progress_bundle(data: dict[str, Any]) -> ProgressBundle:
             "english",
             "created_at",
         }
-        for i, item in enumerate(job_segments):
+        for i, item in enumerate(translation_segments):
             if not isinstance(item, dict):
-                raise ImportError(f"job_segments[{i}] must be an object")
+                raise ImportError(f"translation_segments[{i}] must be an object")
             missing = required_seg_fields - set(item.keys())
             if missing:
-                raise ImportError(f"job_segments[{i}] missing fields: {missing}")
+                raise ImportError(f"translation_segments[{i}] missing fields: {missing}")
 
-    # Validate job_paragraphs if present
-    if job_paragraphs is not None:
-        if not isinstance(job_paragraphs, list):
-            raise ImportError("'job_paragraphs' must be a list")
-        required_para_fields = {"id", "job_id", "paragraph_idx", "indent", "separator"}
-        for i, item in enumerate(job_paragraphs):
+    # Validate translation_paragraphs if present
+    if translation_paragraphs is not None:
+        if not isinstance(translation_paragraphs, list):
+            raise ImportError("'translation_paragraphs' must be a list")
+        required_para_fields = {"id", "translation_id", "paragraph_idx", "indent", "separator"}
+        for i, item in enumerate(translation_paragraphs):
             if not isinstance(item, dict):
-                raise ImportError(f"job_paragraphs[{i}] must be an object")
+                raise ImportError(f"translation_paragraphs[{i}] must be an object")
             missing = required_para_fields - set(item.keys())
             if missing:
-                raise ImportError(f"job_paragraphs[{i}] missing fields: {missing}")
+                raise ImportError(f"translation_paragraphs[{i}] missing fields: {missing}")
 
     return ProgressBundle(
         schema_version=schema_version,
@@ -335,9 +391,9 @@ def validate_progress_bundle(data: dict[str, Any]) -> ProgressBundle:
         vocab_items=vocab_items,
         srs_state=srs_state,
         vocab_lookups=vocab_lookups,
-        jobs=jobs,
-        job_segments=job_segments,
-        job_paragraphs=job_paragraphs,
+        translations=translations,
+        translation_segments=translation_segments,
+        translation_paragraphs=translation_paragraphs,
     )
 
 
@@ -352,10 +408,10 @@ def import_progress(bundle: ProgressBundle) -> dict[str, int]:
     """
     with db_conn() as conn:
         # Delete existing data in FK-safe order
-        # Job tables first (children before parents)
-        conn.execute("DELETE FROM job_segments")
-        conn.execute("DELETE FROM job_paragraphs")
-        conn.execute("DELETE FROM jobs")
+        # Translation tables first (children before parents)
+        conn.execute("DELETE FROM translation_segments")
+        conn.execute("DELETE FROM translation_paragraphs")
+        conn.execute("DELETE FROM translations")
         # Then vocab tables
         conn.execute("DELETE FROM vocab_lookups")
         conn.execute("DELETE FROM srs_state")
@@ -411,13 +467,13 @@ def import_progress(bundle: ProgressBundle) -> dict[str, int]:
                 ),
             )
 
-        # Insert jobs (if present)
-        jobs_count = 0
-        if bundle.jobs:
-            for item in bundle.jobs:
+        # Insert translations (if present)
+        translations_count = 0
+        if bundle.translations:
+            for item in bundle.translations:
                 conn.execute(
                     """
-                    INSERT INTO jobs (id, created_at, updated_at, status, job_type, source_type,
+                    INSERT INTO translations (id, created_at, updated_at, status, translation_type, source_type,
                                       input_text, full_translation, error_message, metadata_json, text_id)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
@@ -426,7 +482,7 @@ def import_progress(bundle: ProgressBundle) -> dict[str, int]:
                         item["created_at"],
                         item["updated_at"],
                         item["status"],
-                        item["job_type"],
+                        item["translation_type"],
                         item["source_type"],
                         item["input_text"],
                         item.get("full_translation"),
@@ -435,21 +491,21 @@ def import_progress(bundle: ProgressBundle) -> dict[str, int]:
                         item.get("text_id"),
                     ),
                 )
-            jobs_count = len(bundle.jobs)
+            translations_count = len(bundle.translations)
 
-        # Insert job_segments (if present)
-        job_segments_count = 0
-        if bundle.job_segments:
-            for item in bundle.job_segments:
+        # Insert translation_segments (if present)
+        translation_segments_count = 0
+        if bundle.translation_segments:
+            for item in bundle.translation_segments:
                 conn.execute(
                     """
-                    INSERT INTO job_segments (id, job_id, paragraph_idx, seg_idx,
+                    INSERT INTO translation_segments (id, translation_id, paragraph_idx, seg_idx,
                                               segment_text, pinyin, english, created_at)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         item["id"],
-                        item["job_id"],
+                        item["translation_id"],
                         item["paragraph_idx"],
                         item["seg_idx"],
                         item["segment_text"],
@@ -458,26 +514,26 @@ def import_progress(bundle: ProgressBundle) -> dict[str, int]:
                         item["created_at"],
                     ),
                 )
-            job_segments_count = len(bundle.job_segments)
+            translation_segments_count = len(bundle.translation_segments)
 
-        # Insert job_paragraphs (if present)
-        job_paragraphs_count = 0
-        if bundle.job_paragraphs:
-            for item in bundle.job_paragraphs:
+        # Insert translation_paragraphs (if present)
+        translation_paragraphs_count = 0
+        if bundle.translation_paragraphs:
+            for item in bundle.translation_paragraphs:
                 conn.execute(
                     """
-                    INSERT INTO job_paragraphs (id, job_id, paragraph_idx, indent, separator)
+                    INSERT INTO translation_paragraphs (id, translation_id, paragraph_idx, indent, separator)
                     VALUES (?, ?, ?, ?, ?)
                     """,
                     (
                         item["id"],
-                        item["job_id"],
+                        item["translation_id"],
                         item["paragraph_idx"],
                         item["indent"],
                         item["separator"],
                     ),
                 )
-            job_paragraphs_count = len(bundle.job_paragraphs)
+            translation_paragraphs_count = len(bundle.translation_paragraphs)
 
         # Verify foreign key integrity
         fk_errors = conn.execute("PRAGMA foreign_key_check").fetchall()
@@ -490,9 +546,9 @@ def import_progress(bundle: ProgressBundle) -> dict[str, int]:
         "vocab_items": len(bundle.vocab_items),
         "srs_state": len(bundle.srs_state),
         "vocab_lookups": len(bundle.vocab_lookups),
-        "jobs": jobs_count,
-        "job_segments": job_segments_count,
-        "job_paragraphs": job_paragraphs_count,
+        "translations": translations_count,
+        "translation_segments": translation_segments_count,
+        "translation_paragraphs": translation_paragraphs_count,
     }
 
 

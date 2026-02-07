@@ -67,8 +67,8 @@
 
   async function loadTranslations() {
     try {
-      const data = await getJson<ListTranslationsResponse>("/api/jobs?limit=20");
-      translations = data.jobs || [];
+      const data = await getJson<ListTranslationsResponse>("/api/translations?limit=20");
+      translations = data.translations || [];
     } catch (error) {
       console.error("Failed to load translations:", error);
     }
@@ -79,14 +79,14 @@
 
     formLoading = "loading";
     try {
-      const data = await postJson<CreateTranslationResponse>("/api/jobs", {
+      const data = await postJson<CreateTranslationResponse>("/api/translations", {
         input_text: text,
         source_type: "text"
       });
       currentRawText = text;
       currentTextId = null;
       await loadTranslations();
-      openTranslation(data.job_id);
+      openTranslation(data.translation_id);
     } catch (error) {
       formErrorMessage = `Failed to submit translation: ${errorToMessage(error)}`;
       formLoading = "error";
@@ -109,7 +109,7 @@
     currentFullTranslation = null;
 
     try {
-      const detail = await getJson<TranslationDetailResponse>(`/api/jobs/${id}`);
+      const detail = await getJson<TranslationDetailResponse>(`/api/translations/${id}`);
       currentRawText = detail.input_text;
       currentTextId = null;
 
@@ -153,7 +153,7 @@
     if (!confirm("Delete this translation?")) return;
 
     try {
-      await deleteRequest("/api/jobs/" + id);
+      await deleteRequest("/api/translations/" + id);
       if (currentTranslationId === id) {
         backToList();
       } else {

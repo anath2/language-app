@@ -4,13 +4,13 @@ import type { TranslateBatchResponse } from "./types";
 export async function translateBatch(
   segments: string[],
   context: string | null,
-  jobId: string | null,
+  translationId: string | null,
   paragraphIdx: number | null,
 ): Promise<TranslateBatchResponse> {
   return postJson("/api/segments/translate-batch", {
     segments,
     context,
-    job_id: jobId,
+    translation_id: translationId,
     paragraph_idx: paragraphIdx,
   });
 }

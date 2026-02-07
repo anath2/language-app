@@ -1,12 +1,12 @@
 """
-Job queue API routes.
+Translation queue API routes.
 
 Endpoints:
-- POST /api/jobs - Submit new translation job
-- GET /api/jobs - List jobs (for Translations page)
-- GET /api/jobs/{job_id} - Get job details and results
-- GET /api/jobs/{job_id}/status - Quick status check
-- DELETE /api/jobs/{job_id} - Delete a job
+- POST /api/translations - Submit new translation
+- GET /api/translations - List translations (for Translations page)
+- GET /api/translations/{translation_id} - Get translation details and results
+- GET /api/translations/{translation_id}/status - Quick status check
+- DELETE /api/translations/{translation_id} - Delete a translation
 - GET /api/translations/{translation_id}/stream - SSE stream for translation progress
 """
 
@@ -18,47 +18,47 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
 from app.models import (
-    CreateJobRequest,
-    CreateJobResponse,
-    JobDetailResponse,
-    JobStatusResponse,
-    JobSummary,
-    ListJobsResponse,
+    CreateTranslationRequest,
+    CreateTranslationResponse,
     OkResponse,
     ParagraphResult,
+    TranslationDetailResponse,
+    TranslationStatusResponse,
+    TranslationSummary,
+    ListTranslationsResponse,
     TranslationResult,
 )
 from app.persistence import (
-    delete_job,
-    get_job,
-    get_job_segment_count,
-    get_job_with_results,
-    list_jobs,
+    delete_translation,
+    get_translation,
+    get_translation_segment_count,
+    get_translation_with_results,
+    list_translations,
 )
 from app.queue import get_queue_manager
 
-router = APIRouter(tags=["jobs"])
+router = APIRouter(tags=["translations"])
 
 
-def _job_to_summary(job: Any) -> JobSummary:
-    """Convert a JobRecord to JobSummary."""
+def _translation_to_summary(translation: Any) -> TranslationSummary:
+    """Convert a TranslationRecord to TranslationSummary."""
     # Get segment counts
     completed, total = (
-        get_job_segment_count(job.id) if job.status != "pending" else (None, None)
+        get_translation_segment_count(translation.id) if translation.status != "pending" else (None, None)
     )
 
-    return JobSummary(
-        id=job.id,
-        created_at=job.created_at,
-        status=job.status,
-        source_type=job.source_type,
-        input_preview=job.input_text[:100] + "..."
-        if len(job.input_text) > 100
-        else job.input_text,
+    return TranslationSummary(
+        id=translation.id,
+        created_at=translation.created_at,
+        status=translation.status,
+        source_type=translation.source_type,
+        input_preview=translation.input_text[:100] + "..."
+        if len(translation.input_text) > 100
+        else translation.input_text,
         full_translation_preview=(
-            job.full_translation[:100] + "..."
-            if job.full_translation and len(job.full_translation) > 100
-            else job.full_translation
+            translation.full_translation[:100] + "..."
+            if translation.full_translation and len(translation.full_translation) > 100
+            else translation.full_translation
         ),
         segment_count=completed,
         total_segments=total,
@@ -68,59 +68,59 @@ def _job_to_summary(job: Any) -> JobSummary:
 # --- JSON API Endpoints (prefix: /api) ---
 
 
-@router.post("/api/jobs", response_model=CreateJobResponse)
-async def api_create_job(request: CreateJobRequest):
+@router.post("/api/translations", response_model=CreateTranslationResponse)
+async def api_create_translation(request: CreateTranslationRequest):
     """
-    Submit a new translation job.
+    Submit a new translation.
 
-    The job is created immediately with 'pending' status.
-    Use GET /api/jobs/{job_id}/status to check progress.
+    The translation is created immediately with 'pending' status.
+    Use GET /api/translations/{translation_id}/status to check progress.
     Use GET /api/translations/{translation_id}/stream to stream progress via SSE.
     """
     if not request.input_text.strip():
         raise HTTPException(status_code=400, detail="input_text is required")
 
     manager = get_queue_manager()
-    job_id = manager.submit_job(
+    translation_id = manager.submit_translation(
         input_text=request.input_text,
         source_type=request.source_type,
     )
 
-    return CreateJobResponse(job_id=job_id, status="pending")
+    return CreateTranslationResponse(translation_id=translation_id, status="pending")
 
 
-@router.get("/api/jobs", response_model=ListJobsResponse)
-async def api_list_jobs(
+@router.get("/api/translations", response_model=ListTranslationsResponse)
+async def api_list_translations(
     limit: int = 20,
     offset: int = 0,
     status: str | None = None,
 ):
     """
-    List translation jobs for the Translations page.
+    List translations for the Translations page.
 
     Supports pagination and optional status filtering.
     """
     if status and status not in {"pending", "processing", "completed", "failed"}:
         raise HTTPException(status_code=400, detail="Invalid status filter")
 
-    jobs, total = list_jobs(limit=limit, offset=offset, status=status)
+    translations, total = list_translations(limit=limit, offset=offset, status=status)
 
-    return ListJobsResponse(
-        jobs=[_job_to_summary(job) for job in jobs],
+    return ListTranslationsResponse(
+        translations=[_translation_to_summary(t) for t in translations],
         total=total,
     )
 
 
-@router.get("/api/jobs/{job_id}", response_model=JobDetailResponse)
-async def api_get_job(job_id: str):
+@router.get("/api/translations/{translation_id}", response_model=TranslationDetailResponse)
+async def api_get_translation(translation_id: str):
     """
-    Get job with full results.
+    Get translation with full results.
 
-    Returns the job details and all translated segments organized by paragraph.
+    Returns the translation details and all translated segments organized by paragraph.
     """
-    result = get_job_with_results(job_id)
+    result = get_translation_with_results(translation_id)
     if result is None:
-        raise HTTPException(status_code=404, detail="Job not found")
+        raise HTTPException(status_code=404, detail="Translation not found")
 
     # Convert to response format
     paragraphs = None
@@ -141,46 +141,46 @@ async def api_get_job(job_id: str):
             for p in result.paragraphs
         ]
 
-    return JobDetailResponse(
-        id=result.job.id,
-        created_at=result.job.created_at,
-        status=result.job.status,
-        source_type=result.job.source_type,
-        input_text=result.job.input_text,
-        full_translation=result.job.full_translation,
-        error_message=result.job.error_message,
+    return TranslationDetailResponse(
+        id=result.translation.id,
+        created_at=result.translation.created_at,
+        status=result.translation.status,
+        source_type=result.translation.source_type,
+        input_text=result.translation.input_text,
+        full_translation=result.translation.full_translation,
+        error_message=result.translation.error_message,
         paragraphs=paragraphs,
     )
 
 
-@router.get("/api/jobs/{job_id}/status", response_model=JobStatusResponse)
-async def api_get_job_status(job_id: str):
+@router.get("/api/translations/{translation_id}/status", response_model=TranslationStatusResponse)
+async def api_get_translation_status(translation_id: str):
     """
-    Quick status check for a job.
+    Quick status check for a translation.
 
     Returns current status and progress without full results.
     """
-    job = get_job(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="Job not found")
+    translation = get_translation(translation_id)
+    if translation is None:
+        raise HTTPException(status_code=404, detail="Translation not found")
 
     progress, total = (
-        get_job_segment_count(job_id) if job.status != "pending" else (None, None)
+        get_translation_segment_count(translation_id) if translation.status != "pending" else (None, None)
     )
 
-    return JobStatusResponse(
-        job_id=job_id,
-        status=job.status,
+    return TranslationStatusResponse(
+        translation_id=translation_id,
+        status=translation.status,
         progress=progress,
         total=total,
     )
 
 
-@router.delete("/api/jobs/{job_id}", response_model=OkResponse)
-async def api_delete_job(job_id: str):
-    """Delete a job and its results."""
-    if not delete_job(job_id):
-        raise HTTPException(status_code=404, detail="Job not found")
+@router.delete("/api/translations/{translation_id}", response_model=OkResponse)
+async def api_delete_translation(translation_id: str):
+    """Delete a translation and its results."""
+    if not delete_translation(translation_id):
+        raise HTTPException(status_code=404, detail="Translation not found")
 
     return OkResponse()
 
@@ -188,31 +188,31 @@ async def api_delete_job(job_id: str):
 # --- SSE Streaming Endpoint ---
 
 
-@router.get("/api/translations/{job_id}/stream")
-async def translation_stream(job_id: str):
+@router.get("/api/translations/{translation_id}/stream")
+async def translation_stream(translation_id: str):
     """
-    SSE stream for job progress.
+    SSE stream for translation progress.
 
     Events:
-    - start: { type: "start", job_id, total, paragraphs }
+    - start: { type: "start", translation_id, total, paragraphs }
     - progress: { type: "progress", current, total, result }
     - complete: { type: "complete", paragraphs, full_translation }
     - error: { type: "error", message }
 
-    This endpoint starts processing the job if it's pending.
+    This endpoint starts processing the translation if it's pending.
     """
 
     async def generate():
-        job = get_job(job_id)
-        if job is None:
-            yield f"data: {json.dumps({'type': 'error', 'message': 'Job not found'})}\n\n"
+        translation = get_translation(translation_id)
+        if translation is None:
+            yield f"data: {json.dumps({'type': 'error', 'message': 'Translation not found'})}\n\n"
             return
 
         manager = get_queue_manager()
 
-        # If job is already completed, send results immediately
-        if job.status == "completed":
-            result = get_job_with_results(job_id)
+        # If translation is already completed, send results immediately
+        if translation.status == "completed":
+            result = get_translation_with_results(translation_id)
             if result:
                 # Calculate total segments
                 total_segments = (
@@ -235,7 +235,7 @@ async def translation_stream(job_id: str):
                     else []
                 )
 
-                yield f"data: {json.dumps({'type': 'start', 'job_id': job_id, 'total': total_segments, 'paragraphs': paragraph_info, 'fullTranslation': result.job.full_translation})}\n\n"
+                yield f"data: {json.dumps({'type': 'start', 'translation_id': translation_id, 'total': total_segments, 'paragraphs': paragraph_info, 'fullTranslation': result.translation.full_translation})}\n\n"
 
                 # Send all progress events at once
                 global_idx = 0
@@ -252,20 +252,20 @@ async def translation_stream(job_id: str):
                         yield f"data: {json.dumps({'type': 'progress', 'current': global_idx, 'total': total_segments, 'result': result_data})}\n\n"
 
                 # Send complete event
-                yield f"data: {json.dumps({'type': 'complete', 'paragraphs': result.paragraphs, 'fullTranslation': result.job.full_translation})}\n\n"
+                yield f"data: {json.dumps({'type': 'complete', 'paragraphs': result.paragraphs, 'fullTranslation': result.translation.full_translation})}\n\n"
             return
 
-        # If job failed, send error
-        if job.status == "failed":
-            yield f"data: {json.dumps({'type': 'error', 'message': job.error_message or 'Job failed'})}\n\n"
+        # If translation failed, send error
+        if translation.status == "failed":
+            yield f"data: {json.dumps({'type': 'error', 'message': translation.error_message or 'Translation failed'})}\n\n"
             return
 
         # Start processing if pending
-        if job.status == "pending":
+        if translation.status == "pending":
             # Use a queue to collect progress updates
             progress_queue: asyncio.Queue = asyncio.Queue()
 
-            def progress_callback(jid: str, seg_result):
+            def progress_callback(tid: str, seg_result):
                 # Put progress update in queue
                 try:
                     loop = asyncio.get_event_loop()
@@ -273,7 +273,7 @@ async def translation_stream(job_id: str):
                         progress_queue.put_nowait,
                         {
                             "type": "progress",
-                            "job_id": jid,
+                            "translation_id": tid,
                             "result": seg_result,
                         },
                     )
@@ -281,7 +281,7 @@ async def translation_stream(job_id: str):
                     pass
 
             # Start processing in background
-            manager.start_processing(job_id, progress_callback)
+            manager.start_processing(translation_id, progress_callback)
 
             # Wait for processing to initialize
             await asyncio.sleep(0.5)
@@ -292,17 +292,17 @@ async def translation_stream(job_id: str):
 
         while True:
             # Get current progress from manager
-            progress = manager.get_progress(job_id)
+            progress = manager.get_progress(translation_id)
             if progress is None:
-                # Job might be done, check DB
-                job = get_job(job_id)
-                if job is None:
-                    yield f"data: {json.dumps({'type': 'error', 'message': 'Job not found'})}\n\n"
+                # Translation might be done, check DB
+                translation = get_translation(translation_id)
+                if translation is None:
+                    yield f"data: {json.dumps({'type': 'error', 'message': 'Translation not found'})}\n\n"
                     return
-                if job.status == "completed":
+                if translation.status == "completed":
                     break
-                if job.status == "failed":
-                    yield f"data: {json.dumps({'type': 'error', 'message': job.error_message or 'Job failed'})}\n\n"
+                if translation.status == "failed":
+                    yield f"data: {json.dumps({'type': 'error', 'message': translation.error_message or 'Translation failed'})}\n\n"
                     return
                 await asyncio.sleep(0.2)
                 continue
@@ -311,7 +311,7 @@ async def translation_stream(job_id: str):
             if not sent_start and progress.get("total", 0) > 0:
                 total = progress["total"]
                 # Build paragraph info from results so far
-                yield f"data: {json.dumps({'type': 'start', 'job_id': job_id, 'total': total, 'paragraphs': []})}\n\n"
+                yield f"data: {json.dumps({'type': 'start', 'translation_id': translation_id, 'total': total, 'paragraphs': []})}\n\n"
                 sent_start = True
 
             # Send progress events for new results
@@ -337,17 +337,17 @@ async def translation_stream(job_id: str):
                 break
 
             if progress.get("status") == "failed":
-                yield f"data: {json.dumps({'type': 'error', 'message': progress.get('error', 'Job failed')})}\n\n"
+                yield f"data: {json.dumps({'type': 'error', 'message': progress.get('error', 'Translation failed')})}\n\n"
                 return
 
             await asyncio.sleep(0.1)
 
         # Send complete event
-        result = get_job_with_results(job_id)
+        result = get_translation_with_results(translation_id)
         if result:
-            yield f"data: {json.dumps({'type': 'complete', 'paragraphs': result.paragraphs, 'fullTranslation': result.job.full_translation})}\n\n"
+            yield f"data: {json.dumps({'type': 'complete', 'paragraphs': result.paragraphs, 'fullTranslation': result.translation.full_translation})}\n\n"
 
         # Cleanup progress tracking
-        manager.cleanup_progress(job_id)
+        manager.cleanup_progress(translation_id)
 
     return StreamingResponse(generate(), media_type="text/event-stream")

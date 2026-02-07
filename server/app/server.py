@@ -21,7 +21,7 @@ from app.routes import (
     admin_router,
     api_router,
     auth_router,
-    jobs_router,
+    translations_router,
     translation_router,
 )
 
@@ -56,10 +56,11 @@ app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 
 # Register routers
 app.include_router(auth_router)
+# TODO: Why there are two translation routers?
 app.include_router(translation_router)
 app.include_router(api_router)
 app.include_router(admin_router)
-app.include_router(jobs_router)
+app.include_router(translations_router)
 
 
 @app.get("/health")

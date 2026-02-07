@@ -47,8 +47,8 @@ class TranslateBatchRequest(BaseModel):
 
     segments: list[str]  # Chinese text strings to translate
     context: str | None = None  # Optional full text for context
-    job_id: str | None = None  # Optional job ID for persistence
-    paragraph_idx: int | None = None  # Required if job_id is provided
+    translation_id: str | None = None  # Optional translation ID for persistence
+    paragraph_idx: int | None = None  # Required if translation_id is provided
 
 
 class TranslateBatchResponse(BaseModel):
@@ -185,26 +185,26 @@ class DueCountResponse(BaseModel):
 
 
 # =============================================================================
-# Job Queue Models
+# Translation Queue Models
 # =============================================================================
 
 
-class CreateJobRequest(BaseModel):
-    """Request to create a new translation job."""
+class CreateTranslationRequest(BaseModel):
+    """Request to create a new translation."""
 
     input_text: str
     source_type: str = "text"  # text, ocr
 
 
-class CreateJobResponse(BaseModel):
-    """Response after creating a job."""
+class CreateTranslationResponse(BaseModel):
+    """Response after creating a translation."""
 
-    job_id: str
+    translation_id: str
     status: str
 
 
-class JobSummary(BaseModel):
-    """Summary of a job for list views."""
+class TranslationSummary(BaseModel):
+    """Summary of a translation for list views."""
 
     id: str
     created_at: str
@@ -216,15 +216,15 @@ class JobSummary(BaseModel):
     total_segments: int | None  # Total segments
 
 
-class ListJobsResponse(BaseModel):
-    """Response for listing jobs."""
+class ListTranslationsResponse(BaseModel):
+    """Response for listing translations."""
 
-    jobs: list[JobSummary]
+    translations: list[TranslationSummary]
     total: int
 
 
-class JobDetailResponse(BaseModel):
-    """Full job details with translation results."""
+class TranslationDetailResponse(BaseModel):
+    """Full translation details with results."""
 
     id: str
     created_at: str
@@ -236,10 +236,10 @@ class JobDetailResponse(BaseModel):
     paragraphs: list[ParagraphResult] | None
 
 
-class JobStatusResponse(BaseModel):
-    """Quick job status check response."""
+class TranslationStatusResponse(BaseModel):
+    """Quick translation status check response."""
 
-    job_id: str
+    translation_id: str
     status: str
     progress: int | None  # Completed segment count
     total: int | None  # Total segment count

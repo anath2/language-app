@@ -68,14 +68,14 @@ class UserProfile:
 
 
 @dataclass(frozen=True)
-class JobRecord:
-    """Job queue record."""
+class TranslationRecord:
+    """Translation queue record."""
 
     id: str
     created_at: str
     updated_at: str
     status: str  # pending, processing, completed, failed
-    job_type: str
+    translation_type: str
     source_type: str
     input_text: str
     full_translation: str | None
@@ -85,11 +85,11 @@ class JobRecord:
 
 
 @dataclass(frozen=True)
-class JobSegmentRecord:
-    """Individual segment translation result within a job."""
+class TranslationSegmentRecord:
+    """Individual segment translation result within a translation."""
 
     id: str
-    job_id: str
+    translation_id: str
     paragraph_idx: int
     seg_idx: int
     segment_text: str
@@ -99,21 +99,21 @@ class JobSegmentRecord:
 
 
 @dataclass(frozen=True)
-class JobParagraphRecord:
-    """Paragraph metadata for a job."""
+class TranslationParagraphRecord:
+    """Paragraph metadata for a translation."""
 
     id: str
-    job_id: str
+    translation_id: str
     paragraph_idx: int
     indent: str
     separator: str
 
 
 @dataclass(frozen=True)
-class JobWithResults:
-    """Job with full translation results for API responses."""
+class TranslationWithResults:
+    """Translation with full translation results for API responses."""
 
-    job: JobRecord
+    translation: TranslationRecord
     paragraphs: list[dict[str, Any]]  # [{translations: [...], indent, separator}]
 
 
@@ -126,7 +126,7 @@ class ProgressBundle:
     vocab_items: list[dict[str, Any]]
     srs_state: list[dict[str, Any]]
     vocab_lookups: list[dict[str, Any]]
-    # Job queue data for translation history
-    jobs: list[dict[str, Any]] | None = None
-    job_segments: list[dict[str, Any]] | None = None
-    job_paragraphs: list[dict[str, Any]] | None = None
+    # Translation queue data for translation history
+    translations: list[dict[str, Any]] | None = None
+    translation_segments: list[dict[str, Any]] | None = None
+    translation_paragraphs: list[dict[str, Any]] | None = None

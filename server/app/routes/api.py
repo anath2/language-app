@@ -232,10 +232,10 @@ async def api_translate_batch(request: TranslateBatchRequest):
     Uses pypinyin for pinyin generation, CEDICT for dictionary lookup,
     and falls back to LLM for words not in CEDICT.
 
-    If job_id and paragraph_idx are provided, updates the job_segments table.
+    If translation_id and paragraph_idx are provided, updates the translation_segments table.
     """
     from app.cedict import lookup
-    from app.persistence.jobs import update_job_segments
+    from app.persistence.translations import update_translation_segments
     from app.pipeline import get_pipeline
     from app.utils import should_skip_segment, to_pinyin
 
@@ -265,8 +265,8 @@ async def api_translate_batch(request: TranslateBatchRequest):
             TranslationResult(segment=segment_text, pinyin=pinyin, english=english)
         )
 
-    # Persist to job_segments table if job_id is provided
-    if request.job_id is not None and request.paragraph_idx is not None:
+    # Persist to translation_segments table if translation_id is provided
+    if request.translation_id is not None and request.paragraph_idx is not None:
         segments_data = [
             {
                 "segment_text": t.segment,
@@ -275,6 +275,6 @@ async def api_translate_batch(request: TranslateBatchRequest):
             }
             for t in translations
         ]
-        update_job_segments(request.job_id, request.paragraph_idx, segments_data)
+        update_translation_segments(request.translation_id, request.paragraph_idx, segments_data)
 
     return TranslateBatchResponse(translations=translations)

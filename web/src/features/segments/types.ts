@@ -47,7 +47,7 @@ export interface StreamSegmentResult {
 
 export type StreamStartEvent = {
   type: "start";
-  job_id: string;
+  translation_id: string;
   total?: number;
   paragraphs?: ParagraphMeta[];
   fullTranslation?: string | null;

@@ -211,14 +211,14 @@ class TestProgressExport:
         """Export works on empty database."""
         bundle = export_progress()
 
-        assert bundle.schema_version == 2
+        assert bundle.schema_version == 3
         assert bundle.exported_at != ""
         assert bundle.vocab_items == []
         assert bundle.srs_state == []
         assert bundle.vocab_lookups == []
-        assert bundle.jobs == []
-        assert bundle.job_segments == []
-        assert bundle.job_paragraphs == []
+        assert bundle.translations == []
+        assert bundle.translation_segments == []
+        assert bundle.translation_paragraphs == []
 
     def test_export_with_data(self, temp_db):
         """Export includes saved vocabulary and SRS data."""

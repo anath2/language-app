@@ -290,7 +290,7 @@
         {displayParagraphs}
         {translationResults}
         {paragraphMeta}
-        currentJobId={translationId}
+        currentTranslationId={translationId}
         currentRawText={rawText}
         onSave={handleEditSave}
         onCancel={handleEditCancel}

@@ -14,7 +14,7 @@ export interface TranslationSummary {
 }
 
 export interface ListTranslationsResponse {
-  jobs: TranslationSummary[];
+  translations: TranslationSummary[];
   total: number;
 }
 
@@ -30,7 +30,7 @@ export interface TranslationDetailResponse {
 }
 
 export interface CreateTranslationResponse {
-  job_id: string;
+  translation_id: string;
   status: TranslationStatus;
 }
 

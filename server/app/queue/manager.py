@@ -15,14 +15,14 @@ from threading import Lock
 from typing import Any, Callable
 
 from app.cedict import lookup
-from app.persistence.jobs import (
-    complete_job,
-    create_job,
-    fail_job,
-    get_job,
-    save_job_paragraph,
-    save_job_segment,
-    update_job_status,
+from app.persistence.translations import (
+    complete_translation,
+    create_translation,
+    fail_translation,
+    get_translation,
+    save_translation_paragraph,
+    save_translation_segment,
+    update_translation_status,
 )
 from app.pipeline import get_full_translator, get_pipeline
 from app.utils import should_skip_segment, split_into_paragraphs, to_pinyin
@@ -68,14 +68,14 @@ class RateLimiter:
             self._last_request = time.time()
 
 
-class JobQueueManager:
+class TranslationQueueManager:
     """
-    Manages a thread pool for processing translation jobs.
+    Manages a thread pool for processing translations.
 
     Features:
     - Thread pool with configurable worker count
     - Round-robin rate limit management
-    - Job persistence to SQLite
+    - Translation persistence to SQLite
     - Progress callbacks for SSE streaming
     """
 
@@ -86,82 +86,82 @@ class JobQueueManager:
     ):
         self._executor = ThreadPoolExecutor(max_workers=max_workers)
         self._rate_limiter = RateLimiter(rate_limit_ms)
-        self._active_jobs: dict[str, asyncio.Event] = {}
-        self._job_progress: dict[str, dict[str, Any]] = {}
+        self._active_translations: dict[str, asyncio.Event] = {}
+        self._translation_progress: dict[str, dict[str, Any]] = {}
         self._lock = Lock()
 
-    def submit_job(
+    def submit_translation(
         self,
         input_text: str,
         source_type: str = "text",
     ) -> str:
         """
-        Create and queue a new translation job.
+        Create and queue a new translation.
 
-        Returns job_id immediately. Processing happens asynchronously.
+        Returns translation_id immediately. Processing happens asynchronously.
         """
-        job_id = create_job(input_text=input_text, source_type=source_type)
+        translation_id = create_translation(input_text=input_text, source_type=source_type)
 
         # Initialize progress tracking
         with self._lock:
-            self._job_progress[job_id] = {
+            self._translation_progress[translation_id] = {
                 "status": "pending",
                 "current": 0,
                 "total": 0,
                 "results": [],
             }
 
-        return job_id
+        return translation_id
 
     def start_processing(
         self,
-        job_id: str,
+        translation_id: str,
         progress_callback: Callable[[str, SegmentResult], None] | None = None,
     ) -> None:
         """
-        Start processing a job in the thread pool.
+        Start processing a translation in the thread pool.
 
-        progress_callback is called with (job_id, segment_result) for each segment.
+        progress_callback is called with (translation_id, segment_result) for each segment.
         """
-        self._executor.submit(self._process_job, job_id, progress_callback)
+        self._executor.submit(self._process_translation, translation_id, progress_callback)
 
-    def get_progress(self, job_id: str) -> dict[str, Any] | None:
-        """Get current progress for a job."""
+    def get_progress(self, translation_id: str) -> dict[str, Any] | None:
+        """Get current progress for a translation."""
         with self._lock:
-            return self._job_progress.get(job_id)
+            return self._translation_progress.get(translation_id)
 
-    def _process_job(
+    def _process_translation(
         self,
-        job_id: str,
+        translation_id: str,
         progress_callback: Callable[[str, SegmentResult], None] | None = None,
     ) -> None:
         """
-        Worker function that processes a single job.
+        Worker function that processes a single translation.
 
-        1. Load job from database
+        1. Load translation from database
         2. Mark as processing
         3. Run segmentation for all paragraphs
         4. Run full-text translation
         5. For each segment: rate_limit() then translate
-        6. Save results to job_segments
+        6. Save results to translation_segments
         7. Mark as completed (or failed on error)
         """
         try:
             # Mark as processing
-            update_job_status(job_id, "processing")
+            update_translation_status(translation_id, "processing")
             with self._lock:
-                if job_id in self._job_progress:
-                    self._job_progress[job_id]["status"] = "processing"
+                if translation_id in self._translation_progress:
+                    self._translation_progress[translation_id]["status"] = "processing"
 
-            job = get_job(job_id)
-            if job is None:
-                raise ValueError(f"Job {job_id} not found")
+            translation = get_translation(translation_id)
+            if translation is None:
+                raise ValueError(f"Translation {translation_id} not found")
 
             pipe = get_pipeline()
             full_translator = get_full_translator()
 
             # Split text into paragraphs
-            paragraphs = split_into_paragraphs(job.input_text)
+            paragraphs = split_into_paragraphs(translation.input_text)
 
             # Rate limit before full translation
             self._rate_limiter.wait()
@@ -171,7 +171,7 @@ class JobQueueManager:
             asyncio.set_event_loop(loop)
             try:
                 full_result = loop.run_until_complete(
-                    full_translator.acall(text=job.input_text)
+                    full_translator.acall(text=translation.input_text)
                 )
                 full_translation = full_result.english
             finally:
@@ -204,13 +204,13 @@ class JobQueueManager:
             total_segments = sum(len(p["segments"]) for p in all_paragraph_segments)
 
             with self._lock:
-                if job_id in self._job_progress:
-                    self._job_progress[job_id]["total"] = total_segments
+                if translation_id in self._translation_progress:
+                    self._translation_progress[translation_id]["total"] = total_segments
 
             # Save paragraph metadata
             for para_idx, para_data in enumerate(all_paragraph_segments):
-                save_job_paragraph(
-                    job_id=job_id,
+                save_translation_paragraph(
+                    translation_id=translation_id,
                     paragraph_idx=para_idx,
                     indent=para_data["indent"],
                     separator=para_data["separator"],
@@ -245,8 +245,8 @@ class JobQueueManager:
                             loop.close()
 
                     # Save segment result
-                    save_job_segment(
-                        job_id=job_id,
+                    save_translation_segment(
+                        translation_id=translation_id,
                         paragraph_idx=para_idx,
                         seg_idx=seg_idx,
                         segment_text=segment,
@@ -267,34 +267,34 @@ class JobQueueManager:
                     # Update progress
                     global_idx += 1
                     with self._lock:
-                        if job_id in self._job_progress:
-                            self._job_progress[job_id]["current"] = global_idx
-                            self._job_progress[job_id]["results"].append(result)
+                        if translation_id in self._translation_progress:
+                            self._translation_progress[translation_id]["current"] = global_idx
+                            self._translation_progress[translation_id]["results"].append(result)
 
                     # Call progress callback if provided
                     if progress_callback:
-                        progress_callback(job_id, result)
+                        progress_callback(translation_id, result)
 
             # Mark as completed
-            complete_job(job_id, full_translation)
+            complete_translation(translation_id, full_translation)
             with self._lock:
-                if job_id in self._job_progress:
-                    self._job_progress[job_id]["status"] = "completed"
-                    self._job_progress[job_id]["full_translation"] = full_translation
+                if translation_id in self._translation_progress:
+                    self._translation_progress[translation_id]["status"] = "completed"
+                    self._translation_progress[translation_id]["full_translation"] = full_translation
 
         except Exception as e:
             # Mark as failed
-            fail_job(job_id, str(e))
+            fail_translation(translation_id, str(e))
             with self._lock:
-                if job_id in self._job_progress:
-                    self._job_progress[job_id]["status"] = "failed"
-                    self._job_progress[job_id]["error"] = str(e)
+                if translation_id in self._translation_progress:
+                    self._translation_progress[translation_id]["status"] = "failed"
+                    self._translation_progress[translation_id]["error"] = str(e)
             raise
 
-    def cleanup_progress(self, job_id: str) -> None:
-        """Remove progress tracking for a completed job."""
+    def cleanup_progress(self, translation_id: str) -> None:
+        """Remove progress tracking for a completed translation."""
         with self._lock:
-            self._job_progress.pop(job_id, None)
+            self._translation_progress.pop(translation_id, None)
 
     def shutdown(self, wait: bool = True) -> None:
         """Shutdown the thread pool."""
