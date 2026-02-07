@@ -20,7 +20,7 @@
   {#if translations.length === 0}
     <div class="text-center py-8">
       <p class="italic" style="color: var(--text-muted); font-size: var(--text-sm);">No translations yet</p>
-      <p class="mt-1" style="color: var(--text-muted); font-size: var(--text-xs);">Submit text on the left to start</p>
+      <p class="mt-1" style="color: var(--text-muted); font-size: var(--text-xs);">Submit text above to start</p>
     </div>
   {:else}
     {#each translations as translation}

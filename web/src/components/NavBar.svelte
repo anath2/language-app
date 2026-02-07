@@ -1,0 +1,172 @@
+<script lang="ts">
+  import { router } from "../lib/router.svelte";
+  import type { DueCountResponse } from "../lib/types";
+  import { getJson } from "../lib/api";
+
+  let { currentPage }: { currentPage: string } = $props();
+  let dueCount = $state(0);
+
+  // Load due count on mount
+  $effect(() => {
+    loadDueCount();
+    // Refresh every minute
+    const interval = setInterval(loadDueCount, 60000);
+    return () => clearInterval(interval);
+  });
+
+  async function loadDueCount() {
+    try {
+      const data = await getJson<DueCountResponse>("/api/review/count");
+      dueCount = data.due_count;
+    } catch {
+      // Silently fail
+    }
+  }
+
+  function goToTranslate() {
+    router.navigateHome();
+  }
+
+  function goToVocab() {
+    router.navigateToVocab();
+  }
+
+  function goToAdmin() {
+    window.location.href = "/admin";
+  }
+</script>
+
+<nav class="navbar">
+  <div class="nav-brand">
+    <span class="brand-icon">📚</span>
+    <span class="brand-text">Language App</span>
+  </div>
+
+  <div class="nav-items">
+    <button
+      class="nav-item"
+      class:active={currentPage === "home"}
+      onclick={goToTranslate}
+    >
+      <span class="nav-icon">📝</span>
+      <span class="nav-label">Translate</span>
+    </button>
+
+    <button
+      class="nav-item"
+      class:active={currentPage === "vocab"}
+      onclick={goToVocab}
+    >
+      <span class="nav-icon">📖</span>
+      <span class="nav-label">Vocab</span>
+      {#if dueCount > 0}
+        <span class="badge">{dueCount}</span>
+      {/if}
+    </button>
+
+    <button
+      class="nav-item"
+      onclick={goToAdmin}
+    >
+      <span class="nav-icon">⚙️</span>
+      <span class="nav-label">Admin</span>
+    </button>
+  </div>
+</nav>
+
+<style>
+  .navbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1.5rem;
+    background: var(--surface-color, #1e1e1e);
+    border-bottom: 1px solid var(--border-color, #333);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .nav-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    font-size: 1.1rem;
+    color: var(--text-primary, #e0e0e0);
+  }
+
+  .brand-icon {
+    font-size: 1.25rem;
+  }
+
+  .nav-items {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary, #aaa);
+    font-size: 0.95rem;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+    position: relative;
+  }
+
+  .nav-item:hover {
+    background: var(--hover-bg, rgba(255, 255, 255, 0.05));
+    color: var(--text-primary, #e0e0e0);
+  }
+
+  .nav-item.active {
+    background: var(--active-bg, rgba(76, 175, 80, 0.15));
+    color: var(--accent-color, #4caf50);
+  }
+
+  .nav-icon {
+    font-size: 1.1rem;
+  }
+
+  .badge {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    background: var(--error-color, #f44336);
+    color: white;
+    font-size: 0.7rem;
+    font-weight: 600;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  @media (max-width: 480px) {
+    .navbar {
+      padding: 0.75rem 1rem;
+    }
+
+    .brand-text {
+      display: none;
+    }
+
+    .nav-label {
+      display: none;
+    }
+
+    .nav-item {
+      padding: 0.5rem;
+    }
+  }
+</style>

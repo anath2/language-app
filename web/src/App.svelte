@@ -18,6 +18,7 @@
     SegmentResult,
     SavedVocabInfo,
   } from "./features/segments/types";
+  import NavBar from "./components/NavBar.svelte";
   import ReviewPanel from "./components/ReviewPanel.svelte";
   import TranslateForm from "./components/TranslateForm.svelte";
   import TranslationList from "./components/TranslationList.svelte";
@@ -37,16 +38,12 @@
   let savedVocabMap = $state<Map<string, SavedVocabInfo>>(new Map());
 
   let reviewPanelOpen = $state(false);
-  let dueCount = $state(0);
 
-  const isDetailView = $derived(router.route.page === "translation");
-  const translationCountLabel = $derived(`${translations.length} translation${translations.length !== 1 ? "s" : ""}`);
-  const otherTranslationsCount = $derived(translations.filter((t) => t.id !== currentTranslationId).length);
+  const currentPage = $derived(router.route.page);
 
   // Initial data load
   $effect(() => {
     void loadTranslations();
-    void updateDueCount();
   });
 
   // React to route changes (handles popstate and initial deep link)
@@ -54,9 +51,11 @@
     const route = router.route;
     if (route.page === "translation") {
       void loadTranslationFromRoute(route.id);
-    } else {
+    } else if (route.page === "home") {
       clearDetailState();
       void loadTranslations();
+    } else {
+      clearDetailState();
     }
   });
 
@@ -196,22 +195,12 @@
     }
   }
 
-  async function updateDueCount() {
-    try {
-      const data = await getJson<DueCountResponse>("/api/review/count");
-      dueCount = data.due_count || 0;
-    } catch (error) {
-      console.error("Failed to fetch due count:", error);
-    }
-  }
-
   function openReviewPanel() {
     reviewPanelOpen = true;
   }
 
   function closeReviewPanel() {
     reviewPanelOpen = false;
-    void updateDueCount();
   }
 
   async function ensureSavedText() {
@@ -244,7 +233,6 @@
         status: "learning"
       };
       savedVocabMap = new Map(savedVocabMap.set(headword, info));
-      await updateDueCount();
       return info;
     } catch (error) {
       console.error("Failed to save vocab:", error);
@@ -262,7 +250,6 @@
       if (info) {
         savedVocabMap = new Map(savedVocabMap.set(headword, { ...info, status: "known", opacity: 0 }));
       }
-      await updateDueCount();
     } catch (error) {
       console.error("Failed to mark known:", error);
     }
@@ -278,7 +265,6 @@
       if (info) {
         savedVocabMap = new Map(savedVocabMap.set(headword, { ...info, status: "learning", opacity: 1 }));
       }
-      await updateDueCount();
     } catch (error) {
       console.error("Failed to resume learning:", error);
     }
@@ -314,91 +300,96 @@
   <link rel="stylesheet" href="/css/segments.css" />
 </svelte:head>
 
-<div class="container mx-auto px-4 py-8 max-w-6xl">
-  <header class="mb-8 flex items-start justify-between">
-    <div>
-      <h1 class="font-chinese font-semibold mb-1" style="color: var(--text-primary); font-size: var(--text-2xl);">
-        Language App
-      </h1>
-      <p style="color: var(--text-secondary); font-size: var(--text-base);">
-        Enter Chinese text to get word segmentation, pinyin, and English translation
-      </p>
-    </div>
-    <div class="flex items-center gap-3">
-      <a href="/admin" class="btn-secondary px-3 py-1.5 text-sm">Admin</a>
-      <button id="review-btn" class="btn-secondary px-3 py-1.5 flex items-center" onclick={openReviewPanel}>
-        Review
-        {#if dueCount > 0}
-          <span class="review-badge">{dueCount}</span>
-        {/if}
-      </button>
-    </div>
-  </header>
+<NavBar currentPage={currentPage} />
 
-  <ReviewPanel open={reviewPanelOpen} onClose={closeReviewPanel} onDueCountChange={(c) => dueCount = c} />
+<ReviewPanel open={reviewPanelOpen} onClose={closeReviewPanel} onDueCountChange={() => {}} />
 
-  <main class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-    <div class="space-y-4">
+{#if currentPage === "home"}
+  <!-- Home Page: Translate Form + Recent Translations -->
+  <div class="page-container max-w-4xl">
+    <div class="space-y-6">
       <TranslateForm onSubmit={handleSubmit} loading={formLoading === "loading"} />
+
+      <div class="input-card p-5">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="font-semibold" style="color: var(--text-primary); font-size: var(--text-base);">Recent Translations</h2>
+          <span class="text-xs px-2 py-0.5 rounded-full" style="background: var(--pastel-3); color: var(--text-primary);">
+            {translations.length} total
+          </span>
+        </div>
+        <TranslationList {translations} onSelect={openTranslation} onDelete={deleteTranslation} />
+      </div>
+    </div>
+  </div>
+
+{:else if currentPage === "translation"}
+  <!-- Translation Detail Page: Full-width -->
+  <div class="page-container">
+    <button class="mb-4 flex items-center gap-1 hover:underline" style="color: var(--primary); font-size: var(--text-sm);" onclick={backToList}>
+      <span>&larr;</span> Back to translations
+    </button>
+
+    <!-- svelte-ignore a11y_label_has_associated_control -->
+    <div id="original-text-panel" class="input-card p-4 mb-4">
+      <label class="block font-medium mb-1.5" style="color: var(--text-secondary); font-size: var(--text-xs);">Original Text</label>
+      <div class="font-chinese p-2 rounded" style="background: var(--pastel-7); color: var(--text-primary); font-size: var(--text-chinese); min-height: 60px; white-space: pre-wrap;">{currentRawText}</div>
     </div>
 
-    <div class="space-y-4">
-      {#if !isDetailView}
-        <div id="job-queue-panel" class="input-card p-5">
-          <div class="flex items-center justify-between mb-4">
-            <h2 class="font-semibold" style="color: var(--text-primary); font-size: var(--text-base);">Translations</h2>
-            <span class="text-xs px-2 py-0.5 rounded-full" style="background: var(--pastel-3); color: var(--text-primary);">{translationCountLabel}</span>
-          </div>
-          <TranslationList {translations} onSelect={openTranslation} onDelete={deleteTranslation} />
+    {#if detailLoading}
+      <div class="input-card p-5 flex items-center justify-center" style="min-height: 200px;">
+        <div class="text-center">
+          <div class="spinner mx-auto mb-2" style="width: 20px; height: 20px; border-color: rgba(124, 158, 178, 0.3); border-top-color: var(--primary);"></div>
+          <p style="color: var(--text-muted); font-size: var(--text-sm);">Loading...</p>
         </div>
-      {:else}
-        <div id="expanded-job-view">
-          <button class="mb-3 flex items-center gap-1 hover:underline" style="color: var(--primary); font-size: var(--text-sm);" onclick={backToList}>
-            <span>&larr;</span> Back
-          </button>
+      </div>
+    {:else}
+      <Segments
+        translationId={currentTranslationId}
+        translationStatus={currentTranslationStatus}
+        paragraphs={currentParagraphs}
+        fullTranslation={currentFullTranslation}
+        rawText={currentRawText}
+        {savedVocabMap}
+        {onSaveVocab}
+        {onMarkKnown}
+        {onResumeLearning}
+        {onRecordLookup}
+        onStreamComplete={handleStreamComplete}
+        onSegmentsChanged={handleSegmentsChanged}
+      />
+    {/if}
+  </div>
 
-          <!-- svelte-ignore a11y_label_has_associated_control -->
-          <div id="original-text-panel" class="input-card p-4 mb-4">
-            <label class="block font-medium mb-1.5" style="color: var(--text-secondary); font-size: var(--text-xs);">Original Text</label>
-            <div class="font-chinese p-2 rounded" style="background: var(--pastel-7); color: var(--text-primary); font-size: var(--text-chinese); min-height: 60px; white-space: pre-wrap;">{currentRawText}</div>
-          </div>
-
-          {#if detailLoading}
-            <div class="input-card p-5 flex items-center justify-center" style="min-height: 200px;">
-              <div class="text-center">
-                <div class="spinner mx-auto mb-2" style="width: 20px; height: 20px; border-color: rgba(124, 158, 178, 0.3); border-top-color: var(--primary);"></div>
-                <p style="color: var(--text-muted); font-size: var(--text-sm);">Loading...</p>
-              </div>
-            </div>
-          {:else}
-            <Segments
-              translationId={currentTranslationId}
-              translationStatus={currentTranslationStatus}
-              paragraphs={currentParagraphs}
-              fullTranslation={currentFullTranslation}
-              rawText={currentRawText}
-              {savedVocabMap}
-              {onSaveVocab}
-              {onMarkKnown}
-              {onResumeLearning}
-              {onRecordLookup}
-              onStreamComplete={handleStreamComplete}
-              onSegmentsChanged={handleSegmentsChanged}
-            />
-          {/if}
-
-          {#if otherTranslationsCount > 0}
-            <div class="mt-4">
-              <button class="w-full input-card p-3 text-left hover:shadow-md transition-shadow" onclick={backToList}>
-                <div class="flex items-center justify-between">
-                  <span style="color: var(--text-secondary); font-size: var(--text-sm);">Translations</span>
-                  <span class="text-xs px-2 py-0.5 rounded-full" style="background: var(--pastel-4); color: var(--text-primary);">{otherTranslationsCount} more</span>
-                </div>
-              </button>
-            </div>
-          {/if}
-        </div>
-      {/if}
+{:else if currentPage === "vocab"}
+  <!-- Vocab Page: Stub -->
+  <div class="page-container max-w-4xl">
+    <div class="space-y-6">
+      <div class="input-card p-6 text-center">
+        <div class="text-4xl mb-4">📖</div>
+        <h2 class="font-semibold mb-2" style="color: var(--text-primary); font-size: var(--text-xl);">Vocabulary</h2>
+        <p class="mb-6" style="color: var(--text-secondary);">Review and manage your saved vocabulary words.</p>
+        <button class="btn-primary px-6 py-2" onclick={openReviewPanel}>
+          Review Due Cards
+        </button>
+      </div>
     </div>
-  </main>
-</div>
+  </div>
+{/if}
+
+<style>
+  .page-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 1.5rem;
+  }
+
+  .page-container.max-w-4xl {
+    max-width: 56rem;
+  }
+
+  @media (max-width: 640px) {
+    .page-container {
+      padding: 1rem;
+    }
+  }
+</style>
