@@ -185,26 +185,38 @@
 
     saving = true;
     try {
-      const pendingSegmentTexts = [...pendingIndices]
-        .sort((a, b) => a - b)
-        .map((idx) => workingResults[idx]?.segment)
-        .filter((t): t is string => !!t);
-
+      // Identify the affected paragraph
       const paragraphIdx = workingResults[
         [...pendingIndices][0]
       ]?.paragraph_index ?? null;
 
+      if (paragraphIdx === null) {
+        onSave(workingResults, workingMeta);
+        return;
+      }
+
+      // Get ALL segments for this paragraph (not just pending ones)
+      // This is required because the backend replaces all segments for the paragraph
+      const paragraphSegmentIndices: number[] = [];
+      const allSegmentTexts: string[] = [];
+
+      workingResults.forEach((seg, idx) => {
+        if (seg.paragraph_index === paragraphIdx) {
+          paragraphSegmentIndices.push(idx);
+          allSegmentTexts.push(seg.segment);
+        }
+      });
+
       const data = await translateBatch(
-        pendingSegmentTexts,
+        allSegmentTexts,
         currentRawText || null,
         currentTranslationId,
         paragraphIdx,
       );
 
-      // Apply translations to pending segments
-      const sortedPending = [...pendingIndices].sort((a, b) => a - b);
+      // Apply translations to ALL segments in the paragraph
       const next = workingResults.map((r) => ({ ...r }));
-      sortedPending.forEach((idx, i) => {
+      paragraphSegmentIndices.forEach((idx, i) => {
         if (data.translations[i] && next[idx]) {
           next[idx] = {
             ...next[idx],

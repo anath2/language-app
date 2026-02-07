@@ -36,6 +36,7 @@
 
   let tooltipVisible = $state(false);
   let tooltipPinned = $state(false);
+  let tooltipHideTimeout = $state<number | null>(null);
   let tooltip = $state<TooltipState>({
     headword: "",
     pinyin: "",
@@ -48,6 +49,7 @@
 
   let resultsContainer = $state<HTMLDivElement | null>(null);
   let tooltipRef = $state<HTMLDivElement | null>(null);
+  let lastHoveredElement = $state<HTMLElement | null>(null);
 
   function isHTMLElement(value: EventTarget | null): value is HTMLElement {
     return value instanceof HTMLElement;
@@ -82,12 +84,63 @@
 
   async function handleSegmentHover(segment: SegmentResult, element: EventTarget | null) {
     if (tooltipPinned) return;
+    // Clear any pending hide timeout to prevent flickering
+    if (tooltipHideTimeout !== null) {
+      window.clearTimeout(tooltipHideTimeout);
+      tooltipHideTimeout = null;
+    }
+    if (isHTMLElement(element)) {
+      lastHoveredElement = element;
+    }
     await showTooltip(segment, element, false);
   }
 
   function handleSegmentLeave() {
     if (!tooltipPinned) {
+      // Add small delay before hiding to allow moving to tooltip
+      tooltipHideTimeout = window.setTimeout(() => {
+        tooltipVisible = false;
+      }, 150);
+    }
+  }
+
+  function handleTooltipEnter() {
+    // Cancel hide when entering tooltip
+    if (tooltipHideTimeout !== null) {
+      window.clearTimeout(tooltipHideTimeout);
+      tooltipHideTimeout = null;
+    }
+  }
+
+  function handleTooltipLeave() {
+    if (!tooltipPinned) {
       tooltipVisible = false;
+    }
+  }
+
+  function updateTooltipPosition() {
+    if (!tooltipVisible || !tooltipRef) return;
+
+    // If we have a last hovered element and it's still in the DOM, reposition relative to it
+    if (lastHoveredElement && document.contains(lastHoveredElement)) {
+      const segRect = lastHoveredElement.getBoundingClientRect();
+      const tooltipRect = tooltipRef.getBoundingClientRect();
+
+      let left = segRect.left + segRect.width / 2 - tooltipRect.width / 2;
+      let top = segRect.top - tooltipRect.height - 8;
+
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+
+      if (left < 8) left = 8;
+      if (left + tooltipRect.width > viewportWidth - 8) {
+        left = viewportWidth - tooltipRect.width - 8;
+      }
+      if (top < 8) {
+        top = segRect.bottom + 8;
+      }
+
+      tooltip = { ...tooltip, x: left, y: top };
     }
   }
 
@@ -95,9 +148,13 @@
     if (tooltipPinned && tooltip.headword === segment.segment) {
       tooltipPinned = false;
       tooltipVisible = false;
+      lastHoveredElement = null;
       return;
     }
     tooltipPinned = true;
+    if (isHTMLElement(element)) {
+      lastHoveredElement = element;
+    }
     await showTooltip(segment, element, true);
 
     const info = savedVocabMap.get(segment.segment);
@@ -121,13 +178,34 @@
     tooltipPinned = pinned;
     await tick();
 
-    if (!resultsContainer || !tooltipRef || !isHTMLElement(element)) return;
+    if (!tooltipRef || !isHTMLElement(element)) return;
     const segRect = element.getBoundingClientRect();
-    const containerRect = resultsContainer.getBoundingClientRect();
     const tooltipRect = tooltipRef.getBoundingClientRect();
-    const left = segRect.left - containerRect.left + segRect.width / 2 - tooltipRect.width / 2;
-    const top = segRect.top - containerRect.top - tooltipRect.height - 8;
-    tooltip = { ...tooltip, x: Math.max(0, left), y: Math.max(0, top) };
+
+    // Calculate position relative to viewport (for fixed positioning)
+    // Center horizontally over the segment
+    let left = segRect.left + segRect.width / 2 - tooltipRect.width / 2;
+    // Position above the segment with 8px gap
+    let top = segRect.top - tooltipRect.height - 8;
+
+    // Keep tooltip within viewport bounds
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    // Prevent going off left edge
+    if (left < 8) {
+      left = 8;
+    }
+    // Prevent going off right edge
+    if (left + tooltipRect.width > viewportWidth - 8) {
+      left = viewportWidth - tooltipRect.width - 8;
+    }
+    // If tooltip would go above viewport, show it below the segment instead
+    if (top < 8) {
+      top = segRect.bottom + 8;
+    }
+
+    tooltip = { ...tooltip, x: left, y: top };
   }
 
   function handleGlobalClick(event: MouseEvent) {
@@ -137,6 +215,7 @@
     if (target?.closest?.(".segment")) return;
     tooltipPinned = false;
     tooltipVisible = false;
+    lastHoveredElement = null;
   }
 
   async function saveVocab() {
@@ -160,7 +239,7 @@
   }
 </script>
 
-<svelte:window onclick={handleGlobalClick} />
+<svelte:window onclick={handleGlobalClick} onscroll={updateTooltipPosition} />
 
 <div class="relative space-y-3" bind:this={resultsContainer}>
   {#if progress.total > 0 && progress.current < progress.total}
@@ -198,10 +277,13 @@
     {/each}
   </div>
 
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     class={`word-tooltip ${tooltipVisible ? "" : "hidden"}`}
     bind:this={tooltipRef}
     style={`left: ${tooltip.x}px; top: ${tooltip.y}px;`}
+    onmouseenter={handleTooltipEnter}
+    onmouseleave={handleTooltipLeave}
   >
     <div class="tooltip-pinyin">{tooltip.pinyin}</div>
     <div class="tooltip-english">{tooltip.english}</div>
