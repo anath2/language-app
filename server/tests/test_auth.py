@@ -27,10 +27,10 @@ def client(monkeypatch):
 
 class TestLoginPage:
     def test_login_page_accessible(self, client):
-        """GET /login returns the login page."""
+        """GET /login returns the SPA."""
         response = client.get("/login", follow_redirects=False)
         assert response.status_code == 200
-        assert "Password" in response.text
+        assert '<div id="app"></div>' in response.text
 
     def test_login_page_redirects_when_authenticated(self, client):
         """GET /login redirects to home when already authenticated."""
@@ -131,8 +131,8 @@ class TestProtectedRoutes:
     def test_htmx_returns_redirect_header(self, client):
         """HTMX requests return HX-Redirect header when not authenticated."""
         response = client.post(
-            "/translate-html",
-            data={"text": "test"},
+            "/api/texts",
+            json={"raw_text": "test", "source_type": "text"},
             headers={"HX-Request": "true"},
         )
         assert response.status_code == 401
@@ -171,9 +171,9 @@ class TestExcludedPaths:
         assert response.status_code == 200
         assert response.json() == {"status": "ok"}
 
-    def test_static_files_no_auth(self, client):
-        """/static/* paths don't require authentication."""
-        # This will 404 if no static file exists, but shouldn't 401
-        response = client.get("/static/nonexistent.css", follow_redirects=False)
+    def test_css_files_no_auth(self, client):
+        """/css/* paths don't require authentication."""
+        # This will 404 if no css file exists, but shouldn't 401
+        response = client.get("/css/nonexistent.css", follow_redirects=False)
         # Should be 404 not 303 redirect
         assert response.status_code == 404
