@@ -32,7 +32,7 @@
   }
 
   function goToAdmin() {
-    window.location.href = "/admin";
+    router.navigateToAdmin();
   }
 </script>
 
@@ -66,6 +66,7 @@
 
     <button
       class="nav-item"
+      class:active={currentPage === "admin"}
       onclick={goToAdmin}
     >
       <span class="nav-icon">⚙️</span>
@@ -80,8 +81,9 @@
     align-items: center;
     justify-content: space-between;
     padding: 0.75rem 1.5rem;
-    background: var(--surface-color, #1e1e1e);
-    border-bottom: 1px solid var(--border-color, #333);
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    box-shadow: 0 1px 3px var(--shadow);
     position: sticky;
     top: 0;
     z-index: 100;
@@ -93,7 +95,7 @@
     gap: 0.5rem;
     font-weight: 600;
     font-size: 1.1rem;
-    color: var(--text-primary, #e0e0e0);
+    color: var(--text-primary);
   }
 
   .brand-icon {
@@ -113,7 +115,7 @@
     padding: 0.5rem 1rem;
     border: none;
     background: transparent;
-    color: var(--text-secondary, #aaa);
+    color: var(--text-secondary);
     font-size: 0.95rem;
     cursor: pointer;
     border-radius: 6px;
@@ -122,13 +124,13 @@
   }
 
   .nav-item:hover {
-    background: var(--hover-bg, rgba(255, 255, 255, 0.05));
-    color: var(--text-primary, #e0e0e0);
+    background: rgba(124, 158, 178, 0.08);
+    color: var(--text-primary);
   }
 
   .nav-item.active {
-    background: var(--active-bg, rgba(76, 175, 80, 0.15));
-    color: var(--accent-color, #4caf50);
+    background: rgba(124, 158, 178, 0.12);
+    color: var(--primary);
   }
 
   .nav-icon {
@@ -142,7 +144,7 @@
     min-width: 18px;
     height: 18px;
     padding: 0 5px;
-    background: var(--error-color, #f44336);
+    background: var(--secondary);
     color: white;
     font-size: 0.7rem;
     font-weight: 600;

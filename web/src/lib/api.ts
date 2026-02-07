@@ -22,6 +22,18 @@ export async function postJson<T = unknown>(url: string, body: unknown): Promise
   return res.json();
 }
 
+export async function postJsonForm<T = unknown>(url: string, formData: FormData): Promise<T> {
+  const res = await fetch(url, {
+    method: "POST",
+    body: formData,
+  });
+  if (!res.ok) {
+    const message = await safeErrorMessage(res);
+    throw new Error(message || `Request failed: ${res.status}`);
+  }
+  return res.json();
+}
+
 export async function deleteRequest<T = unknown>(url: string): Promise<T> {
   const res = await fetch(url, { method: "DELETE" });
   if (!res.ok) {

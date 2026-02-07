@@ -9,7 +9,7 @@
 </script>
 
 {#if results.length > 0}
-  <div class="p-4 rounded-xl" style="background: var(--surface); box-shadow: 0 1px 3px var(--shadow); border: 1px solid var(--border);">
+  <div class="p-4 mt-4 rounded-xl" style="background: var(--surface); box-shadow: 0 1px 3px var(--shadow); border: 1px solid var(--border);">
     <button class="flex items-center justify-between w-full text-left" onclick={() => (showDetails = !showDetails)}>
       <h3 class="font-semibold" style="color: var(--text-primary); font-size: var(--text-base);">Translation Details</h3>
       <span style="color: var(--text-muted); font-size: var(--text-lg);">{showDetails ? "\u2212" : "+"}</span>
