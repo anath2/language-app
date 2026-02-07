@@ -1,10 +1,11 @@
 <script lang="ts">
   import { getJson, postJson, deleteRequest } from "./lib/api";
+  import { router } from "./lib/router.svelte";
   import type {
-    JobSummary,
-    ListJobsResponse,
-    JobDetailResponse,
-    CreateJobResponse,
+    TranslationSummary,
+    ListTranslationsResponse,
+    TranslationDetailResponse,
+    CreateTranslationResponse,
     DueCountResponse,
     VocabSrsInfoListResponse,
     RecordLookupResponse,
@@ -19,16 +20,15 @@
   } from "./features/segments/types";
   import ReviewPanel from "./components/ReviewPanel.svelte";
   import TranslateForm from "./components/TranslateForm.svelte";
-  import JobQueue from "./components/JobQueue.svelte";
+  import TranslationList from "./components/TranslationList.svelte";
   import Segments from "./features/segments/Segments.svelte";
 
-  let jobQueue = $state<JobSummary[]>([]);
-  let currentJobId = $state<string | null>(null);
-  let currentJobStatus = $state<string | null>(null);
-  let currentJobParagraphs = $state<ParagraphResult[] | null>(null);
-  let currentJobFullTranslation = $state<string | null>(null);
-  let isExpandedView = $state(false);
-  let expandLoading = $state(false);
+  let translations = $state<TranslationSummary[]>([]);
+  let currentTranslationId = $state<string | null>(null);
+  let currentTranslationStatus = $state<string | null>(null);
+  let currentParagraphs = $state<ParagraphResult[] | null>(null);
+  let currentFullTranslation = $state<string | null>(null);
+  let detailLoading = $state(false);
   let formLoading = $state<LoadingState>("idle");
   let formErrorMessage = $state("");
 
@@ -39,12 +39,25 @@
   let reviewPanelOpen = $state(false);
   let dueCount = $state(0);
 
-  const queueCountLabel = $derived(`${jobQueue.length} job${jobQueue.length !== 1 ? "s" : ""}`);
-  const otherJobsCount = $derived(jobQueue.filter((job) => job.id !== currentJobId).length);
+  const isDetailView = $derived(router.route.page === "translation");
+  const translationCountLabel = $derived(`${translations.length} translation${translations.length !== 1 ? "s" : ""}`);
+  const otherTranslationsCount = $derived(translations.filter((t) => t.id !== currentTranslationId).length);
 
+  // Initial data load
   $effect(() => {
-    void loadJobQueue();
+    void loadTranslations();
     void updateDueCount();
+  });
+
+  // React to route changes (handles popstate and initial deep link)
+  $effect(() => {
+    const route = router.route;
+    if (route.page === "translation") {
+      void loadTranslationFromRoute(route.id);
+    } else {
+      clearDetailState();
+      void loadTranslations();
+    }
   });
 
   function errorToMessage(error: unknown): string {
@@ -52,12 +65,12 @@
     return String(error);
   }
 
-  async function loadJobQueue() {
+  async function loadTranslations() {
     try {
-      const data = await getJson<ListJobsResponse>("/api/jobs?limit=20");
-      jobQueue = data.jobs || [];
+      const data = await getJson<ListTranslationsResponse>("/api/jobs?limit=20");
+      translations = data.jobs || [];
     } catch (error) {
-      console.error("Failed to load job queue:", error);
+      console.error("Failed to load translations:", error);
     }
   }
 
@@ -66,16 +79,16 @@
 
     formLoading = "loading";
     try {
-      const data = await postJson<CreateJobResponse>("/api/jobs", {
+      const data = await postJson<CreateTranslationResponse>("/api/jobs", {
         input_text: text,
         source_type: "text"
       });
       currentRawText = text;
       currentTextId = null;
-      await loadJobQueue();
-      await expandJob(data.job_id);
+      await loadTranslations();
+      openTranslation(data.job_id);
     } catch (error) {
-      formErrorMessage = `Failed to submit translation job: ${errorToMessage(error)}`;
+      formErrorMessage = `Failed to submit translation: ${errorToMessage(error)}`;
       formLoading = "error";
     } finally {
       if (formLoading !== "error") {
@@ -84,70 +97,75 @@
     }
   }
 
-  async function expandJob(jobId: string) {
-    isExpandedView = true;
-    expandLoading = true;
-    currentJobId = null;
-    currentJobStatus = null;
-    currentJobParagraphs = null;
-    currentJobFullTranslation = null;
+  function openTranslation(id: string) {
+    router.navigateTo(id);
+  }
+
+  async function loadTranslationFromRoute(id: string) {
+    detailLoading = true;
+    currentTranslationId = null;
+    currentTranslationStatus = null;
+    currentParagraphs = null;
+    currentFullTranslation = null;
 
     try {
-      const job = await getJson<JobDetailResponse>(`/api/jobs/${jobId}`);
-      currentRawText = job.input_text;
+      const detail = await getJson<TranslationDetailResponse>(`/api/jobs/${id}`);
+      currentRawText = detail.input_text;
       currentTextId = null;
 
-      // Set status/data BEFORE setting jobId so the $effect gets complete data
-      if (job.status === "completed" && job.paragraphs) {
-        currentJobStatus = "completed";
-        currentJobParagraphs = job.paragraphs;
-        currentJobFullTranslation = job.full_translation || null;
-      } else if (job.status === "processing" || job.status === "pending") {
-        currentJobStatus = job.status;
-      } else if (job.status === "failed") {
-        currentJobStatus = "failed";
+      // Set status/data BEFORE setting translationId so the $effect gets complete data
+      if (detail.status === "completed" && detail.paragraphs) {
+        currentTranslationStatus = "completed";
+        currentParagraphs = detail.paragraphs;
+        currentFullTranslation = detail.full_translation || null;
+      } else if (detail.status === "processing" || detail.status === "pending") {
+        currentTranslationStatus = detail.status;
+      } else if (detail.status === "failed") {
+        currentTranslationStatus = "failed";
       }
 
-      // Set jobId LAST — this triggers the Segments $effect with all data ready
-      currentJobId = jobId;
-      await loadJobQueue();
+      // Set translationId LAST — this triggers the Segments $effect with all data ready
+      currentTranslationId = id;
+      await loadTranslations();
     } catch (_error) {
-      currentJobStatus = "failed";
-      currentJobId = jobId;
+      currentTranslationStatus = "failed";
+      currentTranslationId = id;
     } finally {
-      expandLoading = false;
+      detailLoading = false;
     }
   }
 
-  function backToQueue() {
-    isExpandedView = false;
-    expandLoading = false;
-    currentJobId = null;
-    currentJobStatus = null;
-    currentJobParagraphs = null;
-    currentJobFullTranslation = null;
-    formLoading = "idle";
-    formErrorMessage = "";
-    void loadJobQueue();
+  function backToList() {
+    router.navigateHome();
   }
 
-  async function deleteJob(jobId: string) {
+  function clearDetailState() {
+    detailLoading = false;
+    currentTranslationId = null;
+    currentTranslationStatus = null;
+    currentParagraphs = null;
+    currentFullTranslation = null;
+    formLoading = "idle";
+    formErrorMessage = "";
+  }
+
+  async function deleteTranslation(id: string) {
     if (!confirm("Delete this translation?")) return;
 
     try {
-      await deleteRequest("/api/jobs/" + jobId);
-      if (currentJobId === jobId) {
-        backToQueue();
+      await deleteRequest("/api/jobs/" + id);
+      if (currentTranslationId === id) {
+        backToList();
       } else {
-        await loadJobQueue();
+        await loadTranslations();
       }
     } catch (_error) {
-      alert("Failed to delete job");
+      alert("Failed to delete translation");
     }
   }
 
   function handleStreamComplete() {
-    void loadJobQueue();
+    void loadTranslations();
   }
 
   function handleSegmentsChanged(results: SegmentResult[]) {
@@ -307,7 +325,6 @@
       </p>
     </div>
     <div class="flex items-center gap-3">
-      <a href="/translations" class="btn-secondary px-3 py-1.5 text-sm">Translations</a>
       <a href="/admin" class="btn-secondary px-3 py-1.5 text-sm">Admin</a>
       <button id="review-btn" class="btn-secondary px-3 py-1.5 flex items-center" onclick={openReviewPanel}>
         Review
@@ -326,18 +343,18 @@
     </div>
 
     <div class="space-y-4">
-      {#if !isExpandedView}
+      {#if !isDetailView}
         <div id="job-queue-panel" class="input-card p-5">
           <div class="flex items-center justify-between mb-4">
-            <h2 class="font-semibold" style="color: var(--text-primary); font-size: var(--text-base);">Translation Queue</h2>
-            <span class="text-xs px-2 py-0.5 rounded-full" style="background: var(--pastel-3); color: var(--text-primary);">{queueCountLabel}</span>
+            <h2 class="font-semibold" style="color: var(--text-primary); font-size: var(--text-base);">Translations</h2>
+            <span class="text-xs px-2 py-0.5 rounded-full" style="background: var(--pastel-3); color: var(--text-primary);">{translationCountLabel}</span>
           </div>
-          <JobQueue jobs={jobQueue} onExpand={expandJob} onDelete={deleteJob} />
+          <TranslationList {translations} onSelect={openTranslation} onDelete={deleteTranslation} />
         </div>
       {:else}
         <div id="expanded-job-view">
-          <button class="mb-3 flex items-center gap-1 hover:underline" style="color: var(--primary); font-size: var(--text-sm);" onclick={backToQueue}>
-            <span>&larr;</span> Back to Queue
+          <button class="mb-3 flex items-center gap-1 hover:underline" style="color: var(--primary); font-size: var(--text-sm);" onclick={backToList}>
+            <span>&larr;</span> Back
           </button>
 
           <!-- svelte-ignore a11y_label_has_associated_control -->
@@ -346,19 +363,19 @@
             <div class="font-chinese p-2 rounded" style="background: var(--pastel-7); color: var(--text-primary); font-size: var(--text-chinese); min-height: 60px; white-space: pre-wrap;">{currentRawText}</div>
           </div>
 
-          {#if expandLoading}
+          {#if detailLoading}
             <div class="input-card p-5 flex items-center justify-center" style="min-height: 200px;">
               <div class="text-center">
                 <div class="spinner mx-auto mb-2" style="width: 20px; height: 20px; border-color: rgba(124, 158, 178, 0.3); border-top-color: var(--primary);"></div>
-                <p style="color: var(--text-muted); font-size: var(--text-sm);">Loading job...</p>
+                <p style="color: var(--text-muted); font-size: var(--text-sm);">Loading...</p>
               </div>
             </div>
           {:else}
             <Segments
-              jobId={currentJobId}
-              jobStatus={currentJobStatus}
-              jobParagraphs={currentJobParagraphs}
-              jobFullTranslation={currentJobFullTranslation}
+              translationId={currentTranslationId}
+              translationStatus={currentTranslationStatus}
+              paragraphs={currentParagraphs}
+              fullTranslation={currentFullTranslation}
               rawText={currentRawText}
               {savedVocabMap}
               {onSaveVocab}
@@ -370,12 +387,12 @@
             />
           {/if}
 
-          {#if otherJobsCount > 0}
+          {#if otherTranslationsCount > 0}
             <div class="mt-4">
-              <button class="w-full input-card p-3 text-left hover:shadow-md transition-shadow" onclick={backToQueue}>
+              <button class="w-full input-card p-3 text-left hover:shadow-md transition-shadow" onclick={backToList}>
                 <div class="flex items-center justify-between">
-                  <span style="color: var(--text-secondary); font-size: var(--text-sm);">Queue</span>
-                  <span class="text-xs px-2 py-0.5 rounded-full" style="background: var(--pastel-4); color: var(--text-primary);">{otherJobsCount} more</span>
+                  <span style="color: var(--text-secondary); font-size: var(--text-sm);">Translations</span>
+                  <span class="text-xs px-2 py-0.5 rounded-full" style="background: var(--pastel-4); color: var(--text-primary);">{otherTranslationsCount} more</span>
                 </div>
               </button>
             </div>

@@ -15,10 +15,10 @@
   import type { LoadingState } from "../../lib/types";
 
   let {
-    jobId,
-    jobStatus,
-    jobParagraphs,
-    jobFullTranslation,
+    translationId,
+    translationStatus,
+    paragraphs: initialParagraphs,
+    fullTranslation: initialFullTranslation,
     rawText,
     savedVocabMap,
     onSaveVocab,
@@ -28,10 +28,10 @@
     onStreamComplete,
     onSegmentsChanged,
   }: {
-    jobId: string | null;
-    jobStatus: string | null;
-    jobParagraphs: ParagraphResult[] | null;
-    jobFullTranslation: string | null;
+    translationId: string | null;
+    translationStatus: string | null;
+    paragraphs: ParagraphResult[] | null;
+    fullTranslation: string | null;
     rawText: string;
     savedVocabMap: Map<string, SavedVocabInfo>;
     onSaveVocab: (headword: string, pinyin: string, english: string) => Promise<SavedVocabInfo | null>;
@@ -52,31 +52,31 @@
 
   const displayParagraphs = $derived(buildDisplayParagraphs(paragraphMeta, translationResults));
 
-  // Track jobId changes and react
-  let lastJobId = $state<string | null>(null);
+  // Track translationId changes and react
+  let lastTranslationId = $state<string | null>(null);
 
   $effect(() => {
-    const currentJobId = jobId;
-    const currentJobStatus = jobStatus;
-    const currentJobParagraphs = jobParagraphs;
-    const currentJobFullTranslation = jobFullTranslation;
+    const currentId = translationId;
+    const currentStatus = translationStatus;
+    const currentParagraphs = initialParagraphs;
+    const currentFullTranslation = initialFullTranslation;
 
-    if (currentJobId !== lastJobId) {
-      lastJobId = currentJobId;
+    if (currentId !== lastTranslationId) {
+      lastTranslationId = currentId;
       isEditMode = false;
 
-      if (!currentJobId) {
+      if (!currentId) {
         resetState();
         return;
       }
 
-      if (currentJobStatus === "completed" && currentJobParagraphs) {
-        applyCompletedJob(currentJobParagraphs, currentJobFullTranslation);
-      } else if (currentJobStatus === "processing" || currentJobStatus === "pending") {
-        void streamJobProgress(currentJobId);
-      } else if (currentJobStatus === "failed") {
+      if (currentStatus === "completed" && currentParagraphs) {
+        applyCompletedJob(currentParagraphs, currentFullTranslation);
+      } else if (currentStatus === "processing" || currentStatus === "pending") {
+        void streamTranslation(currentId);
+      } else if (currentStatus === "failed") {
         loadingState = "error";
-        errorMessage = "Job failed";
+        errorMessage = "Translation failed";
       } else {
         loadingState = "loading";
       }
@@ -152,7 +152,7 @@
     return String(error);
   }
 
-  async function streamJobProgress(streamJobId: string) {
+  async function streamTranslation(streamId: string) {
     translationResults = [];
     paragraphMeta = [];
     fullTranslation = "";
@@ -160,7 +160,7 @@
     loadingState = "loading";
 
     try {
-      const response = await fetch(`/jobs/${streamJobId}/stream`);
+      const response = await fetch(`/api/translations/${streamId}/stream`);
       if (!response.body) {
         throw new Error("Streaming unavailable");
       }
@@ -290,7 +290,7 @@
         {displayParagraphs}
         {translationResults}
         {paragraphMeta}
-        currentJobId={jobId}
+        currentJobId={translationId}
         currentRawText={rawText}
         onSave={handleEditSave}
         onCancel={handleEditCancel}

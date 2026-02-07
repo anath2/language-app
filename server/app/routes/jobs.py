@@ -7,7 +7,7 @@ Endpoints:
 - GET /api/jobs/{job_id} - Get job details and results
 - GET /api/jobs/{job_id}/status - Quick status check
 - DELETE /api/jobs/{job_id} - Delete a job
-- GET /jobs/{job_id}/stream - SSE stream for job progress
+- GET /api/translations/{translation_id}/stream - SSE stream for translation progress
 """
 
 import asyncio
@@ -75,7 +75,7 @@ async def api_create_job(request: CreateJobRequest):
 
     The job is created immediately with 'pending' status.
     Use GET /api/jobs/{job_id}/status to check progress.
-    Use GET /jobs/{job_id}/stream to stream progress via SSE.
+    Use GET /api/translations/{translation_id}/stream to stream progress via SSE.
     """
     if not request.input_text.strip():
         raise HTTPException(status_code=400, detail="input_text is required")
@@ -188,8 +188,8 @@ async def api_delete_job(job_id: str):
 # --- SSE Streaming Endpoint ---
 
 
-@router.get("/jobs/{job_id}/stream")
-async def job_stream(job_id: str):
+@router.get("/api/translations/{job_id}/stream")
+async def translation_stream(job_id: str):
     """
     SSE stream for job progress.
 

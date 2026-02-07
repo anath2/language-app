@@ -78,19 +78,27 @@ server/
 web/                   # Svelte 5 SPA (primary frontend)
 ├── public/css/        # Global CSS (variables, base, segments)
 ├── src/
-│   ├── App.svelte     # Root orchestrator (~500 lines — state, API, layout)
+│   ├── App.svelte     # Root orchestrator — translations, vocab, review, layout
 │   ├── main.ts        # Entry point (mount API)
 │   ├── app.css        # Minimal reset
 │   ├── lib/
 │   │   ├── api.ts     # Typed fetch wrappers (getJson, postJson, deleteRequest)
-│   │   ├── utils.ts   # Pure helpers (getPastelColor, formatTimeAgo)
-│   │   └── types.ts   # Shared interfaces/types for all components
+│   │   ├── utils.ts   # Pure helpers (formatTimeAgo)
+│   │   ├── types.ts   # Shared types (translation, review, vocab — no segment types)
+│   │   └── router.svelte.ts  # pushState/popstate router (routes: /, /translations/:id)
+│   ├── features/
+│   │   └── segments/          # Segment feature module
+│   │       ├── types.ts       # All segment-related types
+│   │       ├── api.ts         # translateBatch API call
+│   │       ├── utils.ts       # getPastelColor
+│   │       ├── Segments.svelte        # Top-level orchestrator (streaming, edit toggle)
+│   │       ├── SegmentDisplay.svelte  # Normal mode: segments + tooltips + vocab
+│   │       ├── SegmentEditor.svelte   # Edit mode: split/join with pending tracking
+│   │       └── TranslationTable.svelte # Collapsible details table
 │   └── components/
 │       ├── ReviewPanel.svelte        # SRS review slide-out panel (~110 lines)
 │       ├── TranslateForm.svelte      # Text input + OCR upload form (~130 lines)
-│       ├── JobQueue.svelte           # Job card list (~70 lines, stateless)
-│       ├── SegmentDisplay.svelte     # Segments + tooltip + progress (~250 lines)
-│       └── TranslationTable.svelte   # Collapsible details table (~40 lines)
+│       └── TranslationList.svelte     # Translation card list (~70 lines, stateless)
 ├── vite.config.js     # Dev proxy to FastAPI on :8000
 ├── tsconfig.json      # Strict TS, verbatimModuleSyntax
 └── package.json       # Svelte 5.49.2, Vite 7.3.1, TS 5.6
@@ -133,6 +141,12 @@ web/                   # Svelte 5 SPA (primary frontend)
 - Direct click actions (no confirmation popovers)
 - Undo button appears after split/join operations
 
+## Development Servers
+
+The frontend dev server (`web/`, Vite on port 5173) is always running. Do not attempt to start it. The backend server (`server/`, FastAPI on port 8000) is also assumed running. Vite proxies API requests to the backend automatically.
+
+After making frontend changes, verify with `cd web && npm run typecheck` — do not restart the dev server.
+
 ## Environment Variables
 
 Requires `.env` file with:
@@ -150,9 +164,9 @@ Tests mock DSPy's `ChainOfThought` and `Predict` at the module level to avoid AP
 ## Key Conventions
 
 - API layer in `web/src/lib/api.ts` — generic typed fetch wrappers; all endpoints proxied through Vite dev server
-- SSE streaming for real-time translation progress (implemented directly in App.svelte via `EventSource`)
-- No routing library — SPA uses conditional rendering (`isExpandedView` boolean) for view switching
-- No external state management library — all state is local `$state` runes in App.svelte
-- Segment editing uses stub API calls (`stubSplitSegment`, `stubJoinSegments`) - replace with real backend endpoints when implemented
+- SSE streaming for real-time translation progress (in `features/segments/Segments.svelte`)
+- Minimal pushState router in `lib/router.svelte.ts` — routes: `/` (home), `/translations/:id` (detail view). Browser back/forward supported.
+- No external state management library — all state is local `$state` runes in App.svelte and Segments.svelte
+- Segment editing (split/join) uses `POST /api/segments/translate-batch` to re-translate modified segments
 - SRS opacity: 1.0 = new/struggling word (full color), 0 = known word (no highlight)
 - Pastel colors cycle through 8 options based on segment index

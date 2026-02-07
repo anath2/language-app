@@ -1,11 +1,11 @@
-export type JobStatus = "pending" | "processing" | "completed" | "failed";
+export type TranslationStatus = "pending" | "processing" | "completed" | "failed";
 export type LoadingState = "idle" | "loading" | "error";
 export type VocabStatus = "unknown" | "learning" | "known";
 
-export interface JobSummary {
+export interface TranslationSummary {
   id: string;
   created_at: string;
-  status: JobStatus;
+  status: TranslationStatus;
   source_type: string;
   input_preview: string;
   full_translation_preview: string | null;
@@ -13,15 +13,15 @@ export interface JobSummary {
   total_segments: number | null;
 }
 
-export interface ListJobsResponse {
-  jobs: JobSummary[];
+export interface ListTranslationsResponse {
+  jobs: TranslationSummary[];
   total: number;
 }
 
-export interface JobDetailResponse {
+export interface TranslationDetailResponse {
   id: string;
   created_at: string;
-  status: JobStatus;
+  status: TranslationStatus;
   source_type: string;
   input_text: string;
   full_translation: string | null;
@@ -29,9 +29,9 @@ export interface JobDetailResponse {
   paragraphs: import("../features/segments/types").ParagraphResult[] | null;
 }
 
-export interface CreateJobResponse {
+export interface CreateTranslationResponse {
   job_id: string;
-  status: JobStatus;
+  status: TranslationStatus;
 }
 
 export interface ReviewCard {
