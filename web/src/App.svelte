@@ -3,38 +3,34 @@
   import type {
     JobSummary,
     ListJobsResponse,
-    ParagraphResult,
     JobDetailResponse,
     CreateJobResponse,
-    ProgressState,
-    ParagraphMeta,
-    SegmentResult,
-    DisplayParagraph,
     DueCountResponse,
     VocabSrsInfoListResponse,
     RecordLookupResponse,
     SaveVocabResponse,
     CreateTextResponse,
-    StreamSegmentResult,
-    StreamEvent,
-    SavedVocabInfo,
     LoadingState,
   } from "./lib/types";
+  import type {
+    ParagraphResult,
+    SegmentResult,
+    SavedVocabInfo,
+  } from "./features/segments/types";
   import ReviewPanel from "./components/ReviewPanel.svelte";
   import TranslateForm from "./components/TranslateForm.svelte";
-  import TranslationTable from "./components/TranslationTable.svelte";
   import JobQueue from "./components/JobQueue.svelte";
-  import SegmentDisplay from "./components/SegmentDisplay.svelte";
+  import Segments from "./features/segments/Segments.svelte";
 
   let jobQueue = $state<JobSummary[]>([]);
   let currentJobId = $state<string | null>(null);
+  let currentJobStatus = $state<string | null>(null);
+  let currentJobParagraphs = $state<ParagraphResult[] | null>(null);
+  let currentJobFullTranslation = $state<string | null>(null);
   let isExpandedView = $state(false);
-  let paragraphMeta = $state<ParagraphMeta[]>([]);
-  let translationResults = $state<SegmentResult[]>([]);
-  let fullTranslation = $state("");
-  let progress = $state<ProgressState>({ current: 0, total: 0 });
-  let loadingState = $state<LoadingState>("idle");
-  let errorMessage = $state("");
+  let expandLoading = $state(false);
+  let formLoading = $state<LoadingState>("idle");
+  let formErrorMessage = $state("");
 
   let currentTextId = $state<string | null>(null);
   let currentRawText = $state("");
@@ -43,7 +39,6 @@
   let reviewPanelOpen = $state(false);
   let dueCount = $state(0);
 
-  const displayParagraphs = $derived(buildDisplayParagraphs(paragraphMeta, translationResults));
   const queueCountLabel = $derived(`${jobQueue.length} job${jobQueue.length !== 1 ? "s" : ""}`);
   const otherJobsCount = $derived(jobQueue.filter((job) => job.id !== currentJobId).length);
 
@@ -55,30 +50,6 @@
   function errorToMessage(error: unknown): string {
     if (error instanceof Error) return error.message;
     return String(error);
-  }
-
-  function buildDisplayParagraphs(meta: ParagraphMeta[], results: SegmentResult[]): DisplayParagraph[] {
-    let globalIndex = 0;
-    return meta.map((para, paraIdx) => {
-      const segments = Array.from({ length: para.segment_count }).map(() => {
-        const existing = results[globalIndex];
-        const entry = existing
-          ? { ...existing }
-          : {
-              segment: "Loading...",
-              pinyin: "",
-              english: "",
-              index: globalIndex,
-              paragraph_index: paraIdx,
-              pending: true
-            };
-        entry.index = globalIndex;
-        entry.paragraph_index = paraIdx;
-        globalIndex += 1;
-        return entry;
-      });
-      return { ...para, paragraph_index: paraIdx, segments };
-    });
   }
 
   async function loadJobQueue() {
@@ -93,7 +64,7 @@
   async function handleSubmit(text: string) {
     if (!text) return;
 
-    loadingState = "loading";
+    formLoading = "loading";
     try {
       const data = await postJson<CreateJobResponse>("/api/jobs", {
         input_text: text,
@@ -104,160 +75,59 @@
       await loadJobQueue();
       await expandJob(data.job_id);
     } catch (error) {
-      errorMessage = `Failed to submit translation job: ${errorToMessage(error)}`;
-      loadingState = "error";
+      formErrorMessage = `Failed to submit translation job: ${errorToMessage(error)}`;
+      formLoading = "error";
     } finally {
-      if (loadingState !== "error") {
-        loadingState = "idle";
+      if (formLoading !== "error") {
+        formLoading = "idle";
       }
     }
   }
 
   async function expandJob(jobId: string) {
-    currentJobId = jobId;
     isExpandedView = true;
-    loadingState = "loading";
-    errorMessage = "";
+    expandLoading = true;
+    currentJobId = null;
+    currentJobStatus = null;
+    currentJobParagraphs = null;
+    currentJobFullTranslation = null;
 
     try {
       const job = await getJson<JobDetailResponse>(`/api/jobs/${jobId}`);
       currentRawText = job.input_text;
       currentTextId = null;
 
+      // Set status/data BEFORE setting jobId so the $effect gets complete data
       if (job.status === "completed" && job.paragraphs) {
-        applyCompletedJob(job);
+        currentJobStatus = "completed";
+        currentJobParagraphs = job.paragraphs;
+        currentJobFullTranslation = job.full_translation || null;
       } else if (job.status === "processing" || job.status === "pending") {
-        await streamJobProgress(jobId);
+        currentJobStatus = job.status;
       } else if (job.status === "failed") {
-        loadingState = "error";
-        errorMessage = job.error_message || "Job failed";
+        currentJobStatus = "failed";
       }
 
+      // Set jobId LAST — this triggers the Segments $effect with all data ready
+      currentJobId = jobId;
       await loadJobQueue();
-    } catch (error) {
-      loadingState = "error";
-      errorMessage = "Failed to load job details";
+    } catch (_error) {
+      currentJobStatus = "failed";
+      currentJobId = jobId;
+    } finally {
+      expandLoading = false;
     }
-  }
-
-  function applyCompletedJob(job: JobDetailResponse) {
-    fullTranslation = job.full_translation || "";
-    paragraphMeta = (job.paragraphs || []).map((para) => ({
-      segment_count: para.translations.length,
-      indent: para.indent,
-      separator: para.separator
-    }));
-    translationResults = flattenParagraphs(job.paragraphs || []);
-    progress = { current: translationResults.length, total: translationResults.length };
-    loadingState = "idle";
-    void fetchAndApplySrsInfo();
-  }
-
-  function flattenParagraphs(paragraphs: ParagraphResult[]): SegmentResult[] {
-    const results: SegmentResult[] = [];
-    paragraphs.forEach((para, paraIdx) => {
-      para.translations.forEach((t) => {
-        results.push({
-          segment: t.segment,
-          pinyin: t.pinyin,
-          english: t.english,
-          index: results.length,
-          paragraph_index: paraIdx,
-          pending: false
-        });
-      });
-    });
-    return results;
-  }
-
-  async function streamJobProgress(jobId: string) {
-    translationResults = [];
-    paragraphMeta = [];
-    fullTranslation = "";
-    progress = { current: 0, total: 0 };
-
-    try {
-      const response = await fetch(`/jobs/${jobId}/stream`);
-      if (!response.body) {
-        throw new Error("Streaming unavailable");
-      }
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          const data = JSON.parse(line.slice(6)) as StreamEvent;
-          if (data.type === "start") {
-            paragraphMeta = data.paragraphs || [];
-            if (paragraphMeta.length === 0 && data.total) {
-              paragraphMeta = [{ segment_count: data.total, indent: "", separator: "" }];
-            }
-            progress = { current: 0, total: data.total || 0 };
-            fullTranslation = data.fullTranslation || "";
-            loadingState = "idle";
-          } else if (data.type === "progress") {
-            progress = { current: data.current, total: data.total };
-            updateSegmentResult(data.result);
-          } else if (data.type === "complete") {
-            fullTranslation = data.fullTranslation || fullTranslation;
-            if (data.paragraphs) {
-              paragraphMeta = data.paragraphs.map((para) => ({
-                segment_count: para.translations.length,
-                indent: para.indent,
-                separator: para.separator
-              }));
-              translationResults = flattenParagraphs(data.paragraphs);
-            }
-            loadingState = "idle";
-            await loadJobQueue();
-            await fetchAndApplySrsInfo();
-          } else if (data.type === "error") {
-            loadingState = "error";
-            errorMessage = data.message || "Streaming failed";
-            await loadJobQueue();
-          }
-        }
-      }
-    } catch (error) {
-      loadingState = "error";
-      errorMessage = `Streaming failed: ${errorToMessage(error)}`;
-      await loadJobQueue();
-    }
-  }
-
-  function updateSegmentResult(result: StreamSegmentResult) {
-    const index = result.index;
-    const updated: SegmentResult = {
-      segment: result.segment,
-      pinyin: result.pinyin,
-      english: result.english,
-      index,
-      paragraph_index: result.paragraph_index,
-      pending: false
-    };
-    const next = translationResults.slice();
-    next[index] = updated;
-    translationResults = next;
   }
 
   function backToQueue() {
     isExpandedView = false;
+    expandLoading = false;
     currentJobId = null;
-    translationResults = [];
-    paragraphMeta = [];
-    fullTranslation = "";
-    progress = { current: 0, total: 0 };
-    loadingState = "idle";
-    errorMessage = "";
+    currentJobStatus = null;
+    currentJobParagraphs = null;
+    currentJobFullTranslation = null;
+    formLoading = "idle";
+    formErrorMessage = "";
     void loadJobQueue();
   }
 
@@ -276,8 +146,16 @@
     }
   }
 
-  async function fetchAndApplySrsInfo() {
-    const headwords = [...new Set(translationResults.filter((s) => s.pinyin || s.english).map((s) => s.segment))];
+  function handleStreamComplete() {
+    void loadJobQueue();
+  }
+
+  function handleSegmentsChanged(results: SegmentResult[]) {
+    void fetchAndApplySrsInfo(results);
+  }
+
+  async function fetchAndApplySrsInfo(results: SegmentResult[]) {
+    const headwords = [...new Set(results.filter((s) => s.pinyin || s.english).map((s) => s.segment))];
     if (headwords.length === 0) return;
 
     try {
@@ -444,11 +322,7 @@
 
   <main class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
     <div class="space-y-4">
-      <TranslateForm onSubmit={handleSubmit} loading={loadingState === "loading"} />
-
-      <div id="translation-table">
-        <TranslationTable results={translationResults} />
-      </div>
+      <TranslateForm onSubmit={handleSubmit} loading={formLoading === "loading"} />
     </div>
 
     <div class="space-y-4">
@@ -472,18 +346,29 @@
             <div class="font-chinese p-2 rounded" style="background: var(--pastel-7); color: var(--text-primary); font-size: var(--text-chinese); min-height: 60px; white-space: pre-wrap;">{currentRawText}</div>
           </div>
 
-          <SegmentDisplay
-            {displayParagraphs}
-            {savedVocabMap}
-            {progress}
-            {fullTranslation}
-            {loadingState}
-            {errorMessage}
-            {onSaveVocab}
-            {onMarkKnown}
-            {onResumeLearning}
-            {onRecordLookup}
-          />
+          {#if expandLoading}
+            <div class="input-card p-5 flex items-center justify-center" style="min-height: 200px;">
+              <div class="text-center">
+                <div class="spinner mx-auto mb-2" style="width: 20px; height: 20px; border-color: rgba(124, 158, 178, 0.3); border-top-color: var(--primary);"></div>
+                <p style="color: var(--text-muted); font-size: var(--text-sm);">Loading job...</p>
+              </div>
+            </div>
+          {:else}
+            <Segments
+              jobId={currentJobId}
+              jobStatus={currentJobStatus}
+              jobParagraphs={currentJobParagraphs}
+              jobFullTranslation={currentJobFullTranslation}
+              rawText={currentRawText}
+              {savedVocabMap}
+              {onSaveVocab}
+              {onMarkKnown}
+              {onResumeLearning}
+              {onRecordLookup}
+              onStreamComplete={handleStreamComplete}
+              onSegmentsChanged={handleSegmentsChanged}
+            />
+          {/if}
 
           {#if otherJobsCount > 0}
             <div class="mt-4">

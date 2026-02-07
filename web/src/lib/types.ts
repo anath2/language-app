@@ -18,18 +18,6 @@ export interface ListJobsResponse {
   total: number;
 }
 
-export interface TranslationResult {
-  segment: string;
-  pinyin: string;
-  english: string;
-}
-
-export interface ParagraphResult {
-  translations: TranslationResult[];
-  indent: string;
-  separator: string;
-}
-
 export interface JobDetailResponse {
   id: string;
   created_at: string;
@@ -38,37 +26,12 @@ export interface JobDetailResponse {
   input_text: string;
   full_translation: string | null;
   error_message: string | null;
-  paragraphs: ParagraphResult[] | null;
+  paragraphs: import("../features/segments/types").ParagraphResult[] | null;
 }
 
 export interface CreateJobResponse {
   job_id: string;
   status: JobStatus;
-}
-
-export interface ProgressState {
-  current: number;
-  total: number;
-}
-
-export interface ParagraphMeta {
-  segment_count: number;
-  indent: string;
-  separator: string;
-}
-
-export interface SegmentResult {
-  segment: string;
-  pinyin: string;
-  english: string;
-  index: number;
-  paragraph_index: number;
-  pending: boolean;
-}
-
-export interface DisplayParagraph extends ParagraphMeta {
-  paragraph_index: number;
-  segments: SegmentResult[];
 }
 
 export interface ReviewCard {
@@ -125,57 +88,4 @@ export interface ReviewAnswerResponse {
 
 export interface ExtractTextResponse {
   text: string;
-}
-
-export interface StreamSegmentResult {
-  segment: string;
-  pinyin: string;
-  english: string;
-  index: number;
-  paragraph_index: number;
-}
-
-export type StreamStartEvent = {
-  type: "start";
-  job_id: string;
-  total?: number;
-  paragraphs?: ParagraphMeta[];
-  fullTranslation?: string | null;
-};
-
-export type StreamProgressEvent = {
-  type: "progress";
-  current: number;
-  total: number;
-  result: StreamSegmentResult;
-};
-
-export type StreamCompleteEvent = {
-  type: "complete";
-  paragraphs?: ParagraphResult[];
-  fullTranslation?: string | null;
-};
-
-export type StreamErrorEvent = {
-  type: "error";
-  message?: string;
-};
-
-export type StreamEvent = StreamStartEvent | StreamProgressEvent | StreamCompleteEvent | StreamErrorEvent;
-
-export interface SavedVocabInfo {
-  vocabItemId: string;
-  opacity: number;
-  isStruggling: boolean;
-  status: VocabStatus;
-}
-
-export interface TooltipState {
-  headword: string;
-  pinyin: string;
-  english: string;
-  vocabItemId: string | null;
-  status: VocabStatus | "";
-  x: number;
-  y: number;
 }

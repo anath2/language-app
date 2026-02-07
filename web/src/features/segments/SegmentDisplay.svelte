@@ -1,14 +1,14 @@
 <script lang="ts">
   import { tick } from "svelte";
-  import { getPastelColor } from "../lib/utils";
+  import { getPastelColor } from "./utils";
   import type {
     DisplayParagraph,
-    LoadingState,
     ProgressState,
     SavedVocabInfo,
     SegmentResult,
     TooltipState,
-  } from "../lib/types";
+  } from "./types";
+  import type { LoadingState } from "../../lib/types";
 
   let {
     displayParagraphs,
@@ -162,90 +162,62 @@
 
 <svelte:window onclick={handleGlobalClick} />
 
-<div id="results" class="input-card p-5 overflow-y-auto" style="max-height: 60vh;" bind:this={resultsContainer}>
-  {#if loadingState === "loading"}
-    <div class="h-full flex items-center justify-center">
-      <div class="text-center">
-        <div class="spinner mx-auto mb-2" style="width: 20px; height: 20px; border-color: rgba(124, 158, 178, 0.3); border-top-color: var(--primary);"></div>
-        <p style="color: var(--text-muted); font-size: var(--text-sm);">Starting translation...</p>
+<div class="relative space-y-3" bind:this={resultsContainer}>
+  {#if progress.total > 0 && progress.current < progress.total}
+    <div class="progress-container">
+      <div class="flex justify-between mb-1.5" style="font-size: var(--text-xs);">
+        <span style="color: var(--text-secondary);">Translating...</span>
+        <span style="color: var(--text-secondary);">{progress.current} / {progress.total}</span>
       </div>
-    </div>
-  {:else if loadingState === "error"}
-    <div class="p-3 rounded-md" style="background: var(--error); border-left: 3px solid var(--secondary-dark);">
-      <p style="color: var(--text-primary); font-size: var(--text-sm);">{errorMessage}</p>
-    </div>
-  {:else if displayParagraphs.length === 0}
-    <div class="h-full flex items-center justify-center">
-      <p class="text-center italic" style="color: var(--text-muted); font-size: var(--text-sm);">Translation results will appear here</p>
-    </div>
-  {:else}
-    <div class="relative space-y-3">
-      <div class="space-y-1">
-        <h2 class="font-semibold" style="color: var(--text-primary); font-size: var(--text-lg);">Translation</h2>
-        <p class="full-translation">{fullTranslation || "Translating..."}</p>
-      </div>
-
-      <div class="section-divider my-3">
-        <span>Segmented Text</span>
-      </div>
-
-      {#if progress.total > 0 && progress.current < progress.total}
-        <div class="progress-container">
-          <div class="flex justify-between mb-1.5" style="font-size: var(--text-xs);">
-            <span style="color: var(--text-secondary);">Translating...</span>
-            <span style="color: var(--text-secondary);">{progress.current} / {progress.total}</span>
-          </div>
-          <div class="progress-bar-bg">
-            <div class="progress-bar-fill" style={`width: ${(progress.current / progress.total) * 100}%`}></div>
-          </div>
-        </div>
-      {/if}
-
-      <div id="segments-container">
-        {#each displayParagraphs as para}
-          <div class="paragraph flex flex-wrap gap-1" style={`margin-bottom: ${para.separator ? para.separator.split("\n").length * 0.4 : 0}rem; padding-left: ${para.indent ? para.indent.length * 0.5 : 0}rem;`}>
-            {#each para.segments as segment (segment.index)}
-              <!-- svelte-ignore a11y_click_events_have_key_events -->
-              <!-- svelte-ignore a11y_no_static_element_interactions -->
-              <span
-                class={getSegmentClasses(segment)}
-                style={`font-family: var(--font-chinese); font-size: var(--text-chinese); color: var(--text-primary); cursor: ${segment.pinyin || segment.english ? "pointer" : "default"}; ${getSegmentStyle(segment)}`}
-                onmouseenter={(event: MouseEvent) => handleSegmentHover(segment, event.currentTarget)}
-                onmouseleave={handleSegmentLeave}
-                onclick={(event: MouseEvent) => {
-                  event.stopPropagation();
-                  toggleSegmentPin(segment, event.currentTarget);
-                }}
-              >
-                {segment.segment}
-              </span>
-            {/each}
-          </div>
-        {/each}
-      </div>
-
-      <div
-        class={`word-tooltip ${tooltipVisible ? "" : "hidden"}`}
-        bind:this={tooltipRef}
-        style={`left: ${tooltip.x}px; top: ${tooltip.y}px;`}
-      >
-        <div class="tooltip-pinyin">{tooltip.pinyin}</div>
-        <div class="tooltip-english">{tooltip.english}</div>
-        <div class="tooltip-actions">
-          {#if tooltip.pinyin || tooltip.english}
-            {#if !tooltip.vocabItemId}
-              <button class="tooltip-btn" type="button" onclick={saveVocab}>Save to Learn</button>
-            {:else if tooltip.status === "learning"}
-              <button class="tooltip-btn" type="button" onclick={markKnown}>Mark as Known</button>
-            {:else if tooltip.status === "known"}
-              <button class="tooltip-btn" type="button" onclick={resumeLearning}>Resume Learning</button>
-            {:else}
-              <button class="tooltip-btn" type="button" onclick={saveVocab}>Save to Learn</button>
-            {/if}
-          {/if}
-        </div>
-        <div class="tooltip-arrow"></div>
+      <div class="progress-bar-bg">
+        <div class="progress-bar-fill" style={`width: ${(progress.current / progress.total) * 100}%`}></div>
       </div>
     </div>
   {/if}
+
+  <div id="segments-container">
+    {#each displayParagraphs as para}
+      <div class="paragraph flex flex-wrap gap-1" style={`margin-bottom: ${para.separator ? para.separator.split("\n").length * 0.4 : 0}rem; padding-left: ${para.indent ? para.indent.length * 0.5 : 0}rem;`}>
+        {#each para.segments as segment (segment.index)}
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <span
+            class={getSegmentClasses(segment)}
+            style={`font-family: var(--font-chinese); font-size: var(--text-chinese); color: var(--text-primary); cursor: ${segment.pinyin || segment.english ? "pointer" : "default"}; ${getSegmentStyle(segment)}`}
+            onmouseenter={(event: MouseEvent) => handleSegmentHover(segment, event.currentTarget)}
+            onmouseleave={handleSegmentLeave}
+            onclick={(event: MouseEvent) => {
+              event.stopPropagation();
+              toggleSegmentPin(segment, event.currentTarget);
+            }}
+          >
+            {segment.segment}
+          </span>
+        {/each}
+      </div>
+    {/each}
+  </div>
+
+  <div
+    class={`word-tooltip ${tooltipVisible ? "" : "hidden"}`}
+    bind:this={tooltipRef}
+    style={`left: ${tooltip.x}px; top: ${tooltip.y}px;`}
+  >
+    <div class="tooltip-pinyin">{tooltip.pinyin}</div>
+    <div class="tooltip-english">{tooltip.english}</div>
+    <div class="tooltip-actions">
+      {#if tooltip.pinyin || tooltip.english}
+        {#if !tooltip.vocabItemId}
+          <button class="tooltip-btn" type="button" onclick={saveVocab}>Save to Learn</button>
+        {:else if tooltip.status === "learning"}
+          <button class="tooltip-btn" type="button" onclick={markKnown}>Mark as Known</button>
+        {:else if tooltip.status === "known"}
+          <button class="tooltip-btn" type="button" onclick={resumeLearning}>Resume Learning</button>
+        {:else}
+          <button class="tooltip-btn" type="button" onclick={saveVocab}>Save to Learn</button>
+        {/if}
+      {/if}
+    </div>
+    <div class="tooltip-arrow"></div>
+  </div>
 </div>
