@@ -1,7 +1,8 @@
 type HomeRoute = { page: "home" };
 type TranslationRoute = { page: "translation"; id: string };
 type VocabRoute = { page: "vocab" };
-type Route = HomeRoute | TranslationRoute | VocabRoute;
+type AdminRoute = { page: "admin" };
+type Route = HomeRoute | TranslationRoute | VocabRoute | AdminRoute;
 
 class Router {
   route = $state<Route>({ page: "home" });
@@ -28,8 +29,14 @@ class Router {
     history.pushState(null, "", "/vocab");
   }
 
+  navigateToAdmin() {
+    this.route = { page: "admin" };
+    history.pushState(null, "", "/admin");
+  }
+
   private parsePath(pathname: string): Route {
     if (pathname === "/vocab") return { page: "vocab" };
+    if (pathname === "/admin") return { page: "admin" };
     const match = pathname.match(/^\/translations\/([^/]+)\/?$/);
     if (match) return { page: "translation", id: match[1] };
     return { page: "home" };

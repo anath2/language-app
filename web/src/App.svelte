@@ -23,6 +23,7 @@
   import TranslateForm from "./components/TranslateForm.svelte";
   import TranslationList from "./components/TranslationList.svelte";
   import Segments from "./features/segments/Segments.svelte";
+  import Admin from "./features/admin/Admin.svelte";
 
   let translations = $state<TranslationSummary[]>([]);
   let currentTranslationId = $state<string | null>(null);
@@ -305,59 +306,73 @@
 <ReviewPanel open={reviewPanelOpen} onClose={closeReviewPanel} onDueCountChange={() => {}} />
 
 {#if currentPage === "home"}
-  <!-- Home Page: Translate Form + Recent Translations -->
-  <div class="page-container max-w-4xl">
-    <div class="space-y-6">
-      <TranslateForm onSubmit={handleSubmit} loading={formLoading === "loading"} />
+  <!-- Home Page: 2-Column Layout -->
+  <div class="page-container">
+    <div class="home-layout">
+      <!-- Left Column: Translate Form -->
+      <div class="home-left">
+        <TranslateForm onSubmit={handleSubmit} loading={formLoading === "loading"} />
+      </div>
 
-      <div class="input-card p-5">
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="font-semibold" style="color: var(--text-primary); font-size: var(--text-base);">Recent Translations</h2>
-          <span class="text-xs px-2 py-0.5 rounded-full" style="background: var(--pastel-3); color: var(--text-primary);">
-            {translations.length} total
-          </span>
+      <!-- Right Column: Recent Translations -->
+      <div class="home-right">
+        <div class="input-card p-5">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="font-semibold" style="color: var(--text-primary); font-size: var(--text-base);">Recent Translations</h2>
+            <span class="text-xs px-2 py-0.5 rounded-full" style="background: var(--background-alt); color: var(--text-secondary);">
+              {translations.length} total
+            </span>
+          </div>
+          <TranslationList {translations} onSelect={openTranslation} onDelete={deleteTranslation} />
         </div>
-        <TranslationList {translations} onSelect={openTranslation} onDelete={deleteTranslation} />
       </div>
     </div>
   </div>
 
 {:else if currentPage === "translation"}
-  <!-- Translation Detail Page: Full-width -->
+  <!-- Translation Detail Page: 2-Column Layout -->
   <div class="page-container">
     <button class="mb-4 flex items-center gap-1 hover:underline" style="color: var(--primary); font-size: var(--text-sm);" onclick={backToList}>
       <span>&larr;</span> Back to translations
     </button>
 
-    <!-- svelte-ignore a11y_label_has_associated_control -->
-    <div id="original-text-panel" class="input-card p-4 mb-4">
-      <label class="block font-medium mb-1.5" style="color: var(--text-secondary); font-size: var(--text-xs);">Original Text</label>
-      <div class="font-chinese p-2 rounded" style="background: var(--pastel-7); color: var(--text-primary); font-size: var(--text-chinese); min-height: 60px; white-space: pre-wrap;">{currentRawText}</div>
-    </div>
-
-    {#if detailLoading}
-      <div class="input-card p-5 flex items-center justify-center" style="min-height: 200px;">
-        <div class="text-center">
-          <div class="spinner mx-auto mb-2" style="width: 20px; height: 20px; border-color: rgba(124, 158, 178, 0.3); border-top-color: var(--primary);"></div>
-          <p style="color: var(--text-muted); font-size: var(--text-sm);">Loading...</p>
+    <div class="translation-layout">
+      <!-- Left Column: Original Text -->
+      <div class="translation-left">
+        <!-- svelte-ignore a11y_label_has_associated_control -->
+        <div id="original-text-panel" class="input-card p-4 sticky-top">
+          <label class="block font-medium mb-2" style="color: var(--text-secondary); font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.05em;">Original Text</label>
+          <div class="font-chinese p-3 rounded" style="background: var(--background-alt); color: var(--text-primary); font-size: var(--text-chinese); line-height: 1.8; white-space: pre-wrap;">{currentRawText}</div>
         </div>
       </div>
-    {:else}
-      <Segments
-        translationId={currentTranslationId}
-        translationStatus={currentTranslationStatus}
-        paragraphs={currentParagraphs}
-        fullTranslation={currentFullTranslation}
-        rawText={currentRawText}
-        {savedVocabMap}
-        {onSaveVocab}
-        {onMarkKnown}
-        {onResumeLearning}
-        {onRecordLookup}
-        onStreamComplete={handleStreamComplete}
-        onSegmentsChanged={handleSegmentsChanged}
-      />
-    {/if}
+
+      <!-- Right Column: Translation Results -->
+      <div class="translation-right">
+        {#if detailLoading}
+          <div class="input-card p-5 flex items-center justify-center" style="min-height: 200px;">
+            <div class="text-center">
+              <div class="spinner mx-auto mb-2" style="width: 20px; height: 20px; border-color: rgba(124, 158, 178, 0.3); border-top-color: var(--primary);"></div>
+              <p style="color: var(--text-muted); font-size: var(--text-sm);">Loading...</p>
+            </div>
+          </div>
+        {:else}
+          <Segments
+            translationId={currentTranslationId}
+            translationStatus={currentTranslationStatus}
+            paragraphs={currentParagraphs}
+            fullTranslation={currentFullTranslation}
+            rawText={currentRawText}
+            {savedVocabMap}
+            {onSaveVocab}
+            {onMarkKnown}
+            {onResumeLearning}
+            {onRecordLookup}
+            onStreamComplete={handleStreamComplete}
+            onSegmentsChanged={handleSegmentsChanged}
+          />
+        {/if}
+      </div>
+    </div>
   </div>
 
 {:else if currentPage === "vocab"}
@@ -374,6 +389,12 @@
       </div>
     </div>
   </div>
+
+{:else if currentPage === "admin"}
+  <!-- Admin Page -->
+  <div class="page-container max-w-4xl">
+    <Admin />
+  </div>
 {/if}
 
 <style>
@@ -385,6 +406,57 @@
 
   .page-container.max-w-4xl {
     max-width: 56rem;
+  }
+
+  /* Home Page: 2-Column Layout */
+  .home-layout {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 1.5rem;
+    align-items: start;
+  }
+
+  .home-left {
+    min-width: 0;
+  }
+
+  .home-right {
+    min-width: 0;
+  }
+
+  /* Translation Detail: 2-Column Layout */
+  .translation-layout {
+    display: grid;
+    grid-template-columns: 360px 1fr;
+    gap: 1.5rem;
+    align-items: start;
+  }
+
+  .translation-left {
+    min-width: 0;
+  }
+
+  .translation-right {
+    min-width: 0;
+  }
+
+  .sticky-top {
+    position: sticky;
+    top: 80px;
+  }
+
+  @media (max-width: 960px) {
+    .home-layout {
+      grid-template-columns: 1fr;
+    }
+
+    .translation-layout {
+      grid-template-columns: 1fr;
+    }
+
+    .sticky-top {
+      position: static;
+    }
   }
 
   @media (max-width: 640px) {
