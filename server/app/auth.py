@@ -101,7 +101,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
     """Middleware to protect routes with session authentication."""
 
     EXCLUDED_PATHS = {"/login", "/health"}
-    EXCLUDED_PREFIXES = ("/static/",)
+    EXCLUDED_PREFIXES = ("/css/",)
 
     async def dispatch(self, request: Request, call_next):
         path = request.url.path

@@ -1,359 +1,353 @@
 """
-Translation and OCR routes.
+Translation queue API routes.
 
 Endpoints:
-- POST /translate-text - JSON translation endpoint
-- POST /translate-html - HTMX translation endpoint
-- POST /translate-stream - SSE streaming translation endpoint
-- POST /extract-text-html - HTMX OCR extraction
-- POST /translate-image - JSON image translation
-- POST /translate-image-html - HTMX image translation
+- POST /api/translations - Submit new translation
+- GET /api/translations - List translations (for Translations page)
+- GET /api/translations/{translation_id} - Get translation details and results
+- GET /api/translations/{translation_id}/status - Quick status check
+- DELETE /api/translations/{translation_id} - Delete a translation
+- GET /api/translations/{translation_id}/stream - SSE stream for translation progress
 """
 
+import asyncio
 import json
+from typing import Any
 
-from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 
 from app.models import (
+    CreateTranslationRequest,
+    CreateTranslationResponse,
+    OkResponse,
     ParagraphResult,
-    ExtractTextResponse,
-    TranslateRequest,
-    TranslateResponse,
+    TranslationDetailResponse,
+    TranslationStatusResponse,
+    TranslationSummary,
+    ListTranslationsResponse,
     TranslationResult,
 )
-from app.cedict import lookup
-from app.pipeline import get_full_translator, get_pipeline
-from app.templates_config import templates
-from app.utils import (
-    extract_text_from_image,
-    should_skip_segment,
-    split_into_paragraphs,
-    to_pinyin,
-    validate_image_file,
+from app.persistence import (
+    delete_translation,
+    get_translation,
+    get_translation_segment_count,
+    get_translation_with_results,
+    list_translations,
 )
+from app.queue import get_queue_manager
 
-router = APIRouter(tags=["translation"])
+router = APIRouter(tags=["translations"])
 
 
-@router.post("/translate-text", response_model=TranslateResponse)
-async def translate_text(request: TranslateRequest):
-    """Translate Chinese text to Pinyin and English"""
-    pipe = get_pipeline()
+def _translation_to_summary(translation: Any) -> TranslationSummary:
+    """Convert a TranslationRecord to TranslationSummary."""
+    # Get segment counts
+    completed, total = (
+        get_translation_segment_count(translation.id) if translation.status != "pending" else (None, None)
+    )
 
-    # Split text into paragraphs
-    paragraphs = split_into_paragraphs(request.text)
+    return TranslationSummary(
+        id=translation.id,
+        created_at=translation.created_at,
+        status=translation.status,
+        source_type=translation.source_type,
+        input_preview=translation.input_text[:100] + "..."
+        if len(translation.input_text) > 100
+        else translation.input_text,
+        full_translation_preview=(
+            translation.full_translation[:100] + "..."
+            if translation.full_translation and len(translation.full_translation) > 100
+            else translation.full_translation
+        ),
+        segment_count=completed,
+        total_segments=total,
+    )
 
-    # Process each paragraph through the pipeline
-    paragraph_results = []
-    for para in paragraphs:
-        results = await pipe.aforward(para["content"])
-        translations = [
-            TranslationResult(segment=seg, pinyin=pinyin, english=english)
-            for seg, pinyin, english in results
-        ]
-        paragraph_results.append(
+
+# --- JSON API Endpoints (prefix: /api) ---
+
+
+@router.post("/api/translations", response_model=CreateTranslationResponse)
+async def api_create_translation(request: CreateTranslationRequest):
+    """
+    Submit a new translation.
+
+    The translation is created immediately with 'pending' status.
+    Use GET /api/translations/{translation_id}/status to check progress.
+    Use GET /api/translations/{translation_id}/stream to stream progress via SSE.
+    """
+    if not request.input_text.strip():
+        raise HTTPException(status_code=400, detail="input_text is required")
+
+    manager = get_queue_manager()
+    translation_id = manager.submit_translation(
+        input_text=request.input_text,
+        source_type=request.source_type,
+    )
+
+    return CreateTranslationResponse(translation_id=translation_id, status="pending")
+
+
+@router.get("/api/translations", response_model=ListTranslationsResponse)
+async def api_list_translations(
+    limit: int = 20,
+    offset: int = 0,
+    status: str | None = None,
+):
+    """
+    List translations for the Translations page.
+
+    Supports pagination and optional status filtering.
+    """
+    if status and status not in {"pending", "processing", "completed", "failed"}:
+        raise HTTPException(status_code=400, detail="Invalid status filter")
+
+    translations, total = list_translations(limit=limit, offset=offset, status=status)
+
+    return ListTranslationsResponse(
+        translations=[_translation_to_summary(t) for t in translations],
+        total=total,
+    )
+
+
+@router.get("/api/translations/{translation_id}", response_model=TranslationDetailResponse)
+async def api_get_translation(translation_id: str):
+    """
+    Get translation with full results.
+
+    Returns the translation details and all translated segments organized by paragraph.
+    """
+    result = get_translation_with_results(translation_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Translation not found")
+
+    # Convert to response format
+    paragraphs = None
+    if result.paragraphs:
+        paragraphs = [
             ParagraphResult(
-                translations=translations,
-                indent=para.get("indent", ""),
-                separator=para["separator"],
+                translations=[
+                    TranslationResult(
+                        segment=t["segment"],
+                        pinyin=t["pinyin"],
+                        english=t["english"],
+                    )
+                    for t in p["translations"]
+                ],
+                indent=p["indent"],
+                separator=p["separator"],
             )
-        )
+            for p in result.paragraphs
+        ]
 
-    return TranslateResponse(paragraphs=paragraph_results)
-
-
-@router.post("/translate-html", response_class=HTMLResponse)
-async def translate_html(request: Request, text: str = Form(...)):
-    """Translate Chinese text and return HTML fragment for HTMX."""
-    if not text.strip():
-        return templates.TemplateResponse(
-            request=request,
-            name="fragments/error.html",
-            context={"message": "Please enter some Chinese text"},
-        )
-
-    try:
-        pipe = get_pipeline()
-
-        # Split text into paragraphs
-        paragraphs = split_into_paragraphs(text)
-
-        # Process each paragraph through the pipeline
-        paragraph_results = []
-        for para in paragraphs:
-            results = await pipe.aforward(para["content"])
-            translations = [
-                {"segment": seg, "pinyin": pinyin, "english": english}
-                for seg, pinyin, english in results
-            ]
-            paragraph_results.append(
-                {
-                    "translations": translations,
-                    "indent": para.get("indent", ""),
-                    "separator": para["separator"],
-                }
-            )
-
-        return templates.TemplateResponse(
-            request=request,
-            name="fragments/results.html",
-            context={"paragraphs": paragraph_results, "original_text": text},
-        )
-    except Exception as e:
-        return templates.TemplateResponse(
-            request=request,
-            name="fragments/error.html",
-            context={"message": f"Translation error: {e}"},
-        )
+    return TranslationDetailResponse(
+        id=result.translation.id,
+        created_at=result.translation.created_at,
+        status=result.translation.status,
+        source_type=result.translation.source_type,
+        input_text=result.translation.input_text,
+        full_translation=result.translation.full_translation,
+        error_message=result.translation.error_message,
+        paragraphs=paragraphs,
+    )
 
 
-@router.post("/translate-stream")
-async def translate_stream(text: str = Form(...)):
-    """Stream translation progress via SSE"""
+@router.get("/api/translations/{translation_id}/status", response_model=TranslationStatusResponse)
+async def api_get_translation_status(translation_id: str):
+    """
+    Quick status check for a translation.
+
+    Returns current status and progress without full results.
+    """
+    translation = get_translation(translation_id)
+    if translation is None:
+        raise HTTPException(status_code=404, detail="Translation not found")
+
+    progress, total = (
+        get_translation_segment_count(translation_id) if translation.status != "pending" else (None, None)
+    )
+
+    return TranslationStatusResponse(
+        translation_id=translation_id,
+        status=translation.status,
+        progress=progress,
+        total=total,
+    )
+
+
+@router.delete("/api/translations/{translation_id}", response_model=OkResponse)
+async def api_delete_translation(translation_id: str):
+    """Delete a translation and its results."""
+    if not delete_translation(translation_id):
+        raise HTTPException(status_code=404, detail="Translation not found")
+
+    return OkResponse()
+
+
+# --- SSE Streaming Endpoint ---
+
+
+@router.get("/api/translations/{translation_id}/stream")
+async def translation_stream(translation_id: str):
+    """
+    SSE stream for translation progress.
+
+    Events:
+    - start: { type: "start", translation_id, total, paragraphs }
+    - progress: { type: "progress", current, total, result }
+    - complete: { type: "complete", paragraphs, full_translation }
+    - error: { type: "error", message }
+
+    This endpoint starts processing the translation if it's pending.
+    """
 
     async def generate():
-        if not text.strip():
-            yield f"data: {json.dumps({'type': 'error', 'message': 'Please enter some Chinese text'})}\n\n"
+        translation = get_translation(translation_id)
+        if translation is None:
+            yield f"data: {json.dumps({'type': 'error', 'message': 'Translation not found'})}\n\n"
             return
 
-        try:
-            pipe = get_pipeline()
-            full_translator = get_full_translator()
+        manager = get_queue_manager()
 
-            # Full-text translation (separate from pipeline)
-            full_translation_result = await full_translator.acall(text=text)
-            full_translation = full_translation_result.english
-
-            # Split text into paragraphs
-            paragraphs = split_into_paragraphs(text)
-
-            # Count total segments across all paragraphs
-            all_paragraph_segments = []
-            for para in paragraphs:
-                segmentation = await pipe.segment.acall(text=para["content"])
-                all_paragraph_segments.append(
-                    {
-                        "segments": segmentation.segments,
-                        "indent": para.get("indent", ""),
-                        "separator": para["separator"],
-                    }
+        # If translation is already completed, send results immediately
+        if translation.status == "completed":
+            result = get_translation_with_results(translation_id)
+            if result:
+                # Calculate total segments
+                total_segments = (
+                    sum(len(p["translations"]) for p in result.paragraphs)
+                    if result.paragraphs
+                    else 0
                 )
 
-            total_segments = sum(len(p["segments"]) for p in all_paragraph_segments)
-
-            # Send initial info with paragraph structure
-            paragraph_info = [
-                {
-                    "segment_count": len(p["segments"]),
-                    "indent": p["indent"],
-                    "separator": p["separator"],
-                }
-                for p in all_paragraph_segments
-            ]
-            yield f"data: {json.dumps({'type': 'start', 'total': total_segments, 'paragraphs': paragraph_info, 'fullTranslation': full_translation})}\n\n"
-
-            # Step 2: Translate each segment in each paragraph
-            global_index = 0
-            all_results = []
-
-            for para_idx, para_data in enumerate(all_paragraph_segments):
-                para_results = []
-                for seg_idx, segment in enumerate(para_data["segments"]):
-                    # Skip translation for segments with only symbols, numbers, and punctuation
-                    if should_skip_segment(segment):
-                        result = {
-                            "segment": segment,
-                            "pinyin": "",
-                            "english": "",
-                            "index": global_index,
-                            "paragraph_index": para_idx,
+                # Send start event
+                paragraph_info = (
+                    [
+                        {
+                            "segment_count": len(p["translations"]),
+                            "indent": p["indent"],
+                            "separator": p["separator"],
                         }
-                    else:
-                        # Pinyin is generated deterministically; LLM only provides English
-                        pinyin = to_pinyin(segment)
-                        # Use the original paragraph content as context
-                        sentence_context = paragraphs[para_idx]["content"]
-                        # Look up dictionary definition
-                        dict_entry = lookup(pipe.cedict, segment) or "Not in dictionary"
-                        translation = await pipe.translate.acall(
-                            segment=segment,
-                            sentence_context=sentence_context,
-                            dictionary_entry=dict_entry,
-                        )
-                        result = {
-                            "segment": segment,
-                            "pinyin": pinyin,
-                            "english": translation.english,
-                            "index": global_index,
-                            "paragraph_index": para_idx,
-                        }
-                    para_results.append(result)
-                    global_index += 1
-
-                    # Send progress update
-                    yield f"data: {json.dumps({'type': 'progress', 'current': global_index, 'total': total_segments, 'result': result})}\n\n"
-
-                all_results.append(
-                    {
-                        "translations": para_results,
-                        "indent": para_data["indent"],
-                        "separator": para_data["separator"],
-                    }
+                        for p in result.paragraphs
+                    ]
+                    if result.paragraphs
+                    else []
                 )
 
-            # Send completion with paragraph structure
-            yield f"data: {json.dumps({'type': 'complete', 'paragraphs': all_results, 'fullTranslation': full_translation})}\n\n"
+                yield f"data: {json.dumps({'type': 'start', 'translation_id': translation_id, 'total': total_segments, 'paragraphs': paragraph_info, 'fullTranslation': result.translation.full_translation})}\n\n"
 
-        except Exception as e:
-            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+                # Send all progress events at once
+                global_idx = 0
+                for para_idx, para in enumerate(result.paragraphs or []):
+                    for seg_idx, t in enumerate(para["translations"]):
+                        result_data = {
+                            "segment": t["segment"],
+                            "pinyin": t["pinyin"],
+                            "english": t["english"],
+                            "index": global_idx,
+                            "paragraph_index": para_idx,
+                        }
+                        global_idx += 1
+                        yield f"data: {json.dumps({'type': 'progress', 'current': global_idx, 'total': total_segments, 'result': result_data})}\n\n"
+
+                # Send complete event
+                yield f"data: {json.dumps({'type': 'complete', 'paragraphs': result.paragraphs, 'fullTranslation': result.translation.full_translation})}\n\n"
+            return
+
+        # If translation failed, send error
+        if translation.status == "failed":
+            yield f"data: {json.dumps({'type': 'error', 'message': translation.error_message or 'Translation failed'})}\n\n"
+            return
+
+        # Start processing if pending
+        if translation.status == "pending":
+            # Use a queue to collect progress updates
+            progress_queue: asyncio.Queue = asyncio.Queue()
+
+            def progress_callback(tid: str, seg_result):
+                # Put progress update in queue
+                try:
+                    loop = asyncio.get_event_loop()
+                    loop.call_soon_threadsafe(
+                        progress_queue.put_nowait,
+                        {
+                            "type": "progress",
+                            "translation_id": tid,
+                            "result": seg_result,
+                        },
+                    )
+                except Exception:
+                    pass
+
+            # Start processing in background
+            manager.start_processing(translation_id, progress_callback)
+
+            # Wait for processing to initialize
+            await asyncio.sleep(0.5)
+
+        # Poll for progress updates
+        last_progress = 0
+        sent_start = False
+
+        while True:
+            # Get current progress from manager
+            progress = manager.get_progress(translation_id)
+            if progress is None:
+                # Translation might be done, check DB
+                translation = get_translation(translation_id)
+                if translation is None:
+                    yield f"data: {json.dumps({'type': 'error', 'message': 'Translation not found'})}\n\n"
+                    return
+                if translation.status == "completed":
+                    break
+                if translation.status == "failed":
+                    yield f"data: {json.dumps({'type': 'error', 'message': translation.error_message or 'Translation failed'})}\n\n"
+                    return
+                await asyncio.sleep(0.2)
+                continue
+
+            # Send start event once we have total
+            if not sent_start and progress.get("total", 0) > 0:
+                total = progress["total"]
+                # Build paragraph info from results so far
+                yield f"data: {json.dumps({'type': 'start', 'translation_id': translation_id, 'total': total, 'paragraphs': []})}\n\n"
+                sent_start = True
+
+            # Send progress events for new results
+            current = progress.get("current", 0)
+            results = progress.get("results", [])
+
+            for i in range(last_progress, current):
+                if i < len(results):
+                    seg = results[i]
+                    result_data = {
+                        "segment": seg.segment,
+                        "pinyin": seg.pinyin,
+                        "english": seg.english,
+                        "index": seg.global_idx,
+                        "paragraph_index": seg.paragraph_idx,
+                    }
+                    yield f"data: {json.dumps({'type': 'progress', 'current': i + 1, 'total': progress.get('total', 0), 'result': result_data})}\n\n"
+
+            last_progress = current
+
+            # Check if completed
+            if progress.get("status") == "completed":
+                break
+
+            if progress.get("status") == "failed":
+                yield f"data: {json.dumps({'type': 'error', 'message': progress.get('error', 'Translation failed')})}\n\n"
+                return
+
+            await asyncio.sleep(0.1)
+
+        # Send complete event
+        result = get_translation_with_results(translation_id)
+        if result:
+            yield f"data: {json.dumps({'type': 'complete', 'paragraphs': result.paragraphs, 'fullTranslation': result.translation.full_translation})}\n\n"
+
+        # Cleanup progress tracking
+        manager.cleanup_progress(translation_id)
 
     return StreamingResponse(generate(), media_type="text/event-stream")
-
-
-@router.post("/extract-text-html", response_class=HTMLResponse)
-async def extract_text_html(request: Request, file: UploadFile = File(...)):
-    """HTMX endpoint for OCR extraction only - fills textarea for editing"""
-    try:
-        file_bytes = await file.read()
-
-        valid, error = validate_image_file(file_bytes, file.filename or "image.png")
-        if not valid:
-            return templates.TemplateResponse(
-                request=request,
-                name="fragments/error.html",
-                context={"message": error},
-            )
-
-        extracted_text = await extract_text_from_image(file_bytes)
-
-        if not extracted_text.strip():
-            return templates.TemplateResponse(
-                request=request,
-                name="fragments/error.html",
-                context={"message": "No Chinese text found in image"},
-            )
-
-        return templates.TemplateResponse(
-            request=request,
-            name="fragments/ocr-result.html",
-            context={"extracted_text": extracted_text},
-        )
-    except Exception as e:
-        return templates.TemplateResponse(
-            request=request,
-            name="fragments/error.html",
-            context={"message": f"OCR error: {e}"},
-        )
-
-
-@router.post("/extract-text", response_model=ExtractTextResponse)
-async def extract_text_json(file: UploadFile = File(...)):
-    """JSON endpoint for OCR extraction only."""
-    file_bytes = await file.read()
-
-    valid, error = validate_image_file(file_bytes, file.filename or "image.png")
-    if not valid:
-        raise HTTPException(status_code=400, detail=error)
-
-    extracted_text = await extract_text_from_image(file_bytes)
-
-    if not extracted_text.strip():
-        raise HTTPException(status_code=400, detail="No Chinese text found in image")
-
-    return ExtractTextResponse(text=extracted_text)
-
-
-@router.post("/translate-image", response_model=TranslateResponse)
-async def translate_image(file: UploadFile = File(...)):
-    """Extract Chinese text from image and translate"""
-    file_bytes = await file.read()
-
-    valid, error = validate_image_file(file_bytes, file.filename or "image.png")
-    if not valid:
-        raise HTTPException(status_code=400, detail=error)
-
-    extracted_text = await extract_text_from_image(file_bytes)
-
-    if not extracted_text.strip():
-        raise HTTPException(status_code=400, detail="No Chinese text found in image")
-
-    pipe = get_pipeline()
-
-    # Split text into paragraphs
-    paragraphs = split_into_paragraphs(extracted_text)
-
-    # Process each paragraph through the pipeline
-    paragraph_results = []
-    for para in paragraphs:
-        results = await pipe.aforward(para["content"])
-        translations = [
-            TranslationResult(segment=seg, pinyin=pinyin, english=english)
-            for seg, pinyin, english in results
-        ]
-        paragraph_results.append(
-            ParagraphResult(
-                translations=translations,
-                indent=para.get("indent", ""),
-                separator=para["separator"],
-            )
-        )
-
-    return TranslateResponse(paragraphs=paragraph_results)
-
-
-@router.post("/translate-image-html", response_class=HTMLResponse)
-async def translate_image_html(request: Request, file: UploadFile = File(...)):
-    """HTMX endpoint for image translation"""
-    try:
-        file_bytes = await file.read()
-
-        valid, error = validate_image_file(file_bytes, file.filename or "image.png")
-        if not valid:
-            return templates.TemplateResponse(
-                request=request,
-                name="fragments/error.html",
-                context={"message": error},
-            )
-
-        extracted_text = await extract_text_from_image(file_bytes)
-
-        if not extracted_text.strip():
-            return templates.TemplateResponse(
-                request=request,
-                name="fragments/error.html",
-                context={"message": "No Chinese text found in image"},
-            )
-
-        pipe = get_pipeline()
-
-        # Split text into paragraphs
-        paragraphs = split_into_paragraphs(extracted_text)
-
-        # Process each paragraph through the pipeline
-        paragraph_results = []
-        for para in paragraphs:
-            results = await pipe.aforward(para["content"])
-            translations = [
-                {"segment": seg, "pinyin": pinyin, "english": english}
-                for seg, pinyin, english in results
-            ]
-            paragraph_results.append(
-                {
-                    "translations": translations,
-                    "indent": para.get("indent", ""),
-                    "separator": para["separator"],
-                }
-            )
-
-        return templates.TemplateResponse(
-            request=request,
-            name="fragments/results.html",
-            context={"paragraphs": paragraph_results, "original_text": extracted_text},
-        )
-    except Exception as e:
-        return templates.TemplateResponse(
-            request=request,
-            name="fragments/error.html",
-            context={"message": f"OCR error: {e}"},
-        )

@@ -3,16 +3,14 @@ FastAPI route handlers.
 
 This package organizes API endpoints by domain:
 - auth: Authentication and homepage routes
-- translation: Translation and OCR routes
+- translation: Translation queue API for background processing
 - api: REST API for persistence and SRS
 - admin: Admin page and profile management
-- translations: Translation queue API for background processing
 """
 
 from app.routes.admin import router as admin_router
 from app.routes.api import router as api_router
 from app.routes.auth import router as auth_router
-from app.routes.translations import router as translations_router
 from app.routes.translation import router as translation_router
 
 __all__ = [
@@ -20,5 +18,4 @@ __all__ = [
     "translation_router",
     "api_router",
     "admin_router",
-    "translations_router",
 ]
