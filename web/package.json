@@ -11,6 +11,7 @@
     "check": "npm run typecheck"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.3.14",
     "@sveltejs/vite-plugin-svelte": "^6.2.4",
     "@tsconfig/svelte": "^5.0.4",
     "svelte": "^5.49.2",

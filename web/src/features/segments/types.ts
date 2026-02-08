@@ -1,4 +1,4 @@
-export type { LoadingState, VocabStatus } from "../../lib/types";
+export type { LoadingState, VocabStatus } from '../../lib/types';
 
 export interface TranslationResult {
   segment: string;
@@ -46,7 +46,7 @@ export interface StreamSegmentResult {
 }
 
 export type StreamStartEvent = {
-  type: "start";
+  type: 'start';
   translation_id: string;
   total?: number;
   paragraphs?: ParagraphMeta[];
@@ -54,30 +54,34 @@ export type StreamStartEvent = {
 };
 
 export type StreamProgressEvent = {
-  type: "progress";
+  type: 'progress';
   current: number;
   total: number;
   result: StreamSegmentResult;
 };
 
 export type StreamCompleteEvent = {
-  type: "complete";
+  type: 'complete';
   paragraphs?: ParagraphResult[];
   fullTranslation?: string | null;
 };
 
 export type StreamErrorEvent = {
-  type: "error";
+  type: 'error';
   message?: string;
 };
 
-export type StreamEvent = StreamStartEvent | StreamProgressEvent | StreamCompleteEvent | StreamErrorEvent;
+export type StreamEvent =
+  | StreamStartEvent
+  | StreamProgressEvent
+  | StreamCompleteEvent
+  | StreamErrorEvent;
 
 export interface SavedVocabInfo {
   vocabItemId: string;
   opacity: number;
   isStruggling: boolean;
-  status: import("../../lib/types").VocabStatus;
+  status: import('../../lib/types').VocabStatus;
 }
 
 export interface TooltipState {
@@ -85,7 +89,7 @@ export interface TooltipState {
   pinyin: string;
   english: string;
   vocabItemId: string | null;
-  status: import("../../lib/types").VocabStatus | "";
+  status: import('../../lib/types').VocabStatus | '';
   x: number;
   y: number;
 }

@@ -1,6 +1,6 @@
-export type TranslationStatus = "pending" | "processing" | "completed" | "failed";
-export type LoadingState = "idle" | "loading" | "error";
-export type VocabStatus = "unknown" | "learning" | "known";
+export type TranslationStatus = 'pending' | 'processing' | 'completed' | 'failed';
+export type LoadingState = 'idle' | 'loading' | 'error';
+export type VocabStatus = 'unknown' | 'learning' | 'known';
 
 export interface TranslationSummary {
   id: string;
@@ -26,7 +26,7 @@ export interface TranslationDetailResponse {
   input_text: string;
   full_translation: string | null;
   error_message: string | null;
-  paragraphs: import("../features/segments/types").ParagraphResult[] | null;
+  paragraphs: import('../features/segments/types').ParagraphResult[] | null;
 }
 
 export interface CreateTranslationResponse {

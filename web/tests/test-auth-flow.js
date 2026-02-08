@@ -18,13 +18,13 @@ function request(options, data = null) {
   return new Promise((resolve, reject) => {
     const req = http.request(options, (res) => {
       let body = '';
-      res.on('data', chunk => body += chunk);
+      res.on('data', (chunk) => (body += chunk));
       res.on('end', () => {
         resolve({
           statusCode: res.statusCode,
           headers: res.headers,
           body: body,
-          cookies: res.headers['set-cookie'] || []
+          cookies: res.headers['set-cookie'] || [],
         });
       });
     });
@@ -43,7 +43,7 @@ async function testAuth() {
     hostname: 'localhost',
     port: 8000,
     path: '/api/translations',
-    method: 'GET'
+    method: 'GET',
   });
 
   if (unauth.statusCode === 401) {
@@ -55,15 +55,18 @@ async function testAuth() {
 
   // Test 2: Login with wrong password
   console.log('\n2️⃣ Testing login with wrong password...');
-  const wrongLogin = await request({
-    hostname: 'localhost',
-    port: 8000,
-    path: '/login',
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded'
-    }
-  }, 'password=wrongpass');
+  const wrongLogin = await request(
+    {
+      hostname: 'localhost',
+      port: 8000,
+      path: '/login',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+    },
+    'password=wrongpass'
+  );
 
   if (wrongLogin.statusCode === 401) {
     console.log('✅ Correctly rejects wrong password (401)');
@@ -74,21 +77,24 @@ async function testAuth() {
 
   // Test 3: Login with correct password
   console.log('\n3️⃣ Testing login with correct password...');
-  const login = await request({
-    hostname: 'localhost',
-    port: 8000,
-    path: '/login',
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded'
-    }
-  }, `password=${PASSWORD}`);
+  const login = await request(
+    {
+      hostname: 'localhost',
+      port: 8000,
+      path: '/login',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+    },
+    `password=${PASSWORD}`
+  );
 
   if (login.statusCode === 303) {
     console.log('✅ Login successful (303 redirect)');
 
     // Extract session cookie
-    const sessionCookie = login.cookies.find(c => c.includes('session='));
+    const sessionCookie = login.cookies.find((c) => c.includes('session='));
     if (sessionCookie) {
       console.log('✅ Session cookie set');
     } else {
@@ -104,7 +110,7 @@ async function testAuth() {
   console.log('\n4️⃣ Testing protected endpoint with auth...');
 
   // Extract session cookie from login response
-  const sessionCookie = login.cookies.find(c => c.includes('session='));
+  const sessionCookie = login.cookies.find((c) => c.includes('session='));
 
   const auth = await request({
     hostname: 'localhost',
@@ -112,8 +118,8 @@ async function testAuth() {
     path: '/api/translations',
     method: 'GET',
     headers: {
-      'Cookie': sessionCookie
-    }
+      Cookie: sessionCookie,
+    },
   });
 
   if (auth.statusCode === 200) {
@@ -131,8 +137,8 @@ async function testAuth() {
     path: '/logout',
     method: 'POST',
     headers: {
-      'Cookie': sessionCookie
-    }
+      Cookie: sessionCookie,
+    },
   });
 
   if (logout.statusCode === 200 || logout.statusCode === 204 || logout.statusCode === 303) {
@@ -153,8 +159,8 @@ async function testAuth() {
     path: '/api/translations',
     method: 'GET',
     headers: {
-      'Cookie': sessionCookie // This cookie should be invalid now
-    }
+      Cookie: sessionCookie, // This cookie should be invalid now
+    },
   });
 
   if (afterLogout.statusCode === 401) {
@@ -169,7 +175,7 @@ async function testAuth() {
 }
 
 // Run tests
-testAuth().catch(err => {
+testAuth().catch((err) => {
   console.error('Test failed:', err);
   process.exit(1);
 });

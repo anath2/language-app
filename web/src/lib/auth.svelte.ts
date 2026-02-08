@@ -9,6 +9,10 @@ let isAuthenticated = $state(false);
 let isLoading = $state(true);
 let error = $state<string>('');
 
+/**
+ * Checks the current authentication status by attempting to access the API.
+ * Updates the reactive authentication state based on the response.
+ */
 export async function checkAuthStatus(): Promise<void> {
   try {
     const response = await fetch(`${API_BASE}/texts`, {
@@ -32,6 +36,12 @@ export async function checkAuthStatus(): Promise<void> {
   }
 }
 
+/**
+ * Attempts to log in with the provided password.
+ * @param password - The password to use for authentication
+ * @returns Promise resolving to true if login successful, false otherwise
+ * @throws Network error if the request fails
+ */
 export async function login(password: string): Promise<boolean> {
   try {
     error = '';
@@ -64,6 +74,10 @@ export async function login(password: string): Promise<boolean> {
   }
 }
 
+/**
+ * Logs out the current user and redirects to the home page.
+ * Updates the reactive authentication state to logged out.
+ */
 export async function logout(): Promise<void> {
   try {
     await fetch('/logout', {
@@ -80,9 +94,15 @@ export async function logout(): Promise<void> {
 
 // Export reactive state
 export const auth = {
-  get isAuthenticated() { return isAuthenticated; },
-  get isLoading() { return isLoading; },
-  get error() { return error; },
+  get isAuthenticated() {
+    return isAuthenticated;
+  },
+  get isLoading() {
+    return isLoading;
+  },
+  get error() {
+    return error;
+  },
   checkAuthStatus,
   login,
   logout,

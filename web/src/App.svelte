@@ -1,305 +1,317 @@
 <script lang="ts">
-  import { getJson, postJson, deleteRequest } from "./lib/api";
-  import { router } from "./lib/router.svelte";
-  import { auth } from "./lib/auth.svelte";
-  import Login from "./features/auth/Login.svelte";
-  import type {
-    TranslationSummary,
-    ListTranslationsResponse,
-    TranslationDetailResponse,
-    CreateTranslationResponse,
-    DueCountResponse,
-    VocabSrsInfoListResponse,
-    RecordLookupResponse,
-    SaveVocabResponse,
-    CreateTextResponse,
-    LoadingState,
-  } from "./lib/types";
-  import type {
-    ParagraphResult,
-    SegmentResult,
-    SavedVocabInfo,
-  } from "./features/segments/types";
-  import NavBar from "./components/NavBar.svelte";
-  import ReviewPanel from "./components/ReviewPanel.svelte";
-  import TranslateForm from "./components/TranslateForm.svelte";
-  import TranslationList from "./components/TranslationList.svelte";
-  import Segments from "./features/segments/Segments.svelte";
-  import Admin from "./features/admin/Admin.svelte";
+import NavBar from './components/NavBar.svelte';
+import ReviewPanel from './components/ReviewPanel.svelte';
+import TranslateForm from './components/TranslateForm.svelte';
+import TranslationList from './components/TranslationList.svelte';
+import Admin from './features/admin/Admin.svelte';
+import Login from './features/auth/Login.svelte';
+import Segments from './features/segments/Segments.svelte';
+import type { ParagraphResult, SavedVocabInfo, SegmentResult } from './features/segments/types';
+import { deleteRequest, getJson, postJson } from './lib/api';
+import { auth } from './lib/auth.svelte';
+import { router } from './lib/router.svelte';
+import type {
+  CreateTextResponse,
+  CreateTranslationResponse,
+  DueCountResponse,
+  ListTranslationsResponse,
+  LoadingState,
+  RecordLookupResponse,
+  SaveVocabResponse,
+  TranslationDetailResponse,
+  TranslationSummary,
+  VocabSrsInfoListResponse,
+} from './lib/types';
 
-  let translations = $state<TranslationSummary[]>([]);
-  let currentTranslationId = $state<string | null>(null);
-  let currentTranslationStatus = $state<string | null>(null);
-  let currentParagraphs = $state<ParagraphResult[] | null>(null);
-  let currentFullTranslation = $state<string | null>(null);
-  let detailLoading = $state(false);
-  let formLoading = $state<LoadingState>("idle");
-  let formErrorMessage = $state("");
+let translations = $state<TranslationSummary[]>([]);
+let currentTranslationId = $state<string | null>(null);
+let currentTranslationStatus = $state<string | null>(null);
+let currentParagraphs = $state<ParagraphResult[] | null>(null);
+let currentFullTranslation = $state<string | null>(null);
+let detailLoading = $state(false);
+let formLoading = $state<LoadingState>('idle');
+let formErrorMessage = $state('');
 
-  let currentTextId = $state<string | null>(null);
-  let currentRawText = $state("");
-  let savedVocabMap = $state<Map<string, SavedVocabInfo>>(new Map());
+let currentTextId = $state<string | null>(null);
+let currentRawText = $state('');
+let savedVocabMap = $state<Map<string, SavedVocabInfo>>(new Map());
 
-  let reviewPanelOpen = $state(false);
+let reviewPanelOpen = $state(false);
 
-  const currentPage = $derived(router.route.page);
+const currentPage = $derived(router.route.page);
 
-  // Check authentication on mount
-  $effect(() => {
-    void auth.checkAuthStatus();
-  });
+// Check authentication on mount
+$effect(() => {
+  void auth.checkAuthStatus();
+});
 
-  // Initial data load after auth is checked
-  $effect(() => {
-    if (!auth.isLoading && auth.isAuthenticated) {
-      void loadTranslations();
-    }
-  });
-
-  // React to route changes (handles popstate and initial deep link)
-  $effect(() => {
-    if (!auth.isAuthenticated && router.route.page !== "login") {
-      // Only process routes if authenticated or on login page
-      return;
-    }
-
-    const route = router.route;
-    if (route.page === "translation") {
-      void loadTranslationFromRoute(route.id);
-    } else if (route.page === "home") {
-      clearDetailState();
-      void loadTranslations();
-    } else {
-      clearDetailState();
-    }
-  });
-
-  function errorToMessage(error: unknown): string {
-    if (error instanceof Error) return error.message;
-    return String(error);
-  }
-
-  async function loadTranslations() {
-    try {
-      const data = await getJson<ListTranslationsResponse>("/api/translations?limit=20");
-      translations = data.translations || [];
-    } catch (error) {
-      console.error("Failed to load translations:", error);
-    }
-  }
-
-  async function handleSubmit(text: string) {
-    if (!text) return;
-
-    formLoading = "loading";
-    try {
-      const data = await postJson<CreateTranslationResponse>("/api/translations", {
-        input_text: text,
-        source_type: "text"
-      });
-      currentRawText = text;
-      currentTextId = null;
-      await loadTranslations();
-      openTranslation(data.translation_id);
-    } catch (error) {
-      formErrorMessage = `Failed to submit translation: ${errorToMessage(error)}`;
-      formLoading = "error";
-    } finally {
-      if (formLoading !== "error") {
-        formLoading = "idle";
-      }
-    }
-  }
-
-  function openTranslation(id: string) {
-    router.navigateTo(id);
-  }
-
-  async function loadTranslationFromRoute(id: string) {
-    detailLoading = true;
-    currentTranslationId = null;
-    currentTranslationStatus = null;
-    currentParagraphs = null;
-    currentFullTranslation = null;
-
-    try {
-      const detail = await getJson<TranslationDetailResponse>(`/api/translations/${id}`);
-      currentRawText = detail.input_text;
-      currentTextId = null;
-
-      // Set status/data BEFORE setting translationId so the $effect gets complete data
-      if (detail.status === "completed" && detail.paragraphs) {
-        currentTranslationStatus = "completed";
-        currentParagraphs = detail.paragraphs;
-        currentFullTranslation = detail.full_translation || null;
-      } else if (detail.status === "processing" || detail.status === "pending") {
-        currentTranslationStatus = detail.status;
-      } else if (detail.status === "failed") {
-        currentTranslationStatus = "failed";
-      }
-
-      // Set translationId LAST — this triggers the Segments $effect with all data ready
-      currentTranslationId = id;
-      await loadTranslations();
-    } catch (_error) {
-      currentTranslationStatus = "failed";
-      currentTranslationId = id;
-    } finally {
-      detailLoading = false;
-    }
-  }
-
-  function backToList() {
-    router.navigateHome();
-  }
-
-  function clearDetailState() {
-    detailLoading = false;
-    currentTranslationId = null;
-    currentTranslationStatus = null;
-    currentParagraphs = null;
-    currentFullTranslation = null;
-    formLoading = "idle";
-    formErrorMessage = "";
-  }
-
-  async function deleteTranslation(id: string) {
-    if (!confirm("Delete this translation?")) return;
-
-    try {
-      await deleteRequest("/api/translations/" + id);
-      if (currentTranslationId === id) {
-        backToList();
-      } else {
-        await loadTranslations();
-      }
-    } catch (_error) {
-      alert("Failed to delete translation");
-    }
-  }
-
-  function handleStreamComplete() {
+// Initial data load after auth is checked
+$effect(() => {
+  if (!auth.isLoading && auth.isAuthenticated) {
     void loadTranslations();
   }
+});
 
-  function handleSegmentsChanged(results: SegmentResult[]) {
-    void fetchAndApplySrsInfo(results);
+// React to route changes (handles popstate and initial deep link)
+$effect(() => {
+  if (!auth.isAuthenticated && router.route.page !== 'login') {
+    // Only process routes if authenticated or on login page
+    return;
   }
 
-  async function fetchAndApplySrsInfo(results: SegmentResult[]) {
-    const headwords = [...new Set(results.filter((s) => s.pinyin || s.english).map((s) => s.segment))];
-    if (headwords.length === 0) return;
-
-    try {
-      const params = new URLSearchParams();
-      params.set("headwords", headwords.join(","));
-      const data = await getJson<VocabSrsInfoListResponse>(`/api/vocab/srs-info?${params.toString()}`);
-      const nextMap = new Map<string, SavedVocabInfo>();
-      data.items.forEach((info) => {
-        const opacity = info.status === "known" ? 0 : info.opacity;
-        nextMap.set(info.headword, {
-          vocabItemId: info.vocab_item_id,
-          opacity,
-          isStruggling: info.is_struggling,
-          status: info.status
-        });
-      });
-      savedVocabMap = nextMap;
-    } catch (error) {
-      console.error("Failed to fetch SRS info:", error);
-    }
+  const route = router.route;
+  if (route.page === 'translation') {
+    void loadTranslationFromRoute(route.id);
+  } else if (route.page === 'home') {
+    clearDetailState();
+    void loadTranslations();
+  } else {
+    clearDetailState();
   }
+});
 
-  function openReviewPanel() {
-    reviewPanelOpen = true;
+function errorToMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
+
+async function loadTranslations() {
+  try {
+    const data = await getJson<ListTranslationsResponse>('/api/translations?limit=20');
+    translations = data.translations || [];
+  } catch (error) {
+    console.error('Failed to load translations:', error);
   }
+}
 
-  function closeReviewPanel() {
-    reviewPanelOpen = false;
-  }
+async function handleSubmit(text: string) {
+  if (!text) return;
 
-  async function ensureSavedText() {
-    if (currentTextId || !currentRawText) return currentTextId;
-
-    const data = await postJson<CreateTextResponse>("/api/texts", {
-      raw_text: currentRawText,
-      source_type: "text",
-      metadata: {}
+  formLoading = 'loading';
+  try {
+    const data = await postJson<CreateTranslationResponse>('/api/translations', {
+      input_text: text,
+      source_type: 'text',
     });
-    currentTextId = data.id;
-    return currentTextId;
-  }
-
-  async function onSaveVocab(headword: string, pinyin: string, english: string): Promise<SavedVocabInfo | null> {
-    try {
-      await ensureSavedText();
-      const data = await postJson<SaveVocabResponse>("/api/vocab/save", {
-        headword,
-        pinyin,
-        english,
-        text_id: currentTextId,
-        snippet: currentRawText,
-        status: "learning"
-      });
-      const info: SavedVocabInfo = {
-        vocabItemId: data.vocab_item_id,
-        opacity: 1,
-        isStruggling: false,
-        status: "learning"
-      };
-      savedVocabMap = new Map(savedVocabMap.set(headword, info));
-      return info;
-    } catch (error) {
-      console.error("Failed to save vocab:", error);
-      return null;
+    currentRawText = text;
+    currentTextId = null;
+    await loadTranslations();
+    openTranslation(data.translation_id);
+  } catch (error) {
+    formErrorMessage = `Failed to submit translation: ${errorToMessage(error)}`;
+    formLoading = 'error';
+  } finally {
+    if (formLoading !== 'error') {
+      formLoading = 'idle';
     }
   }
+}
 
-  async function onMarkKnown(headword: string, vocabItemId: string) {
-    try {
-      await postJson("/api/vocab/status", {
-        vocab_item_id: vocabItemId,
-        status: "known"
-      });
-      const info = savedVocabMap.get(headword);
-      if (info) {
-        savedVocabMap = new Map(savedVocabMap.set(headword, { ...info, status: "known", opacity: 0 }));
-      }
-    } catch (error) {
-      console.error("Failed to mark known:", error);
+function openTranslation(id: string) {
+  router.navigateTo(id);
+}
+
+async function loadTranslationFromRoute(id: string) {
+  detailLoading = true;
+  currentTranslationId = null;
+  currentTranslationStatus = null;
+  currentParagraphs = null;
+  currentFullTranslation = null;
+
+  try {
+    const detail = await getJson<TranslationDetailResponse>(`/api/translations/${id}`);
+    currentRawText = detail.input_text;
+    currentTextId = null;
+
+    // Set status/data BEFORE setting translationId so the $effect gets complete data
+    if (detail.status === 'completed' && detail.paragraphs) {
+      currentTranslationStatus = 'completed';
+      currentParagraphs = detail.paragraphs;
+      currentFullTranslation = detail.full_translation || null;
+    } else if (detail.status === 'processing' || detail.status === 'pending') {
+      currentTranslationStatus = detail.status;
+    } else if (detail.status === 'failed') {
+      currentTranslationStatus = 'failed';
     }
-  }
 
-  async function onResumeLearning(headword: string, vocabItemId: string) {
-    try {
-      await postJson("/api/vocab/status", {
-        vocab_item_id: vocabItemId,
-        status: "learning"
-      });
-      const info = savedVocabMap.get(headword);
-      if (info) {
-        savedVocabMap = new Map(savedVocabMap.set(headword, { ...info, status: "learning", opacity: 1 }));
-      }
-    } catch (error) {
-      console.error("Failed to resume learning:", error);
+    // Set translationId LAST — this triggers the Segments $effect with all data ready
+    currentTranslationId = id;
+    await loadTranslations();
+  } catch (_error) {
+    currentTranslationStatus = 'failed';
+    currentTranslationId = id;
+  } finally {
+    detailLoading = false;
+  }
+}
+
+function backToList() {
+  router.navigateHome();
+}
+
+function clearDetailState() {
+  detailLoading = false;
+  currentTranslationId = null;
+  currentTranslationStatus = null;
+  currentParagraphs = null;
+  currentFullTranslation = null;
+  formLoading = 'idle';
+  formErrorMessage = '';
+}
+
+async function deleteTranslation(id: string) {
+  if (!confirm('Delete this translation?')) return;
+
+  try {
+    await deleteRequest('/api/translations/' + id);
+    if (currentTranslationId === id) {
+      backToList();
+    } else {
+      await loadTranslations();
     }
+  } catch (_error) {
+    alert('Failed to delete translation');
   }
+}
 
-  async function onRecordLookup(headword: string, vocabItemId: string) {
-    try {
-      const data = await postJson<RecordLookupResponse>("/api/vocab/lookup", { vocab_item_id: vocabItemId });
-      const info = savedVocabMap.get(headword);
-      if (info) {
-        savedVocabMap = new Map(savedVocabMap.set(headword, {
+function handleStreamComplete() {
+  void loadTranslations();
+}
+
+function handleSegmentsChanged(results: SegmentResult[]) {
+  void fetchAndApplySrsInfo(results);
+}
+
+async function fetchAndApplySrsInfo(results: SegmentResult[]) {
+  const headwords = [
+    ...new Set(results.filter((s) => s.pinyin || s.english).map((s) => s.segment)),
+  ];
+  if (headwords.length === 0) return;
+
+  try {
+    const params = new URLSearchParams();
+    params.set('headwords', headwords.join(','));
+    const data = await getJson<VocabSrsInfoListResponse>(
+      `/api/vocab/srs-info?${params.toString()}`
+    );
+    const nextMap = new Map<string, SavedVocabInfo>();
+    data.items.forEach((info) => {
+      const opacity = info.status === 'known' ? 0 : info.opacity;
+      nextMap.set(info.headword, {
+        vocabItemId: info.vocab_item_id,
+        opacity,
+        isStruggling: info.is_struggling,
+        status: info.status,
+      });
+    });
+    savedVocabMap = nextMap;
+  } catch (error) {
+    console.error('Failed to fetch SRS info:', error);
+  }
+}
+
+function openReviewPanel() {
+  reviewPanelOpen = true;
+}
+
+function closeReviewPanel() {
+  reviewPanelOpen = false;
+}
+
+async function ensureSavedText() {
+  if (currentTextId || !currentRawText) return currentTextId;
+
+  const data = await postJson<CreateTextResponse>('/api/texts', {
+    raw_text: currentRawText,
+    source_type: 'text',
+    metadata: {},
+  });
+  currentTextId = data.id;
+  return currentTextId;
+}
+
+async function onSaveVocab(
+  headword: string,
+  pinyin: string,
+  english: string
+): Promise<SavedVocabInfo | null> {
+  try {
+    await ensureSavedText();
+    const data = await postJson<SaveVocabResponse>('/api/vocab/save', {
+      headword,
+      pinyin,
+      english,
+      text_id: currentTextId,
+      snippet: currentRawText,
+      status: 'learning',
+    });
+    const info: SavedVocabInfo = {
+      vocabItemId: data.vocab_item_id,
+      opacity: 1,
+      isStruggling: false,
+      status: 'learning',
+    };
+    savedVocabMap = new Map(savedVocabMap.set(headword, info));
+    return info;
+  } catch (error) {
+    console.error('Failed to save vocab:', error);
+    return null;
+  }
+}
+
+async function onMarkKnown(headword: string, vocabItemId: string) {
+  try {
+    await postJson('/api/vocab/status', {
+      vocab_item_id: vocabItemId,
+      status: 'known',
+    });
+    const info = savedVocabMap.get(headword);
+    if (info) {
+      savedVocabMap = new Map(
+        savedVocabMap.set(headword, { ...info, status: 'known', opacity: 0 })
+      );
+    }
+  } catch (error) {
+    console.error('Failed to mark known:', error);
+  }
+}
+
+async function onResumeLearning(headword: string, vocabItemId: string) {
+  try {
+    await postJson('/api/vocab/status', {
+      vocab_item_id: vocabItemId,
+      status: 'learning',
+    });
+    const info = savedVocabMap.get(headword);
+    if (info) {
+      savedVocabMap = new Map(
+        savedVocabMap.set(headword, { ...info, status: 'learning', opacity: 1 })
+      );
+    }
+  } catch (error) {
+    console.error('Failed to resume learning:', error);
+  }
+}
+
+async function onRecordLookup(headword: string, vocabItemId: string) {
+  try {
+    const data = await postJson<RecordLookupResponse>('/api/vocab/lookup', {
+      vocab_item_id: vocabItemId,
+    });
+    const info = savedVocabMap.get(headword);
+    if (info) {
+      savedVocabMap = new Map(
+        savedVocabMap.set(headword, {
           ...info,
           opacity: data.opacity,
-          isStruggling: data.is_struggling
-        }));
-      }
-    } catch (error) {
-      console.error("Failed to record lookup:", error);
+          isStruggling: data.is_struggling,
+        })
+      );
     }
+  } catch (error) {
+    console.error('Failed to record lookup:', error);
   }
+}
 </script>
 
 <svelte:head>
@@ -318,7 +330,7 @@
 {#if !auth.isAuthenticated && !auth.isLoading && router.route.page !== "login"}
   <Login returnUrl={window.location.pathname + window.location.search} />
 {:else if auth.isAuthenticated || router.route.page === "login"}
-  <NavBar currentPage={currentPage} />
+  <NavBar />
 
   {#if currentPage === "login"}
     {#if router.route.page === "login"}

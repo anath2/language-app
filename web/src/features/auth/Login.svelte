@@ -1,34 +1,34 @@
 <script lang="ts">
-  import { auth } from '../../lib/auth.svelte';
+import { auth } from '../../lib/auth.svelte';
 
-  interface Props {
-    returnUrl?: string;
+interface Props {
+  returnUrl?: string;
+}
+
+const { returnUrl = '/' }: Props = $props();
+
+let password = $state('');
+let isSubmitting = $state(false);
+
+async function handleLogin(e: Event) {
+  e.preventDefault();
+  if (!password || isSubmitting) return;
+
+  isSubmitting = true;
+  const success = await auth.login(password);
+  isSubmitting = false;
+
+  if (success) {
+    // Redirect to return URL or home
+    window.location.href = returnUrl.startsWith('/') ? `#${returnUrl}` : `/${returnUrl}`;
   }
+}
 
-  let { returnUrl = '/' }: Props = $props();
-
-  let password = $state('');
-  let isSubmitting = $state(false);
-
-  async function handleLogin(e: Event) {
-    e.preventDefault();
-    if (!password || isSubmitting) return;
-
-    isSubmitting = true;
-    const success = await auth.login(password);
-    isSubmitting = false;
-
-    if (success) {
-      // Redirect to return URL or home
-      window.location.href = returnUrl.startsWith('/') ? `#${returnUrl}` : `/${returnUrl}`;
-    }
-  }
-
-  // Focus password input on mount
-  $effect(() => {
-    const input = document.querySelector('input[type="password"]') as HTMLInputElement;
-    input?.focus();
-  });
+// Focus password input on mount
+$effect(() => {
+  const input = document.querySelector('input[type="password"]') as HTMLInputElement;
+  input?.focus();
+});
 </script>
 
 <div class="login-container">

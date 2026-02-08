@@ -1,137 +1,137 @@
 <script lang="ts">
-  import { onMount } from "svelte";
-  import type { UserProfile, AdminProfileResponse, ImportProgressResponse } from "../../lib/types";
-  import { getJson, postJsonForm } from "../../lib/api";
+import { onMount } from 'svelte';
+import { getJson, postJsonForm } from '../../lib/api';
+import type { AdminProfileResponse, ImportProgressResponse, UserProfile } from '../../lib/types';
 
-  interface Props {
-    onImportSuccess?: () => void;
+interface Props {
+  onImportSuccess?: () => void;
+}
+
+const { onImportSuccess = () => {} }: Props = $props();
+
+// State
+let profile = $state<UserProfile | null>(null);
+let vocabStats = $state({ known: 0, learning: 0, total: 0 });
+let loading = $state(true);
+let saving = $state(false);
+let importModalOpen = $state(false);
+let importing = $state(false);
+let message = $state<{ type: 'error' | 'success'; text: string } | null>(null);
+let fileInput = $state<HTMLInputElement | null>(null);
+
+// Form fields
+let name = $state('');
+let email = $state('');
+let language = $state('');
+
+async function loadProfile() {
+  try {
+    const response = await getJson<AdminProfileResponse>('/admin/api/profile');
+    profile = response.profile;
+    vocabStats = response.vocabStats;
+
+    if (profile) {
+      name = profile.name;
+      email = profile.email;
+      language = profile.language;
+    }
+  } catch (error) {
+    message = { type: 'error', text: 'Failed to load profile' };
+  } finally {
+    loading = false;
+  }
+}
+
+async function saveProfile(e: Event) {
+  e.preventDefault();
+  saving = true;
+  message = null;
+
+  try {
+    const data = new FormData();
+    data.append('name', name);
+    data.append('email', email);
+    data.append('language', language);
+
+    const response = await postJsonForm<{ profile: UserProfile }>('/admin/api/profile', data);
+    profile = response.profile;
+    message = { type: 'success', text: 'Profile saved successfully' };
+  } catch (error) {
+    message = { type: 'error', text: 'Failed to save profile' };
+  } finally {
+    saving = false;
+  }
+}
+
+async function handleFileSelect(e: Event) {
+  const target = e.target as HTMLInputElement;
+  if (!target.files?.length) return;
+
+  const file = target.files[0];
+  if (!file.name.endsWith('.json')) {
+    message = { type: 'error', text: 'Please select a JSON file' };
+    return;
   }
 
-  let { onImportSuccess = () => {} }: Props = $props();
+  importing = true;
+  message = null;
 
-  // State
-  let profile = $state<UserProfile | null>(null);
-  let vocabStats = $state({ known: 0, learning: 0, total: 0 });
-  let loading = $state(true);
-  let saving = $state(false);
-  let importModalOpen = $state(false);
-  let importing = $state(false);
-  let message = $state<{ type: 'error' | 'success'; text: string } | null>(null);
-  let fileInput = $state<HTMLInputElement | null>(null);
+  try {
+    const formData = new FormData();
+    formData.append('file', file, file.name);
 
-  // Form fields
-  let name = $state("");
-  let email = $state("");
-  let language = $state("");
+    const response = await fetch('/admin/progress/import', {
+      method: 'POST',
+      body: formData,
+    });
 
-  async function loadProfile() {
-    try {
-      const response = await getJson<AdminProfileResponse>("/admin/api/profile");
-      profile = response.profile;
-      vocabStats = response.vocabStats;
+    const result = (await response.json()) as ImportProgressResponse;
 
-      if (profile) {
-        name = profile.name;
-        email = profile.email;
-        language = profile.language;
-      }
-    } catch (error) {
-      message = { type: "error", text: "Failed to load profile" };
-    } finally {
-      loading = false;
-    }
-  }
-
-  async function saveProfile(e: Event) {
-    e.preventDefault();
-    saving = true;
-    message = null;
-
-    try {
-      const data = new FormData();
-      data.append("name", name);
-      data.append("email", email);
-      data.append("language", language);
-
-      const response = await postJsonForm<{ profile: UserProfile }>("/admin/api/profile", data);
-      profile = response.profile;
-      message = { type: "success", text: "Profile saved successfully" };
-    } catch (error) {
-      message = { type: "error", text: "Failed to save profile" };
-    } finally {
-      saving = false;
-    }
-  }
-
-  async function handleFileSelect(e: Event) {
-    const target = e.target as HTMLInputElement;
-    if (!target.files?.length) return;
-
-    const file = target.files[0];
-    if (!file.name.endsWith('.json')) {
-      message = { type: "error", text: "Please select a JSON file" };
-      return;
-    }
-
-    importing = true;
-    message = null;
-
-    try {
-      const formData = new FormData();
-      formData.append('file', file, file.name);
-
-      const response = await fetch('/admin/progress/import', {
-        method: 'POST',
-        body: formData,
-      });
-
-      const result = (await response.json()) as ImportProgressResponse;
-
-      if (result.success && result.counts) {
-        message = {
-          type: "success",
-          text: `Import successful! Added ${result.counts.vocab_items} vocabulary items, ${result.counts.srs_state} review states, and ${result.counts.vocab_lookups} lookups.`
-        };
-        importModalOpen = false;
-        onImportSuccess();
-        // Reload profile to update stats
-        loadProfile();
-      } else {
-        throw new Error("Invalid response format");
-      }
-    } catch (error) {
+    if (result.success && result.counts) {
       message = {
-        type: "error",
-        text: error instanceof Error ? error.message : "Import failed"
+        type: 'success',
+        text: `Import successful! Added ${result.counts.vocab_items} vocabulary items, ${result.counts.srs_state} review states, and ${result.counts.vocab_lookups} lookups.`,
       };
-    } finally {
-      importing = false;
-      if (fileInput) fileInput.value = '';
+      importModalOpen = false;
+      onImportSuccess();
+      // Reload profile to update stats
+      loadProfile();
+    } else {
+      throw new Error('Invalid response format');
     }
-  }
-
-  function openImportModal() {
-    importModalOpen = true;
-  }
-
-  function closeImportModal() {
-    importModalOpen = false;
+  } catch (error) {
+    message = {
+      type: 'error',
+      text: error instanceof Error ? error.message : 'Import failed',
+    };
+  } finally {
+    importing = false;
     if (fileInput) fileInput.value = '';
   }
+}
 
-  async function handleKeydown(e: KeyboardEvent) {
-    if (e.key === "Escape" && importModalOpen) {
-      closeImportModal();
-    }
+function openImportModal() {
+  importModalOpen = true;
+}
+
+function closeImportModal() {
+  importModalOpen = false;
+  if (fileInput) fileInput.value = '';
+}
+
+async function handleKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && importModalOpen) {
+    closeImportModal();
   }
+}
 
-  onMount(() => {
-    loadProfile();
-    document.addEventListener("keydown", handleKeydown);
-    return () => {
-      document.removeEventListener("keydown", handleKeydown);
-    };
-  });
+onMount(() => {
+  loadProfile();
+  document.addEventListener('keydown', handleKeydown);
+  return () => {
+    document.removeEventListener('keydown', handleKeydown);
+  };
+});
 </script>
 
 <div class="space-y-6">

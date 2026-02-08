@@ -1,59 +1,63 @@
 <script lang="ts">
-  import { getJson, postJson } from "../lib/api";
-  import type { ReviewCard, ReviewQueueResponse, ReviewAnswerResponse } from "../lib/types";
+import { getJson, postJson } from '../lib/api';
+import type { ReviewAnswerResponse, ReviewCard, ReviewQueueResponse } from '../lib/types';
 
-  let { open, onClose, onDueCountChange }: {
-    open: boolean;
-    onClose: () => void;
-    onDueCountChange: (count: number) => void;
-  } = $props();
+const {
+  open,
+  onClose,
+  onDueCountChange,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onDueCountChange: (count: number) => void;
+} = $props();
 
-  let reviewQueue = $state<ReviewCard[]>([]);
-  let reviewIndex = $state(0);
-  let reviewAnswered = $state(false);
+let reviewQueue = $state<ReviewCard[]>([]);
+let reviewIndex = $state(0);
+let reviewAnswered = $state(false);
 
-  $effect(() => {
-    if (open) {
-      void loadReviewQueue();
-    }
-  });
-
-  async function loadReviewQueue() {
-    try {
-      const data = await getJson<ReviewQueueResponse>("/api/review/queue?limit=20");
-      reviewQueue = data.cards || [];
-      reviewIndex = 0;
-      reviewAnswered = false;
-      onDueCountChange(data.due_count || 0);
-    } catch (error) {
-      console.error("Failed to load review queue:", error);
-      reviewQueue = [];
-    }
+$effect(() => {
+  if (open) {
+    void loadReviewQueue();
   }
+});
 
-  function revealAnswer() {
-    reviewAnswered = true;
-  }
-
-  async function gradeCard(grade: number) {
-    if (!reviewQueue[reviewIndex]) return;
-
-    try {
-      await postJson<ReviewAnswerResponse>("/api/review/answer", {
-        vocab_item_id: reviewQueue[reviewIndex].vocab_item_id,
-        grade,
-      });
-    } catch (error) {
-      console.error("Failed to record grade:", error);
-    }
-
-    reviewIndex += 1;
+async function loadReviewQueue() {
+  try {
+    const data = await getJson<ReviewQueueResponse>('/api/review/queue?limit=20');
+    reviewQueue = data.cards || [];
+    reviewIndex = 0;
     reviewAnswered = false;
-
-    if (reviewIndex >= reviewQueue.length) {
-      await loadReviewQueue();
-    }
+    onDueCountChange(data.due_count || 0);
+  } catch (error) {
+    console.error('Failed to load review queue:', error);
+    reviewQueue = [];
   }
+}
+
+function revealAnswer() {
+  reviewAnswered = true;
+}
+
+async function gradeCard(grade: number) {
+  if (!reviewQueue[reviewIndex]) return;
+
+  try {
+    await postJson<ReviewAnswerResponse>('/api/review/answer', {
+      vocab_item_id: reviewQueue[reviewIndex].vocab_item_id,
+      grade,
+    });
+  } catch (error) {
+    console.error('Failed to record grade:', error);
+  }
+
+  reviewIndex += 1;
+  reviewAnswered = false;
+
+  if (reviewIndex >= reviewQueue.length) {
+    await loadReviewQueue();
+  }
+}
 </script>
 
 {#if open}

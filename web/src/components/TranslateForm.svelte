@@ -1,58 +1,63 @@
 <script lang="ts">
-  import type { ExtractTextResponse } from "../lib/types";
+import type { ExtractTextResponse } from '../lib/types';
 
-  let { onSubmit, loading }: {
-    onSubmit: (text: string) => void;
-    loading: boolean;
-  } = $props();
+/** Props interface for TranslateForm */
+interface TranslateFormProps {
+  /** Function to call when translation form is submitted */
+  onSubmit: (text: string) => void;
+  /** Whether translation is currently loading */
+  loading: boolean;
+}
 
-  let textInput = $state("");
-  let ocrFile = $state<File | null>(null);
-  let ocrPreviewUrl = $state("");
-  let ocrFileName = $state("");
-  let ocrLoading = $state(false);
+const { onSubmit, loading }: TranslateFormProps = $props();
 
-  function handleFileChange(event: Event) {
-    const input = event.target as HTMLInputElement | null;
-    const [file] = input?.files || [];
-    if (!file) return;
-    ocrFile = file;
-    ocrFileName = file.name;
-    ocrPreviewUrl = URL.createObjectURL(file);
+let textInput = $state('');
+let ocrFile = $state<File | null>(null);
+let ocrPreviewUrl = $state('');
+let ocrFileName = $state('');
+let ocrLoading = $state(false);
+
+function handleFileChange(event: Event) {
+  const input = event.target as HTMLInputElement | null;
+  const [file] = input?.files || [];
+  if (!file) return;
+  ocrFile = file;
+  ocrFileName = file.name;
+  ocrPreviewUrl = URL.createObjectURL(file);
+}
+
+function clearPreview() {
+  ocrFile = null;
+  ocrFileName = '';
+  if (ocrPreviewUrl) {
+    URL.revokeObjectURL(ocrPreviewUrl);
   }
+  ocrPreviewUrl = '';
+}
 
-  function clearPreview() {
-    ocrFile = null;
-    ocrFileName = "";
-    if (ocrPreviewUrl) {
-      URL.revokeObjectURL(ocrPreviewUrl);
+async function extractTextFromImage() {
+  if (!ocrFile) return;
+  ocrLoading = true;
+  try {
+    const formData = new FormData();
+    formData.append('file', ocrFile);
+    const res = await fetch('/extract-text', {
+      method: 'POST',
+      body: formData,
+    });
+    if (!res.ok) {
+      const data = (await res.json()) as { detail?: string };
+      throw new Error(data?.detail || 'OCR failed');
     }
-    ocrPreviewUrl = "";
+    const data = (await res.json()) as ExtractTextResponse;
+    textInput = data.text || '';
+    clearPreview();
+  } catch (error) {
+    console.error('OCR failed:', error);
+  } finally {
+    ocrLoading = false;
   }
-
-  async function extractTextFromImage() {
-    if (!ocrFile) return;
-    ocrLoading = true;
-    try {
-      const formData = new FormData();
-      formData.append("file", ocrFile);
-      const res = await fetch("/extract-text", {
-        method: "POST",
-        body: formData,
-      });
-      if (!res.ok) {
-        const data = (await res.json()) as { detail?: string };
-        throw new Error(data?.detail || "OCR failed");
-      }
-      const data = (await res.json()) as ExtractTextResponse;
-      textInput = data.text || "";
-      clearPreview();
-    } catch (error) {
-      console.error("OCR failed:", error);
-    } finally {
-      ocrLoading = false;
-    }
-  }
+}
 </script>
 
 <div class="input-card p-5 h-[100%]">

@@ -1,19 +1,23 @@
 <script lang="ts">
-  import type { TranslationStatus, TranslationSummary } from "../lib/types";
-  import { formatTimeAgo } from "../lib/utils";
+import type { TranslationStatus, TranslationSummary } from '../lib/types';
+import { formatTimeAgo } from '../lib/utils';
 
-  let { translations, onSelect, onDelete }: {
-    translations: TranslationSummary[];
-    onSelect: (id: string) => void;
-    onDelete: (id: string) => void;
-  } = $props();
+const {
+  translations,
+  onSelect,
+  onDelete,
+}: {
+  translations: TranslationSummary[];
+  onSelect: (id: string) => void;
+  onDelete: (id: string) => void;
+} = $props();
 
-  const statusLabels: Record<TranslationStatus, string> = {
-    pending: "Pending",
-    processing: "Processing",
-    completed: "Completed",
-    failed: "Failed",
-  };
+const statusLabels: Record<TranslationStatus, string> = {
+  pending: 'Pending',
+  processing: 'Processing',
+  completed: 'Completed',
+  failed: 'Failed',
+};
 </script>
 
 <div class="space-y-3">

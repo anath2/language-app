@@ -1,11 +1,13 @@
 <script lang="ts">
-  import type { SegmentResult } from "./types";
+import type { SegmentResult } from './types';
 
-  let { results }: {
-    results: SegmentResult[];
-  } = $props();
+const {
+  results,
+}: {
+  results: SegmentResult[];
+} = $props();
 
-  let showDetails = $state(false);
+let showDetails = $state(false);
 </script>
 
 {#if results.length > 0}

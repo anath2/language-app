@@ -1,52 +1,31 @@
 <script lang="ts">
-  import { router } from "../lib/router.svelte";
-  import type { DueCountResponse } from "../lib/types";
-  import { getJson } from "../lib/api";
-  import { auth } from "../lib/auth.svelte";
+import { getJson } from '../lib/api';
+import { auth } from '../lib/auth.svelte';
+import { router } from '../lib/router.svelte';
+import type { DueCountResponse } from '../lib/types';
 
-  let { currentPage }: { currentPage: string } = $props();
-  let dueCount = $state(0);
+let dueCount = $state(0);
 
-  // Load due count on mount
-  $effect(() => {
-    if (auth.isAuthenticated) {
-      loadDueCount();
-      // Refresh every minute
-      const interval = setInterval(loadDueCount, 60000);
-      return () => clearInterval(interval);
-    } else {
-      dueCount = 0;
-    }
-  });
-
-  async function loadDueCount() {
-    try {
-      const data = await getJson<DueCountResponse>("/api/review/count");
-      dueCount = data.due_count;
-    } catch {
-      // Silently fail
-    }
+// Load due count on mount
+$effect(() => {
+  if (auth.isAuthenticated) {
+    loadDueCount();
+    // Refresh every minute
+    const interval = setInterval(loadDueCount, 60000);
+    return () => clearInterval(interval);
+  } else {
+    dueCount = 0;
   }
+});
 
-  function goToTranslate() {
-    router.navigateHome();
+async function loadDueCount() {
+  try {
+    const data = await getJson<DueCountResponse>('/api/review/count');
+    dueCount = data.due_count;
+  } catch {
+    // Silently fail
   }
-
-  function goToVocab() {
-    router.navigateToVocab();
-  }
-
-  function goToAdmin() {
-    router.navigateToAdmin();
-  }
-
-  function goToLogin() {
-    router.navigateToLogin(window.location.pathname);
-  }
-
-  function handleLogout() {
-    auth.logout();
-  }
+}
 </script>
 
 <nav class="navbar">
@@ -59,8 +38,7 @@
     <div class="nav-items">
       <button
         class="nav-item"
-        class:active={currentPage === "home"}
-        onclick={goToTranslate}
+onclick={() => router.navigateHome()}
       >
         <span class="nav-icon">📝</span>
         <span class="nav-label">Translate</span>
@@ -68,8 +46,7 @@
 
       <button
         class="nav-item"
-        class:active={currentPage === "vocab"}
-        onclick={goToVocab}
+        onclick={() => router.navigateToVocab()}
       >
         <span class="nav-icon">📖</span>
         <span class="nav-label">Vocab</span>
@@ -80,21 +57,20 @@
 
       <button
         class="nav-item"
-        class:active={currentPage === "admin"}
-        onclick={goToAdmin}
+        onclick={() => router.navigateToAdmin()}
       >
         <span class="nav-icon">⚙️</span>
         <span class="nav-label">Admin</span>
       </button>
 
-      <button class="nav-item logout-btn" onclick={handleLogout} title="Logout">
+      <button class="nav-item logout-btn" onclick={auth.logout} title="Logout">
         <span class="nav-icon">🚪</span>
         <span class="nav-label">Logout</span>
       </button>
     </div>
   {:else}
     <div class="nav-items">
-      <button class="nav-item login-btn" onclick={goToLogin} title="Login">
+      <button class="nav-item login-btn" onclick={() => router.navigateToLogin(window.location.pathname)} title="Login">
         <span class="nav-icon">🔐</span>
         <span class="nav-label">Login</span>
       </button>
@@ -153,11 +129,6 @@
   .nav-item:hover {
     background: rgba(124, 158, 178, 0.08);
     color: var(--text-primary);
-  }
-
-  .nav-item.active {
-    background: rgba(124, 158, 178, 0.12);
-    color: var(--primary);
   }
 
   .nav-icon {
