@@ -1,0 +1,22 @@
+{
+  "name": "language-app-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "svelte-check --tsconfig ./tsconfig.json",
+    "check": "npm run typecheck"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.3.14",
+    "@sveltejs/vite-plugin-svelte": "^6.2.4",
+    "@tsconfig/svelte": "^5.0.4",
+    "svelte": "^5.49.2",
+    "svelte-check": "^4.0.2",
+    "typescript": "^5.6.3",
+    "vite": "^7.3.1"
+  }
+}
