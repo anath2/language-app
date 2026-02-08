@@ -1,15 +1,18 @@
 <script lang="ts">
-import NavBar from './components/NavBar.svelte';
-import ReviewPanel from './components/ReviewPanel.svelte';
-import TranslateForm from './components/TranslateForm.svelte';
-import TranslationList from './components/TranslationList.svelte';
-import Admin from './features/admin/Admin.svelte';
-import Login from './features/auth/Login.svelte';
-import Segments from './features/segments/Segments.svelte';
-import type { ParagraphResult, SavedVocabInfo, SegmentResult } from './features/segments/types';
-import { deleteRequest, getJson, postJson } from './lib/api';
-import { auth } from './lib/auth.svelte';
-import { router } from './lib/router.svelte';
+import NavBar from '@/components/NavBar.svelte';
+import Admin from '@/features/admin/components/Admin.svelte';
+import Login from '@/features/auth/components/Login.svelte';
+import { auth } from '@/features/auth/stores/authStore.svelte';
+import Segments from '@/features/translation/components/Segments.svelte';
+import TranslateForm from '@/features/translation/components/TranslateForm.svelte';
+import TranslationList from '@/features/translation/components/TranslationList.svelte';
+import { translationStore } from '@/features/translation/stores/translationStore.svelte';
+import type { ParagraphResult, SavedVocabInfo, SegmentResult } from '@/features/translation/types';
+import ReviewPanel from '@/features/vocab/components/ReviewPanel.svelte';
+import { reviewStore } from '@/features/vocab/stores/reviewStore.svelte';
+import { vocabStore } from '@/features/vocab/stores/vocabStore.svelte';
+import { deleteRequest, getJson, postJson } from '@/lib/api';
+import { router } from '@/lib/router.svelte';
 import type {
   CreateTextResponse,
   CreateTranslationResponse,
@@ -21,7 +24,7 @@ import type {
   TranslationDetailResponse,
   TranslationSummary,
   VocabSrsInfoListResponse,
-} from './lib/types';
+} from '@/lib/types';
 
 let translations = $state<TranslationSummary[]>([]);
 let currentTranslationId = $state<string | null>(null);
@@ -322,9 +325,7 @@ async function onRecordLookup(headword: string, vocabItemId: string) {
     href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;600&display=swap"
     rel="stylesheet"
   />
-  <link rel="stylesheet" href="/css/variables.css" />
-  <link rel="stylesheet" href="/css/base.css" />
-  <link rel="stylesheet" href="/css/segments.css" />
+
 </svelte:head>
 
 {#if !auth.isAuthenticated && !auth.isLoading && router.route.page !== "login"}

@@ -1,31 +1,17 @@
 <script lang="ts">
-import { getJson } from '../lib/api';
-import { auth } from '../lib/auth.svelte';
-import { router } from '../lib/router.svelte';
-import type { DueCountResponse } from '../lib/types';
-
-let dueCount = $state(0);
+import { auth } from '@/features/auth/stores/authStore.svelte';
+import { vocabStore } from '@/features/vocab/stores/vocabStore.svelte';
+import { router } from '@/lib/router.svelte';
 
 // Load due count on mount
 $effect(() => {
   if (auth.isAuthenticated) {
-    loadDueCount();
+    vocabStore.loadDueCount();
     // Refresh every minute
-    const interval = setInterval(loadDueCount, 60000);
+    const interval = setInterval(() => vocabStore.loadDueCount(), 60000);
     return () => clearInterval(interval);
-  } else {
-    dueCount = 0;
   }
 });
-
-async function loadDueCount() {
-  try {
-    const data = await getJson<DueCountResponse>('/api/review/count');
-    dueCount = data.due_count;
-  } catch {
-    // Silently fail
-  }
-}
 </script>
 
 <nav class="navbar">
@@ -47,8 +33,8 @@ onclick={() => router.navigateHome()}
         onclick={() => router.navigateToVocab()}
       >
         <span class="nav-label">Vocab</span>
-        {#if dueCount > 0}
-          <span class="badge">{dueCount}</span>
+        {#if vocabStore.dueCount > 0}
+          <span class="badge">{vocabStore.dueCount}</span>
         {/if}
       </button>
 
