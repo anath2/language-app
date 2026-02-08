@@ -1,14 +1,14 @@
 <script lang="ts">
 import { tick } from 'svelte';
-import type { LoadingState } from '../../lib/types';
+import type { LoadingState } from '@/lib/types';
 import type {
   DisplayParagraph,
   ProgressState,
   SavedVocabInfo,
   SegmentResult,
   TooltipState,
-} from './types';
-import { getPastelColor } from './utils';
+} from '@/features/translation/types';
+import { getPastelColor } from '@/features/translation/utils';
 
 const {
   displayParagraphs,

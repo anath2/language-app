@@ -1,7 +1,7 @@
 <script lang="ts">
-import { translateBatch } from './api';
-import type { DisplayParagraph, ParagraphMeta, SegmentResult } from './types';
-import { getPastelColor } from './utils';
+import { translateBatch } from '@/features/translation/api';
+import type { DisplayParagraph, ParagraphMeta, SegmentResult } from '@/features/translation/types';
+import { getPastelColor } from '@/features/translation/utils';
 
 const {
   displayParagraphs,

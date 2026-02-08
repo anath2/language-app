@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { LoadingState } from '../../lib/types';
+import type { LoadingState } from '@/lib/types';
 import SegmentDisplay from './SegmentDisplay.svelte';
 import SegmentEditor from './SegmentEditor.svelte';
 import TranslationTable from './TranslationTable.svelte';
@@ -12,7 +12,7 @@ import type {
   SegmentResult,
   StreamEvent,
   StreamSegmentResult,
-} from './types';
+} from '@/features/translation/types';
 
 const {
   translationId,

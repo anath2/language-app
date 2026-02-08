@@ -1,6 +1,6 @@
 <script lang="ts">
-import { getJson, postJson } from '../lib/api';
-import type { ReviewAnswerResponse, ReviewCard, ReviewQueueResponse } from '../lib/types';
+import { getJson, postJson } from '@/lib/api';
+import type { ReviewAnswerResponse, ReviewCard, ReviewQueueResponse } from '@/lib/types';
 
 const {
   open,

@@ -1,7 +1,7 @@
 <script lang="ts">
 import { onMount } from 'svelte';
-import { getJson, postJsonForm } from '../../lib/api';
-import type { AdminProfileResponse, ImportProgressResponse, UserProfile } from '../../lib/types';
+import { getJson, postJsonForm } from '@/lib/api';
+import type { AdminProfileResponse, ImportProgressResponse, UserProfile } from '@/lib/types';
 
 interface Props {
   onImportSuccess?: () => void;

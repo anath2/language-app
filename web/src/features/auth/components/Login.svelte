@@ -1,5 +1,5 @@
 <script lang="ts">
-import { auth } from '../../lib/auth.svelte';
+import { auth } from '@/features/auth/stores/authStore.svelte';
 
 interface Props {
   returnUrl?: string;
@@ -12,7 +12,7 @@ let isSubmitting = $state(false);
 
 async function handleLogin(e: Event) {
   e.preventDefault();
-  if (!password || isSubmitting) return;
+  if (!password.trim() || isSubmitting) return;
 
   isSubmitting = true;
   const success = await auth.login(password);

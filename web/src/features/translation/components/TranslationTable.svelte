@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { SegmentResult } from './types';
+import type { SegmentResult } from '@/features/translation/types';
 
 const {
   results,

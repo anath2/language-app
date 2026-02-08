@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { ExtractTextResponse } from '../lib/types';
+import type { ExtractTextResponse } from '@/lib/types';
 
 /** Props interface for TranslateForm */
 interface TranslateFormProps {

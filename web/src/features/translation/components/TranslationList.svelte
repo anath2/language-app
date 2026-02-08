@@ -1,6 +1,6 @@
 <script lang="ts">
-import type { TranslationStatus, TranslationSummary } from '../lib/types';
-import { formatTimeAgo } from '../lib/utils';
+import type { TranslationStatus, TranslationSummary } from '@/lib/types';
+import { formatTimeAgo } from '@/lib/utils';
 
 const {
   translations,
