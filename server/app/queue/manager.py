@@ -146,6 +146,11 @@ class TranslationQueueManager:
         6. Save results to translation_segments
         7. Mark as completed (or failed on error)
         """
+        # Create one event loop for this translation task
+        # This avoids creating/destroying loops for each segment (lines 233-245)
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
         try:
             # Mark as processing
             update_translation_status(translation_id, "processing")
@@ -166,30 +171,20 @@ class TranslationQueueManager:
             # Rate limit before full translation
             self._rate_limiter.wait()
 
-            # Get full translation (run in thread-safe manner)
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                full_result = loop.run_until_complete(
-                    full_translator.acall(text=translation.input_text)
-                )
-                full_translation = full_result.english
-            finally:
-                loop.close()
+            # Get full translation
+            full_result = loop.run_until_complete(
+                full_translator.acall(text=translation.input_text)
+            )
+            full_translation = full_result.english
 
             # Segment all paragraphs first
             all_paragraph_segments: list[dict[str, Any]] = []
             for para in paragraphs:
                 self._rate_limiter.wait()
 
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    segmentation = loop.run_until_complete(
-                        pipe.segment.acall(text=para["content"])
-                    )
-                finally:
-                    loop.close()
+                segmentation = loop.run_until_complete(
+                    pipe.segment.acall(text=para["content"])
+                )
 
                 all_paragraph_segments.append(
                     {
@@ -230,19 +225,14 @@ class TranslationQueueManager:
                         pinyin = to_pinyin(segment)
                         dict_entry = lookup(pipe.cedict, segment) or "Not in dictionary"
 
-                        loop = asyncio.new_event_loop()
-                        asyncio.set_event_loop(loop)
-                        try:
-                            translation = loop.run_until_complete(
-                                pipe.translate.acall(
-                                    segment=segment,
-                                    sentence_context=para_data["content"],
-                                    dictionary_entry=dict_entry,
-                                )
+                        translation_result = loop.run_until_complete(
+                            pipe.translate.acall(
+                                segment=segment,
+                                sentence_context=para_data["content"],
+                                dictionary_entry=dict_entry,
                             )
-                            english = translation.english
-                        finally:
-                            loop.close()
+                        )
+                        english = translation_result.english
 
                     # Save segment result
                     save_translation_segment(
@@ -290,6 +280,9 @@ class TranslationQueueManager:
                     self._translation_progress[translation_id]["status"] = "failed"
                     self._translation_progress[translation_id]["error"] = str(e)
             raise
+        finally:
+            # Clean up the event loop created at the start of this method
+            loop.close()
 
     def cleanup_progress(self, translation_id: str) -> None:
         """Remove progress tracking for a completed translation."""
