@@ -1,0 +1,58 @@
+/* ===========================================
+   Design Tokens - Colors
+   =========================================== */
+
+:root {
+  /* Primary */
+  --primary: #7C9EB2;
+  --primary-light: #A8C5D8;
+  --primary-dark: #5A7A8A;
+  --primary-hover: #5A7A8A;
+  --primary-alpha: rgba(124, 158, 178, 0.2);
+
+  /* Secondary */
+  --secondary: #E8B4BC;
+  --secondary-light: #F5D5DA;
+  --secondary-dark: #C9929A;
+
+  /* Backgrounds */
+  --background: #FAFAFA;
+  --background-alt: #F5F5F5;
+  --surface: #FFFFFF;
+  --surface-2: #F8F9FA;
+
+  /* Text */
+  --text-primary: #2D3436;
+  --text-secondary: #636E72;
+  --text-muted: #B2BEC3;
+  --text-disabled: #CBD5E0;
+  --translation-color: #6b5b95;
+
+  /* Status */
+  --error: #E53E3E;
+  --error-bg: #FEE;
+  --error-border: #FCC;
+  --success: #A8E6CF;
+  --warning: #FFE5B4;
+  --info: #BAE1FF;
+
+  /* UI Elements */
+  --border: #E0E0E0;
+  --border-focus: #7C9EB2;
+  --shadow: rgba(0, 0, 0, 0.08);
+  --shadow-lg: rgba(0, 0, 0, 0.15);
+
+  /* Tooltip */
+  --tooltip-bg: #2D3436;
+  --tooltip-text: #FFFFFF;
+
+  /* Segment Pastel Colors (8 rotating) */
+  --pastel-1: #FFB3BA;
+  --pastel-2: #BAFFC9;
+  --pastel-3: #BAE1FF;
+  --pastel-4: #FFFFBA;
+  --pastel-5: #FFD9BA;
+  --pastel-6: #E0BBE4;
+  --pastel-7: #C9F0FF;
+  --pastel-8: #FFDAB3;
+}
