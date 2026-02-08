@@ -15,7 +15,7 @@ let error = $state<string>('');
  */
 export async function checkAuthStatus(): Promise<void> {
   try {
-    const response = await fetch(`${API_BASE}/texts`, {
+    const response = await fetch(API_BASE, {
       method: 'GET',
       credentials: 'include',
     });
