@@ -2,16 +2,21 @@
   import { router } from "../lib/router.svelte";
   import type { DueCountResponse } from "../lib/types";
   import { getJson } from "../lib/api";
+  import { auth } from "../lib/auth.svelte";
 
   let { currentPage }: { currentPage: string } = $props();
   let dueCount = $state(0);
 
   // Load due count on mount
   $effect(() => {
-    loadDueCount();
-    // Refresh every minute
-    const interval = setInterval(loadDueCount, 60000);
-    return () => clearInterval(interval);
+    if (auth.isAuthenticated) {
+      loadDueCount();
+      // Refresh every minute
+      const interval = setInterval(loadDueCount, 60000);
+      return () => clearInterval(interval);
+    } else {
+      dueCount = 0;
+    }
   });
 
   async function loadDueCount() {
@@ -34,6 +39,14 @@
   function goToAdmin() {
     router.navigateToAdmin();
   }
+
+  function goToLogin() {
+    router.navigateToLogin(window.location.pathname);
+  }
+
+  function handleLogout() {
+    auth.logout();
+  }
 </script>
 
 <nav class="navbar">
@@ -42,37 +55,51 @@
     <span class="brand-text">Language App</span>
   </div>
 
-  <div class="nav-items">
-    <button
-      class="nav-item"
-      class:active={currentPage === "home"}
-      onclick={goToTranslate}
-    >
-      <span class="nav-icon">📝</span>
-      <span class="nav-label">Translate</span>
-    </button>
+  {#if auth.isAuthenticated}
+    <div class="nav-items">
+      <button
+        class="nav-item"
+        class:active={currentPage === "home"}
+        onclick={goToTranslate}
+      >
+        <span class="nav-icon">📝</span>
+        <span class="nav-label">Translate</span>
+      </button>
 
-    <button
-      class="nav-item"
-      class:active={currentPage === "vocab"}
-      onclick={goToVocab}
-    >
-      <span class="nav-icon">📖</span>
-      <span class="nav-label">Vocab</span>
-      {#if dueCount > 0}
-        <span class="badge">{dueCount}</span>
-      {/if}
-    </button>
+      <button
+        class="nav-item"
+        class:active={currentPage === "vocab"}
+        onclick={goToVocab}
+      >
+        <span class="nav-icon">📖</span>
+        <span class="nav-label">Vocab</span>
+        {#if dueCount > 0}
+          <span class="badge">{dueCount}</span>
+        {/if}
+      </button>
 
-    <button
-      class="nav-item"
-      class:active={currentPage === "admin"}
-      onclick={goToAdmin}
-    >
-      <span class="nav-icon">⚙️</span>
-      <span class="nav-label">Admin</span>
-    </button>
-  </div>
+      <button
+        class="nav-item"
+        class:active={currentPage === "admin"}
+        onclick={goToAdmin}
+      >
+        <span class="nav-icon">⚙️</span>
+        <span class="nav-label">Admin</span>
+      </button>
+
+      <button class="nav-item logout-btn" onclick={handleLogout} title="Logout">
+        <span class="nav-icon">🚪</span>
+        <span class="nav-label">Logout</span>
+      </button>
+    </div>
+  {:else}
+    <div class="nav-items">
+      <button class="nav-item login-btn" onclick={goToLogin} title="Login">
+        <span class="nav-icon">🔐</span>
+        <span class="nav-label">Login</span>
+      </button>
+    </div>
+  {/if}
 </nav>
 
 <style>
@@ -154,6 +181,7 @@
     justify-content: center;
   }
 
+
   @media (max-width: 480px) {
     .navbar {
       padding: 0.75rem 1rem;
@@ -170,5 +198,15 @@
     .nav-item {
       padding: 0.5rem;
     }
+  }
+
+  .login-btn, .logout-btn {
+    margin-left: 1rem;
+    background: rgba(124, 158, 178, 0.08);
+    border: 1px solid var(--border);
+  }
+
+  .login-btn:hover, .logout-btn:hover {
+    background: rgba(124, 158, 178, 0.12);
   }
 </style>

@@ -1,8 +1,15 @@
 export async function getJson<T = unknown>(url: string): Promise<T> {
   const res = await fetch(url, {
-    headers: { "Accept": "application/json" }
+    headers: { "Accept": "application/json" },
+    credentials: 'include',
   });
   if (!res.ok) {
+    if (res.status === 401) {
+      // Redirect to login with return URL
+      const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+      window.location.href = `#/login?return=$${returnUrl}`;
+      throw new Error('Authentication required');
+    }
     const message = await safeErrorMessage(res);
     throw new Error(message || `Request failed: ${res.status}`);
   }
@@ -13,9 +20,16 @@ export async function postJson<T = unknown>(url: string, body: unknown): Promise
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json", "Accept": "application/json" },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
+    credentials: 'include',
   });
   if (!res.ok) {
+    if (res.status === 401) {
+      // Redirect to login with return URL
+      const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+      window.location.href = `#/login?return=$${returnUrl}`;
+      throw new Error('Authentication required');
+    }
     const message = await safeErrorMessage(res);
     throw new Error(message || `Request failed: ${res.status}`);
   }
@@ -26,8 +40,15 @@ export async function postJsonForm<T = unknown>(url: string, formData: FormData)
   const res = await fetch(url, {
     method: "POST",
     body: formData,
+    credentials: 'include',
   });
   if (!res.ok) {
+    if (res.status === 401) {
+      // Redirect to login with return URL
+      const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+      window.location.href = `#/login?return=$${returnUrl}`;
+      throw new Error('Authentication required');
+    }
     const message = await safeErrorMessage(res);
     throw new Error(message || `Request failed: ${res.status}`);
   }
@@ -35,8 +56,17 @@ export async function postJsonForm<T = unknown>(url: string, formData: FormData)
 }
 
 export async function deleteRequest<T = unknown>(url: string): Promise<T> {
-  const res = await fetch(url, { method: "DELETE" });
+  const res = await fetch(url, {
+    method: "DELETE",
+    credentials: 'include',
+  });
   if (!res.ok) {
+    if (res.status === 401) {
+      // Redirect to login with return URL
+      const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+      window.location.href = `#/login?return=$${returnUrl}`;
+      throw new Error('Authentication required');
+    }
     const message = await safeErrorMessage(res);
     throw new Error(message || `Request failed: ${res.status}`);
   }

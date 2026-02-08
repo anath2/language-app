@@ -1,6 +1,8 @@
 <script lang="ts">
   import { getJson, postJson, deleteRequest } from "./lib/api";
   import { router } from "./lib/router.svelte";
+  import { auth } from "./lib/auth.svelte";
+  import Login from "./features/auth/Login.svelte";
   import type {
     TranslationSummary,
     ListTranslationsResponse,
@@ -42,13 +44,25 @@
 
   const currentPage = $derived(router.route.page);
 
-  // Initial data load
+  // Check authentication on mount
   $effect(() => {
-    void loadTranslations();
+    void auth.checkAuthStatus();
+  });
+
+  // Initial data load after auth is checked
+  $effect(() => {
+    if (!auth.isLoading && auth.isAuthenticated) {
+      void loadTranslations();
+    }
   });
 
   // React to route changes (handles popstate and initial deep link)
   $effect(() => {
+    if (!auth.isAuthenticated && router.route.page !== "login") {
+      // Only process routes if authenticated or on login page
+      return;
+    }
+
     const route = router.route;
     if (route.page === "translation") {
       void loadTranslationFromRoute(route.id);
@@ -301,11 +315,20 @@
   <link rel="stylesheet" href="/css/segments.css" />
 </svelte:head>
 
-<NavBar currentPage={currentPage} />
+{#if !auth.isAuthenticated && !auth.isLoading && router.route.page !== "login"}
+  <Login returnUrl={window.location.pathname + window.location.search} />
+{:else if auth.isAuthenticated || router.route.page === "login"}
+  <NavBar currentPage={currentPage} />
 
-<ReviewPanel open={reviewPanelOpen} onClose={closeReviewPanel} onDueCountChange={() => {}} />
+  {#if currentPage === "login"}
+    {#if router.route.page === "login"}
+      <Login returnUrl={router.route.returnUrl} />
+    {/if}
+  {:else}
 
-{#if currentPage === "home"}
+    <ReviewPanel open={reviewPanelOpen} onClose={closeReviewPanel} onDueCountChange={() => {}} />
+
+    {#if currentPage === "home"}
   <!-- Home Page: 2-Column Layout -->
   <div class="page-container">
     <div class="home-layout">
@@ -391,10 +414,14 @@
   </div>
 
 {:else if currentPage === "admin"}
-  <!-- Admin Page -->
-  <div class="page-container max-w-4xl">
-    <Admin />
-  </div>
+    <!-- Admin Page -->
+    <div class="page-container max-w-4xl">
+      <Admin />
+    </div>
+  {/if}
+
+  {/if}
+
 {/if}
 
 <style>
