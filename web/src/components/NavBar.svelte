@@ -30,7 +30,6 @@ async function loadDueCount() {
 
 <nav class="navbar">
   <div class="nav-brand">
-    <span class="brand-icon">📚</span>
     <span class="brand-text">Language App</span>
   </div>
 
@@ -40,7 +39,6 @@ async function loadDueCount() {
         class="nav-item"
 onclick={() => router.navigateHome()}
       >
-        <span class="nav-icon">📝</span>
         <span class="nav-label">Translate</span>
       </button>
 
@@ -48,7 +46,6 @@ onclick={() => router.navigateHome()}
         class="nav-item"
         onclick={() => router.navigateToVocab()}
       >
-        <span class="nav-icon">📖</span>
         <span class="nav-label">Vocab</span>
         {#if dueCount > 0}
           <span class="badge">{dueCount}</span>
@@ -59,19 +56,16 @@ onclick={() => router.navigateHome()}
         class="nav-item"
         onclick={() => router.navigateToAdmin()}
       >
-        <span class="nav-icon">⚙️</span>
         <span class="nav-label">Admin</span>
       </button>
 
       <button class="nav-item logout-btn" onclick={auth.logout} title="Logout">
-        <span class="nav-icon">🚪</span>
         <span class="nav-label">Logout</span>
       </button>
     </div>
   {:else}
     <div class="nav-items">
       <button class="nav-item login-btn" onclick={() => router.navigateToLogin(window.location.pathname)} title="Login">
-        <span class="nav-icon">🔐</span>
         <span class="nav-label">Login</span>
       </button>
     </div>
@@ -129,10 +123,6 @@ onclick={() => router.navigateHome()}
   .nav-item:hover {
     background: rgba(124, 158, 178, 0.08);
     color: var(--text-primary);
-  }
-
-  .nav-icon {
-    font-size: 1.1rem;
   }
 
   .badge {
