@@ -1,0 +1,49 @@
+/* ===========================================
+   Layout Utilities - Flexbox & Grid
+   =========================================== */
+
+/* Display */
+.block { display: block; }
+.inline-block { display: inline-block; }
+.inline-flex { display: inline-flex; }
+.flex { display: flex; }
+.grid { display: grid; }
+.hidden { display: none; }
+.visible { visibility: visible; }
+
+/* Flex Direction */
+.flex-wrap { flex-wrap: wrap; }
+
+/* Alignment */
+.items-center { align-items: center; }
+.justify-between { justify-content: space-between; }
+.justify-center { justify-content: center; }
+
+/* Gap */
+.gap-1 { gap: 0.25rem; }
+.gap-1-5 { gap: 0.375rem; }
+.gap-2 { gap: 0.5rem; }
+.gap-4 { gap: 1rem; }
+
+/* Grid */
+.grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+
+@media (min-width: 768px) {
+  .md-grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+/* Positioning */
+.relative { position: relative; }
+
+/* Overflow */
+.overflow-x-auto { overflow-x: auto; }
+.overflow-y-auto { overflow-y: auto; }
+
+/* Resize */
+.resize-y { resize: vertical; }
+
+/* Stack (vertical spacing) */
+.space-y-1 > * + * { margin-top: 0.25rem; }
+.space-y-3 > * + * { margin-top: 0.75rem; }
+.space-y-4 > * + * { margin-top: 1rem; }
+.space-y-6 > * + * { margin-top: 1.5rem; }

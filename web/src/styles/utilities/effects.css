@@ -1,0 +1,27 @@
+/* ===========================================
+   Border & Effects Utilities
+   =========================================== */
+
+/* Border Radius */
+.rounded { border-radius: 0.25rem; }
+.rounded-md { border-radius: 0.375rem; }
+.rounded-xl { border-radius: 0.75rem; }
+.rounded-full { border-radius: 9999px; }
+
+/* Border */
+.border-2 { border-width: 2px; }
+.border-transparent { border-color: transparent; }
+
+/* Shadow */
+.shadow-sm { box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); }
+.hover-shadow-sm:hover { box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); }
+
+/* Cursor */
+.cursor-pointer { cursor: pointer; }
+
+/* Transitions */
+.transition-all { transition-property: all; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
+.duration-150 { transition-duration: 150ms; }
+
+/* Transform */
+.hover-translate-y-n1:hover { transform: translateY(-1px); }
