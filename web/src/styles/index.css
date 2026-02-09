@@ -16,6 +16,7 @@
 @import './components/cards.css';
 @import './components/forms.css';
 @import './components/feedback.css';
+@import './components/navbar.css';
 
 /* ===========================================
    Legacy Base Styles (from base.css)
