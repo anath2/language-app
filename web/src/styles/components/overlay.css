@@ -1,0 +1,18 @@
+/* ===========================================
+   Panel Overlay
+   =========================================== */
+
+.panel-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.3);
+    z-index: 99;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+
+.panel-overlay.visible {
+    opacity: 1;
+    pointer-events: auto;
+}
