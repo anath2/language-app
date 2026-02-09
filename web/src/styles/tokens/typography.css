@@ -1,26 +1,39 @@
 :root {
+  /* Base Units */
+  --text-unit: 0.875rem;      /* 14px - base text size */
+  --leading-unit: 0.25;       /* Base line height multiplier */
+  --tracking-unit: 0.01em;    /* Base letter spacing unit */
+
   /* Font Families */
   --font-chinese: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
   --font-body: "Inter", "SF Pro Display", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", "Fira Code", monospace;
 
-  /* Font Sizes */
-  --text-xs: 0.7rem;
-  --text-sm: 0.75rem;
-  --text-base: 0.875rem;
-  --text-lg: 1rem;
-  --text-xl: 1.125rem;
-  --text-2xl: 1.5rem;
-  --text-chinese: 1.2rem;
+  /* Font Sizes using calc() */
+  --text-xs: calc(var(--text-unit) * 0.8);      /* 0.7rem ≈ 11px */
+  --text-sm: calc(var(--text-unit) * 0.857);    /* 0.75rem ≈ 12px */
+  --text-base: var(--text-unit);                 /* 0.875rem ≈ 14px */
+  --text-lg: calc(var(--text-unit) * 1.143);    /* 1rem ≈ 16px */
+  --text-xl: calc(var(--text-unit) * 1.286);    /* 1.125rem ≈ 18px */
+  --text-2xl: calc(var(--text-unit) * 1.714);   /* 1.5rem ≈ 24px */
+  --text-3xl: calc(var(--text-unit) * 2);       /* 1.75rem ≈ 28px */
+  --text-4xl: calc(var(--text-unit) * 2.571);   /* 2.25rem ≈ 36px */
+  --text-chinese: calc(var(--text-unit) * 1.371); /* 1.2rem ≈ 19px */
 
-  /* Line Heights */
-  --leading-tight: 1.25;
-  --leading-normal: 1.5;
-  --leading-relaxed: 1.75;
-  --leading-segmented: 2.4;
+  /* Line Heights using calc() */
+  --leading-none: 1;
+  --leading-tight: calc(1 + var(--leading-unit));      /* 1.25 */
+  --leading-snug: calc(1 + var(--leading-unit) * 1.5); /* 1.375 */
+  --leading-normal: calc(1 + var(--leading-unit) * 2); /* 1.5 */
+  --leading-relaxed: calc(1 + var(--leading-unit) * 3); /* 1.75 */
+  --leading-loose: calc(1 + var(--leading-unit) * 4);  /* 2 */
+  --leading-segmented: calc(1 + var(--leading-unit) * 5.6); /* 2.4 */
 
   /* Letter Spacing */
-  --tracking-tight: -0.025em;
+  --tracking-tighter: calc(var(--tracking-unit) * -2.5); /* -0.025em */
+  --tracking-tight: calc(var(--tracking-unit) * -1);     /* -0.01em */
   --tracking-normal: 0;
-  --tracking-wide: 0.05em;
+  --tracking-wide: calc(var(--tracking-unit) * 5);       /* 0.05em */
+  --tracking-wider: calc(var(--tracking-unit) * 7);      /* 0.07em */
+  --tracking-widest: calc(var(--tracking-unit) * 10);    /* 0.1em */
 }

@@ -3,8 +3,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
   border-radius: var(--radius-md);
   font-weight: 500;
   font-size: var(--text-sm);
@@ -59,23 +59,23 @@
 }
 
 .btn-ghost:hover:not(:disabled) {
-  background: rgba(124, 158, 178, 0.08);
+  background: var(--primary-alpha);
   color: var(--text-primary);
 }
 
 /* Size Variants */
 .btn-sm {
-  padding: 0.35rem 0.75rem;
+  padding: calc(var(--space-unit) * 1.5) var(--space-3);
   font-size: var(--text-xs);
 }
 
 .btn-lg {
-  padding: 0.75rem 1.5rem;
+  padding: var(--space-3) var(--space-6);
   font-size: var(--text-base);
 }
 
 /* Icon Button */
 .btn-icon {
-  padding: 0.5rem;
+  padding: var(--space-2);
   border-radius: var(--radius-md);
 }
