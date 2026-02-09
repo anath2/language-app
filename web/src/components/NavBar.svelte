@@ -3,6 +3,8 @@ import { auth } from '@/features/auth/stores/authStore.svelte';
 import { vocabStore } from '@/features/vocab/stores/vocabStore.svelte';
 import { router } from '@/lib/router.svelte';
 
+let accountDropdownOpen = $state(false);
+
 // Load due count on mount
 $effect(() => {
   if (auth.isAuthenticated) {
@@ -12,18 +14,38 @@ $effect(() => {
     return () => clearInterval(interval);
   }
 });
+
+function toggleAccountDropdown(event: Event) {
+  event.stopPropagation();
+  accountDropdownOpen = !accountDropdownOpen;
+}
+
+function closeDropdown() {
+  accountDropdownOpen = false;
+}
+
+function handleAdminClick() {
+  accountDropdownOpen = false;
+  router.navigateToAdmin();
+}
+
+function handleLogoutClick() {
+  accountDropdownOpen = false;
+  auth.logout();
+}
 </script>
 
-<nav class="navbar">
-  <div class="nav-brand">
-    <span class="brand-text">Language App</span>
-  </div>
+<svelte:window onclick={closeDropdown} />
 
+<nav class="navbar">
   {#if auth.isAuthenticated}
-    <div class="nav-items">
+    <div class="nav-main">
+      <div class="nav-brand">
+        <span class="brand-text">Language App</span>
+      </div>
       <button
         class="nav-item"
-onclick={() => router.navigateHome()}
+        onclick={() => router.navigateHome()}
       >
         <span class="nav-label">Translate</span>
       </button>
@@ -37,123 +59,43 @@ onclick={() => router.navigateHome()}
           <span class="badge">{vocabStore.dueCount}</span>
         {/if}
       </button>
+    </div>
 
-      <button
-        class="nav-item"
-        onclick={() => router.navigateToAdmin()}
-      >
-        <span class="nav-label">Admin</span>
-      </button>
+    <div class="nav-right">
+      <div class="dropdown-container">
+        <button
+          class="nav-item account-btn"
+          onclick={toggleAccountDropdown}
+          aria-haspopup="true"
+          aria-expanded={accountDropdownOpen}
+        >
+          <span class="nav-label">Account</span>
+          <span class="dropdown-arrow" class:open={accountDropdownOpen}>▼</span>
+        </button>
 
-      <button class="nav-item logout-btn" onclick={auth.logout} title="Logout">
-        <span class="nav-label">Logout</span>
-      </button>
+        {#if accountDropdownOpen}
+          <div class="dropdown-menu">
+            <button class="dropdown-item" onclick={handleAdminClick}>
+              <span>Admin</span>
+            </button>
+            <div class="dropdown-divider"></div>
+            <button class="dropdown-item logout-item" onclick={handleLogoutClick}>
+              <span>Logout</span>
+            </button>
+          </div>
+        {/if}
+      </div>
     </div>
   {:else}
-    <div class="nav-items">
+    <div class="nav-main">
+      <div class="nav-brand">
+        <span class="brand-text">Language App</span>
+      </div>
+    </div>
+    <div class="nav-right">
       <button class="nav-item login-btn" onclick={() => router.navigateToLogin(window.location.pathname)} title="Login">
         <span class="nav-label">Login</span>
       </button>
     </div>
   {/if}
 </nav>
-
-<style>
-  .navbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0.75rem 1.5rem;
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    box-shadow: 0 1px 3px var(--shadow);
-    position: sticky;
-    top: 0;
-    z-index: 100;
-  }
-
-  .nav-brand {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-weight: 600;
-    font-size: 1.1rem;
-    color: var(--text-primary);
-  }
-
-  .brand-icon {
-    font-size: 1.25rem;
-  }
-
-  .nav-items {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-
-  .nav-item {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 1rem;
-    border: none;
-    background: transparent;
-    color: var(--text-secondary);
-    font-size: 0.95rem;
-    cursor: pointer;
-    border-radius: 6px;
-    transition: all 0.2s ease;
-    position: relative;
-  }
-
-  .nav-item:hover {
-    background: rgba(124, 158, 178, 0.08);
-    color: var(--text-primary);
-  }
-
-  .badge {
-    position: absolute;
-    top: 2px;
-    right: 2px;
-    min-width: 18px;
-    height: 18px;
-    padding: 0 5px;
-    background: var(--secondary);
-    color: white;
-    font-size: 0.7rem;
-    font-weight: 600;
-    border-radius: 9px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-
-  @media (max-width: 480px) {
-    .navbar {
-      padding: 0.75rem 1rem;
-    }
-
-    .brand-text {
-      display: none;
-    }
-
-    .nav-label {
-      display: none;
-    }
-
-    .nav-item {
-      padding: 0.5rem;
-    }
-  }
-
-  .login-btn, .logout-btn {
-    margin-left: 1rem;
-    background: rgba(124, 158, 178, 0.08);
-    border: 1px solid var(--border);
-  }
-
-  .login-btn:hover, .logout-btn:hover {
-    background: rgba(124, 158, 178, 0.12);
-  }
-</style>
