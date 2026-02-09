@@ -318,7 +318,6 @@ async function onRecordLookup(headword: string, vocabItemId: string) {
 </script>
 
 <svelte:head>
-  <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
   <link

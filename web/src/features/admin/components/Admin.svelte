@@ -143,7 +143,7 @@ onMount(() => {
       <p style="color: var(--text-secondary);">Loading...</p>
     {:else}
       <form onsubmit={saveProfile} class="space-y-4">
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="grid grid-cols-1 md-grid-cols-3 gap-4">
           <div>
             <label for="name" class="block mb-1" style="color: var(--text-secondary);">Name</label>
             <input

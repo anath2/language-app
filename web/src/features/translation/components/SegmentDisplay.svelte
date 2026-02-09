@@ -84,7 +84,7 @@ function getSegmentClasses(segment: SegmentResult) {
   ];
   if (segment.pending) classes.push('segment-pending');
   if (segment.pinyin || segment.english) {
-    classes.push('transition-all', 'duration-150', 'hover:-translate-y-px', 'hover:shadow-sm');
+    classes.push('transition-all', 'duration-150', 'hover-translate-y-n1', 'hover-shadow-sm');
   }
   const info = savedVocabMap.get(segment.segment);
   if (info) {
