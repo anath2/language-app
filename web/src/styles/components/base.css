@@ -12,7 +12,7 @@ body {
 /* Input card container */
 .input-card {
     background: var(--surface);
-    border-radius: 12px;
+    border-radius: var(--radius-xl);
     box-shadow: 0 1px 3px var(--shadow);
     border: 1px solid var(--border);
 }
@@ -21,9 +21,9 @@ body {
 .textarea-main {
     font-family: var(--font-chinese);
     font-size: var(--text-chinese);
-    line-height: 1.6;
+    line-height: var(--leading-normal);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius-lg);
     transition: all 0.2s ease;
 }
 
@@ -35,7 +35,7 @@ body {
 .textarea-main:focus {
     outline: none;
     border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(124, 158, 178, 0.15);
+    box-shadow: 0 0 0 calc(var(--space-unit) * 3) var(--primary-alpha);
 }
 
 /* Full translation text */
@@ -49,7 +49,7 @@ body {
 /* Image upload zone */
 .image-upload-zone {
     border: 1px dashed var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius-lg);
     background: var(--background-alt);
     transition: all 0.15s ease;
 }
@@ -61,5 +61,5 @@ body {
 
 .image-upload-zone.drag-over {
     border-color: var(--primary);
-    background: rgba(124, 158, 178, 0.06);
+    background: var(--primary-alpha);
 }
