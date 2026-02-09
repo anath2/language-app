@@ -1,22 +1,12 @@
-/* ===========================================
-   Language App - Complete Stylesheet
-   =========================================== */
-
-/* ===========================================
-   Design Tokens
-   =========================================== */
+/* Design Tokens */
 @import './tokens/colors.css';
 @import './tokens/typography.css';
 @import './tokens/spacing.css';
 
-/* ===========================================
-   Utilities
-   =========================================== */
+/* Utilities */
 @import './utilities/index.css';
 
-/* ===========================================
-   Component Base Styles
-   =========================================== */
+/* Components */
 @import './components/base.css';
 @import './components/buttons.css';
 @import './components/cards.css';
