@@ -1,5 +1,4 @@
 // Translation store - manages translation list and current translation
-// Located in features/translation/stores/
 
 import { deleteRequest, getJson, postJson } from '@/lib/api';
 import type {
@@ -8,7 +7,7 @@ import type {
   LoadingState,
   TranslationDetailResponse,
   TranslationSummary,
-} from '@/lib/types';
+} from '@/features/translation/types';
 
 // State
 let translations = $state<TranslationSummary[]>([]);

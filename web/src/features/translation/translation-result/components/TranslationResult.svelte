@@ -1,15 +1,17 @@
 <script lang="ts">
-import type { LoadingState } from '@/lib/types';
-import SegmentDisplay from './SegmentDisplay.svelte';
-import SegmentEditor from './SegmentEditor.svelte';
+import Button from '@/ui/Button.svelte';
+import { Pencil } from '@lucide/svelte';
+import SegmentResult from './SegmentResult.svelte';
 import TranslationTable from './TranslationTable.svelte';
+import SegmentEditor from './SegmentEditor.svelte';
 import type {
   DisplayParagraph,
+  LoadingState,
   ParagraphMeta,
   ParagraphResult,
   ProgressState,
   SavedVocabInfo,
-  SegmentResult,
+  SegmentResult as SegmentResultType,
   StreamEvent,
   StreamSegmentResult,
 } from '@/features/translation/types';
@@ -43,10 +45,10 @@ const {
   onResumeLearning: (headword: string, vocabItemId: string) => Promise<void>;
   onRecordLookup: (headword: string, vocabItemId: string) => Promise<void>;
   onStreamComplete: () => void;
-  onSegmentsChanged: (results: SegmentResult[]) => void;
+  onSegmentsChanged: (results: SegmentResultType[]) => void;
 } = $props();
 
-let translationResults = $state<SegmentResult[]>([]);
+let translationResults = $state<SegmentResultType[]>([]);
 let paragraphMeta = $state<ParagraphMeta[]>([]);
 let fullTranslation = $state('');
 let progress = $state<ProgressState>({ current: 0, total: 0 });
@@ -56,7 +58,6 @@ let isEditMode = $state(false);
 
 const displayParagraphs = $derived(buildDisplayParagraphs(paragraphMeta, translationResults));
 
-// Track translationId changes and react
 let lastTranslationId = $state<string | null>(null);
 
 $effect(() => {
@@ -99,7 +100,7 @@ function resetState() {
 
 function buildDisplayParagraphs(
   meta: ParagraphMeta[],
-  results: SegmentResult[]
+  results: SegmentResultType[]
 ): DisplayParagraph[] {
   let globalIndex = 0;
   return meta.map((para, paraIdx) => {
@@ -137,8 +138,8 @@ function applyCompletedJob(paragraphs: ParagraphResult[], fullTrans: string | nu
   onSegmentsChanged(translationResults);
 }
 
-function flattenParagraphs(paragraphs: ParagraphResult[]): SegmentResult[] {
-  const results: SegmentResult[] = [];
+function flattenParagraphs(paragraphs: ParagraphResult[]): SegmentResultType[] {
+  const results: SegmentResultType[] = [];
   paragraphs.forEach((para, paraIdx) => {
     para.translations.forEach((t) => {
       results.push({
@@ -226,7 +227,7 @@ async function streamTranslation(streamId: string) {
 
 function updateSegmentResult(result: StreamSegmentResult) {
   const index = result.index;
-  const updated: SegmentResult = {
+  const updated: SegmentResultType = {
     segment: result.segment,
     pinyin: result.pinyin,
     english: result.english,
@@ -243,7 +244,7 @@ function enterEditMode() {
   isEditMode = true;
 }
 
-function handleEditSave(results: SegmentResult[], meta: ParagraphMeta[]) {
+function handleEditSave(results: SegmentResultType[], meta: ParagraphMeta[]) {
   translationResults = results;
   paragraphMeta = meta;
   isEditMode = false;
@@ -255,11 +256,11 @@ function handleEditCancel() {
 }
 </script>
 
-<div id="results" class="input-card p-5 overflow-y-auto" style="max-height: 60vh;">
+<div id="results" class="input-card p-5">
   {#if loadingState === "loading"}
-    <div class="h-full flex items-center justify-center">
+    <div class="flex items-center justify-center">
       <div class="text-center">
-        <div class="spinner mx-auto mb-2" style="width: 20px; height: 20px; border-color: rgba(124, 158, 178, 0.3); border-top-color: var(--primary);"></div>
+        <div class="spinner mx-auto mb-2" style="width: 20px; height: 20px; border-color: rgba(108, 190, 237, 0.3); border-top-color: var(--primary);"></div>
         <p style="color: var(--text-muted); font-size: var(--text-sm);">Starting translation...</p>
       </div>
     </div>
@@ -272,29 +273,19 @@ function handleEditCancel() {
       <p class="text-center italic" style="color: var(--text-muted); font-size: var(--text-sm);">Translation results will appear here</p>
     </div>
   {:else}
-    <div class="space-y-1">
-      <h2 class="font-semibold" style="color: var(--text-primary); font-size: var(--text-lg);">Translation</h2>
-      <p class="full-translation">{fullTranslation || "Translating..."}</p>
-    </div>
-
     <div class="section-divider my-3">
       <div class="flex items-center justify-between w-full">
         <span>Segmented Text</span>
         {#if !isEditMode && progress.current >= progress.total && translationResults.length > 0}
-          <button class="btn-edit" type="button" onclick={enterEditMode}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-            </svg>
-            Edit Segments
-          </button>
+          <Button size="sm" variant="ghost" onclick={enterEditMode}>
+           <Pencil /> Edit Segments
+          </Button>
         {/if}
       </div>
     </div>
 
     {#if isEditMode}
       <SegmentEditor
-        {displayParagraphs}
         {translationResults}
         {paragraphMeta}
         currentTranslationId={translationId}
@@ -303,7 +294,7 @@ function handleEditCancel() {
         onCancel={handleEditCancel}
       />
     {:else}
-      <SegmentDisplay
+      <SegmentResult
         {displayParagraphs}
         {savedVocabMap}
         {progress}
@@ -322,3 +313,18 @@ function handleEditCancel() {
 <div id="translation-table">
   <TranslationTable results={translationResults} />
 </div>
+
+<style>
+  .section-divider {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+  .section-divider::before,
+  .section-divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+</style>

@@ -1,22 +1,18 @@
 // Vocabulary store - manages saved vocabulary and SRS state
-// Located in features/vocab/stores/
 
-import type { SavedVocabInfo } from '@/features/translation/types';
-import { getJson, postJson } from '@/lib/api';
 import type {
   DueCountResponse,
   RecordLookupResponse,
+  SavedVocabInfo,
   SaveVocabResponse,
   VocabSrsInfoListResponse,
-} from '@/lib/types';
+} from '@/features/translation/types';
+import { getJson, postJson } from '@/lib/api';
 
 // State
 let savedVocabMap = $state<Map<string, SavedVocabInfo>>(new Map());
 let dueCount = $state(0);
 
-/**
- * Fetch SRS info for a list of headwords
- */
 export async function fetchSrsInfo(headwords: string[]): Promise<void> {
   if (headwords.length === 0) return;
 

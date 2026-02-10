@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { TranslationStatus, TranslationSummary } from '@/lib/types';
+import type { TranslationStatus, TranslationSummary } from '@/features/translation/types';
 import { formatTimeAgo } from '@/lib/utils';
 
 const {

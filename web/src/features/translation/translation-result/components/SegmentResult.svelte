@@ -1,8 +1,8 @@
 <script lang="ts">
 import { tick } from 'svelte';
-import type { LoadingState } from '@/lib/types';
 import type {
   DisplayParagraph,
+  LoadingState,
   ProgressState,
   SavedVocabInfo,
   SegmentResult,
@@ -14,9 +14,6 @@ const {
   displayParagraphs,
   savedVocabMap,
   progress,
-  fullTranslation,
-  loadingState,
-  errorMessage,
   onSaveVocab,
   onMarkKnown,
   onResumeLearning,

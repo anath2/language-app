@@ -4,7 +4,6 @@ import type { DisplayParagraph, ParagraphMeta, SegmentResult } from '@/features/
 import { getPastelColor } from '@/features/translation/utils';
 
 const {
-  displayParagraphs,
   translationResults,
   paragraphMeta,
   currentTranslationId,
@@ -12,7 +11,6 @@ const {
   onSave,
   onCancel,
 }: {
-  displayParagraphs: DisplayParagraph[];
   translationResults: SegmentResult[];
   paragraphMeta: ParagraphMeta[];
   currentTranslationId: string | null;
