@@ -29,6 +29,8 @@ web/.vite/
 
 # database
 *.db
+.db-wal
+.db-shm
 
 # Misc
 .DS_Store
