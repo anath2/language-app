@@ -1,7 +1,7 @@
 :root {
   /* Base Units */
   --space-unit: 0.25rem;      /* 4px - base spacing unit */
-  --radius-unit: 0.25rem;     /* 4px - base border radius unit */
+  --radius-unit: 0.35rem;     /* 4px - base border radius unit */
 
   /* Spacing Scale */
   --space-0: 0;

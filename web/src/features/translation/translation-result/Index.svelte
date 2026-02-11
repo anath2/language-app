@@ -1,7 +1,8 @@
 <script lang="ts">
-import Button from '@/ui/Button.svelte';
 import { ChevronLeft } from '@lucide/svelte';
 import { getJson, postJson } from '@/lib/api';
+import Button from '@/ui/Button.svelte';
+import Card from '@/ui/Card.svelte';
 import { translationStore } from '@/features/translation/stores/translationStore.svelte';
 import TranslationResult from './components/TranslationResult.svelte';
 import type {
@@ -202,30 +203,30 @@ async function onRecordLookup(headword: string, vocabItemId: string) {
 </script>
 
 <div class="page-container">
-  <Button size="sm" variant="ghost" onclick={onBack}>
-    <ChevronLeft /> Back to translations
+  <Button variant="ghost" size="sm" onclick={onBack}>
+    <ChevronLeft size={16} />
+    <span>Back to translations</span>
   </Button>
 
   <div class="translation-layout">
     <div class="translation-left">
-      <!-- svelte-ignore a11y_label_has_associated_control -->
-      <div id="original-text-panel" class="input-card p-4 sticky-top">
-        <label class="block font-medium mb-2" style="color: var(--text-secondary); font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.05em;">Original Text</label>
-        <div class="font-chinese p-3 rounded" style="color: var(--text-primary); font-size: var(--text-chinese); line-height: 1.8; white-space: pre-wrap;">{currentRawText}</div>
-        <hr />
-        <label class="block font-medium mb-2" style="color: var(--text-secondary); font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.05em;">Translated Text</label>
-        <div>{currentFullTranslation}</div>
-      </div>
+      <Card padding="5" important class="sticky-top">
+        <span class="panel-label">Original Text</span>
+        <div class="chinese-text">{currentRawText}</div>
+        <div class="panel-divider"></div>
+        <span class="panel-label">Translated Text</span>
+        <div class="translated-text">{currentFullTranslation}</div>
+      </Card>
     </div>
 
     <div class="translation-right">
       {#if detailLoading}
-        <div class="input-card p-5 flex items-center justify-center" style="min-height: 200px;">
-          <div class="text-center">
-            <div class="spinner mx-auto mb-2" style="width: 20px; height: 20px; border-color: rgba(108, 190, 237, 0.3); border-top-color: var(--primary);"></div>
-            <p style="color: var(--text-muted); font-size: var(--text-sm);">Loading...</p>
+        <Card padding="5" class="loading-card">
+          <div class="loading-inner">
+            <div class="spinner spinner-dark"></div>
+            <p class="loading-text">Loading...</p>
           </div>
-        </div>
+        </Card>
       {:else}
         <TranslationResult
           translationId={translationId}
@@ -258,6 +259,7 @@ async function onRecordLookup(headword: string, vocabItemId: string) {
     grid-template-columns: 1fr 1fr;
     gap: 1.5rem;
     align-items: start;
+    margin-top: var(--space-2);
   }
 
   .translation-left,
@@ -265,7 +267,54 @@ async function onRecordLookup(headword: string, vocabItemId: string) {
     min-width: 0;
   }
 
-  .sticky-top {
+  .panel-label {
+    display: block;
+    color: var(--text-secondary);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: var(--space-2);
+  }
+
+  .chinese-text {
+    font-family: var(--font-chinese);
+    font-size: var(--text-chinese);
+    color: var(--text-primary);
+    line-height: 1.8;
+    white-space: pre-wrap;
+  }
+
+  .panel-divider {
+    height: 1px;
+    background: var(--border);
+    margin: var(--space-4) 0;
+  }
+
+  .translated-text {
+    font-size: var(--text-base);
+    color: var(--text-primary);
+    line-height: var(--leading-relaxed);
+  }
+
+  :global(.loading-card) {
+    min-height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .loading-inner {
+    text-align: center;
+  }
+
+  .loading-text {
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+    margin-top: var(--space-2);
+  }
+
+  :global(.sticky-top) {
     position: sticky;
     top: 80px;
   }
@@ -275,7 +324,7 @@ async function onRecordLookup(headword: string, vocabItemId: string) {
       grid-template-columns: 1fr;
     }
 
-    .sticky-top {
+    :global(.sticky-top) {
       position: static;
     }
   }

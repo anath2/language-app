@@ -2,6 +2,7 @@
 import { translateBatch } from '@/features/translation/api';
 import type { DisplayParagraph, ParagraphMeta, SegmentResult } from '@/features/translation/types';
 import { getPastelColor } from '@/features/translation/utils';
+import Button from '@/ui/Button.svelte';
 
 const {
   translationResults,
@@ -244,14 +245,13 @@ function handleKeydown(event: KeyboardEvent) {
   <div id="segments-container">
     {#each workingParagraphs as para}
       <div
-        class="paragraph flex flex-wrap gap-1 items-center"
+        class="paragraph"
         style={`margin-bottom: ${para.separator ? para.separator.split("\n").length * 0.4 : 0}rem; padding-left: ${para.indent ? para.indent.length * 0.5 : 0}rem;`}
       >
         {#each para.segments as segment, segIdx (segment.index)}
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <span
-            class={`segment editing inline-block rounded border-2 border-transparent ${pendingIndices.has(segment.index) ? "segment-pending" : ""}`}
-            style={`font-family: var(--font-chinese); font-size: var(--text-chinese); color: var(--text-primary);`}
+            class={`segment editing ${pendingIndices.has(segment.index) ? "segment-pending" : ""}`}
           >
             {#each segment.segment.split("") as char, charIdx}
               <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -301,14 +301,144 @@ function handleKeydown(event: KeyboardEvent) {
       <span class="pending-count">{pendingIndices.size}</span> changes
     </span>
     <div class="edit-bar-actions">
-      <button class="btn-cancel" type="button" onclick={cancel}>Cancel</button>
-      <button class="btn-save" type="button" onclick={save} disabled={saving}>
-        {#if saving}
-          Saving...
-        {:else}
-          Save Changes
-        {/if}
-      </button>
+      <Button variant="ghost" size="sm" onclick={cancel}>Cancel</Button>
+      <Button variant="primary" size="sm" onclick={save} disabled={saving} loading={saving}>
+        Save Changes
+      </Button>
     </div>
   </div>
 </div>
+
+<style>
+  .paragraph {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+    align-items: center;
+  }
+
+  .segment {
+    display: inline-block;
+    border-radius: var(--radius-md);
+    border: 2px solid transparent;
+    font-family: var(--font-chinese);
+    font-size: var(--text-chinese);
+    color: var(--text-primary);
+  }
+
+  .segment.editing {
+    cursor: default;
+    padding: 0;
+    background: transparent !important;
+  }
+
+  .char-wrapper {
+    display: inline-block;
+    padding: var(--space-1) calc(var(--space-unit) * 0.6);
+    position: relative;
+    cursor: default;
+  }
+
+  .segment.editing .char-wrapper:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    right: -1px;
+    top: 15%;
+    height: 70%;
+    width: 2px;
+    background: var(--border);
+    border-radius: 1px;
+    transition: all 0.15s ease;
+    opacity: 0.5;
+  }
+
+  .segment.editing .char-wrapper:not(:last-child):hover::after {
+    background: var(--primary);
+    box-shadow: 0 0 4px var(--primary);
+    opacity: 1;
+  }
+
+  .split-point {
+    position: absolute;
+    right: calc(var(--space-unit) * -2);
+    top: 0;
+    width: var(--space-8);
+    height: 100%;
+    cursor: pointer;
+    z-index: 5;
+  }
+
+  .split-point:hover {
+    background: var(--primary-alpha);
+  }
+
+  .segment-pending {
+    background: var(--background-alt) !important;
+    border: 2px dashed var(--border) !important;
+    opacity: 0.8;
+  }
+
+  .join-indicator {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--space-8);
+    height: var(--space-8);
+    margin: 0 var(--space-1);
+    opacity: 0;
+    transition: all 0.15s ease;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: calc(var(--space-unit) * 5);
+    font-weight: 300;
+    position: relative;
+    z-index: 10;
+    vertical-align: baseline;
+    border-radius: var(--radius-md);
+    line-height: 1;
+  }
+
+  .join-indicator:hover {
+    opacity: 1;
+    color: var(--primary);
+    background: rgba(108, 190, 237, 0.15);
+  }
+
+  .join-indicator.visible {
+    opacity: 0.7;
+  }
+
+  .join-indicator.visible:hover {
+    opacity: 1;
+  }
+
+  .segment-edit-bar {
+    position: sticky;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-3) var(--space-4);
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.05);
+    margin: var(--space-4) calc(var(--space-unit) * -5) calc(var(--space-unit) * -5);
+    border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+    z-index: 20;
+  }
+
+  .edit-bar-status {
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+  }
+
+  .pending-count {
+    font-weight: 600;
+    color: var(--primary);
+  }
+
+  .edit-bar-actions {
+    display: flex;
+    gap: var(--space-2);
+  }
+</style>

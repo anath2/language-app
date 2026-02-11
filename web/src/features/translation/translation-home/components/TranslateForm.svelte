@@ -103,9 +103,16 @@ async function extractTextFromImage() {
           </span>
         {/if}
       </span>
-      <button type="button" class="ocr-dismiss" onclick={clearPreview} aria-label="Remove image">
+      <Button
+        type="button"
+        variant="ghost"
+        size="xs"
+        iconOnly
+        ariaLabel="Remove image"
+        onclick={clearPreview}
+      >
         <X size={16} />
-      </button>
+      </Button>
     </div>
   {/if}
 
@@ -234,24 +241,6 @@ async function extractTextFromImage() {
   @keyframes spin {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
-  }
-
-  .ocr-dismiss {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: var(--space-1);
-    border: none;
-    background: transparent;
-    color: var(--text-muted);
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    transition: color 0.15s ease, background 0.15s ease;
-  }
-
-  .ocr-dismiss:hover {
-    color: var(--text-primary);
-    background: var(--surface);
   }
 
   /* Action bar */

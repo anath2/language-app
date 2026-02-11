@@ -1,29 +1,29 @@
 <script lang="ts">
-  import TranslateForm from '@/features/translation/translation-home/components/TranslateForm.svelte';
-  import TranslationList from '@/features/translation/translation-home/components/TranslationList.svelte';
-  import VocabReviewCard from '@/features/translation/translation-home/components/VocabReviewCard.svelte';
-  import { translationStore } from '@/features/translation/stores/translationStore.svelte';
-  import { router } from '@/lib/router.svelte';
+import TranslateForm from '@/features/translation/translation-home/components/TranslateForm.svelte';
+import TranslationList from '@/features/translation/translation-home/components/TranslationList.svelte';
+import VocabReviewCard from '@/features/translation/translation-home/components/VocabReviewCard.svelte';
+import { translationStore } from '@/features/translation/stores/translationStore.svelte';
+import { router } from '@/lib/router.svelte';
 
-  $effect(() => {
-    void translationStore.loadTranslations();
-  });
+$effect(() => {
+  void translationStore.loadTranslations();
+});
 
-  async function handleSubmit(text: string) {
-    const id = await translationStore.submitTranslation(text);
-    if (id) {
-      router.navigateTo(id);
-    }
-  }
-
-  async function handleDelete(id: string) {
-    if (!confirm('Delete this translation?')) return;
-    await translationStore.deleteTranslation(id);
-  }
-
-  function handleSelect(id: string) {
+async function handleSubmit(text: string) {
+  const id = await translationStore.submitTranslation(text);
+  if (id) {
     router.navigateTo(id);
   }
+}
+
+async function handleDelete(id: string) {
+  if (!confirm('Delete this translation?')) return;
+  await translationStore.deleteTranslation(id);
+}
+
+function handleSelect(id: string) {
+  router.navigateTo(id);
+}
 </script>
 
 <div class="translate-text-layout">

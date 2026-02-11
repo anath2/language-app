@@ -1,54 +1,58 @@
 :root {
   /* Primary */
-  --primary: #7C9EB2;
-  --primary-light: #A8C5D8;
-  --primary-dark: #5A7A8A;
-  --primary-hover: #5A7A8A;
-  --primary-alpha: rgba(124, 158, 178, 0.2);
+  --primary: #6CBEED;
+  --primary-dark: #5AA5D6;
+  --primary-light: #B8DDEF;
+  --primary-alpha: rgba(108, 190, 237, 0.1);
 
   /* Secondary */
-  --secondary: #E8B4BC;
-  --secondary-light: #F5D5DA;
-  --secondary-dark: #C9929A;
+  --secondary: #94A3B8;
+  --secondary-dark: #475569;
 
   /* Backgrounds */
-  --background: #FAFAFA;
-  --background-alt: #F5F5F5;
+  --background: #fcfeff;
+  --background-alt: #EDF1F3;
+
+  /* Surfaces */
   --surface: #FFFFFF;
-  --surface-2: #F8F9FA;
+  --surface-2: #EDF1F3;
 
   /* Text */
-  --text-primary: #2D3436;
-  --text-secondary: #636E72;
-  --text-muted: #B2BEC3;
-  --text-disabled: #CBD5E0;
-  --translation-color: #6b5b95;
+  --text-primary: #1d232e;
+  --text-secondary: #64748B;
+  --text-muted: #A0AEC0;
 
-  /* Status */
-  --error: #E53E3E;
-  --error-bg: #FEE;
-  --error-border: #FCC;
-  --success: #A8E6CF;
-  --warning: #FFE5B4;
-  --info: #BAE1FF;
+  /* Border & Shadow */
+  --border: #B8DDEF;
+  --shadow: #2D374826;
 
-  /* UI Elements */
-  --border: #E0E0E0;
-  --border-focus: #7C9EB2;
-  --shadow: rgba(0, 0, 0, 0.08);
-  --shadow-lg: rgba(0, 0, 0, 0.15);
+  /* Semantic: Error */
+  --error: #C53030;
+  --error-bg: #FFF5F5;
+  --error-border: #FEB2B2;
 
-  /* Tooltip */
-  --tooltip-bg: #2D3436;
-  --tooltip-text: #FFFFFF;
+  /* Semantic: Warning & Success */
+  --warning: #94A3B8;
+  --success: #6CBEED;
 
-  /* Segment Pastel Colors (8 rotating) */
-  --pastel-1: #FFB3BA;
-  --pastel-2: #BAFFC9;
-  --pastel-3: #BAE1FF;
-  --pastel-4: #FFFFBA;
-  --pastel-5: #FFD9BA;
-  --pastel-6: #E0BBE4;
-  --pastel-7: #C9F0FF;
-  --pastel-8: #FFDAB3;
+  /* Review Grade Colors (dedicated tokens) */
+  --review-again: #E4C6BD;
+  --review-hard: #94A3B8;
+  --review-good: #6CBEED;
+
+  /* Vocabulary Status Colors */
+  --vocab-known: #6CBEED;
+  --vocab-learning: #E4C6BD;
+  --vocab-unknown: #94A3B8;
+  --vocab-struggling: #E4C6BD;
+
+  /* Pastel Segment Colors (8 cycling) — East Asian inspired */
+  --pastel-1: #C2E0D3;   /* celadon / jade green */
+  --pastel-2: #E4C6BD;   /* cinnabar / terracotta pink */
+  --pastel-3: #B8CEE8;   /* indigo / soft blue */
+  --pastel-4: #E0D6B4;   /* amber / golden sand */
+  --pastel-5: #D1BDE0;   /* plum / soft purple */
+  --pastel-6: #E8D4B0;   /* persimmon / warm orange */
+  --pastel-7: #B0D8D0;   /* teal / cool green */
+  --pastel-8: #D0C4E0;   /* iris / lavender */
 }

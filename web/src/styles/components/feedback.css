@@ -27,7 +27,7 @@
 }
 
 .spinner-dark {
-  border-color: rgba(124, 158, 178, 0.3);
+  border-color: rgba(108, 190, 237, 0.3);
   border-top-color: var(--primary);
 }
 
@@ -68,22 +68,4 @@
   font-size: var(--text-sm);
 }
 
-/* Progress Bar */
-.progress-container {
-  margin-bottom: var(--space-3);
-}
-
-.progress-bar-bg {
-  width: 100%;
-  height: calc(var(--space-unit) * 1);
-  background: var(--border);
-  border-radius: calc(var(--space-unit) * 0.5);
-  overflow: hidden;
-}
-
-.progress-bar-fill {
-  height: 100%;
-  background: var(--primary);
-  border-radius: calc(var(--space-unit) * 0.5);
-  transition: width 0.3s ease;
-}
+/* Progress bar styles migrated to SegmentResult.svelte <style> block */

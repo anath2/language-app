@@ -9,14 +9,6 @@ body {
     font-family: var(--font-chinese);
 }
 
-/* Input card container */
-.input-card {
-    background: var(--surface);
-    border-radius: var(--radius-xl);
-    box-shadow: 0 1px 3px var(--shadow);
-    border: 1px solid var(--border);
-}
-
 /* Main text area */
 .textarea-main {
     font-family: var(--font-chinese);

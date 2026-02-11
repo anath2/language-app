@@ -1,5 +1,6 @@
 <script lang="ts">
 import Button from '@/ui/Button.svelte';
+import Card from '@/ui/Card.svelte';
 import { Pencil } from '@lucide/svelte';
 import SegmentResult from './SegmentResult.svelte';
 import TranslationTable from './TranslationTable.svelte';
@@ -256,32 +257,28 @@ function handleEditCancel() {
 }
 </script>
 
-<div id="results" class="input-card p-5">
+<Card id="results" padding="5" shadow>
   {#if loadingState === "loading"}
-    <div class="flex items-center justify-center">
-      <div class="text-center">
-        <div class="spinner mx-auto mb-2" style="width: 20px; height: 20px; border-color: rgba(108, 190, 237, 0.3); border-top-color: var(--primary);"></div>
-        <p style="color: var(--text-muted); font-size: var(--text-sm);">Starting translation...</p>
-      </div>
+    <div class="loading-state">
+      <div class="spinner spinner-dark"></div>
+      <p class="loading-label">Starting translation...</p>
     </div>
   {:else if loadingState === "error"}
-    <div class="p-3 rounded-md" style="background: var(--error); border-left: 3px solid var(--secondary-dark);">
-      <p style="color: var(--text-primary); font-size: var(--text-sm);">{errorMessage}</p>
+    <div class="error-banner">
+      <p>{errorMessage}</p>
     </div>
   {:else if displayParagraphs.length === 0}
-    <div class="h-full flex items-center justify-center">
-      <p class="text-center italic" style="color: var(--text-muted); font-size: var(--text-sm);">Translation results will appear here</p>
+    <div class="empty-state-inline">
+      <p>Translation results will appear here</p>
     </div>
   {:else}
-    <div class="section-divider my-3">
-      <div class="flex items-center justify-between w-full">
-        <span>Segmented Text</span>
-        {#if !isEditMode && progress.current >= progress.total && translationResults.length > 0}
-          <Button size="sm" variant="ghost" onclick={enterEditMode}>
-           <Pencil /> Edit Segments
-          </Button>
-        {/if}
-      </div>
+    <div class="section-header">
+      <span class="section-title">Segmented Text</span>
+      {#if !isEditMode && progress.current >= progress.total && translationResults.length > 0}
+        <Button size="xs" variant="ghost" shape="pill" onclick={enterEditMode}>
+         <Pencil size={16} /> Edit Segments
+        </Button>
+      {/if}
     </div>
 
     {#if isEditMode}
@@ -308,23 +305,58 @@ function handleEditCancel() {
       />
     {/if}
   {/if}
-</div>
+</Card>
 
 <div id="translation-table">
   <TranslationTable results={translationResults} />
 </div>
 
 <style>
-  .section-divider {
+  .loading-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-8) 0;
+  }
+
+  .loading-label {
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+    margin-top: var(--space-2);
+  }
+
+  .error-banner {
+    background: var(--error-bg);
+    color: var(--error);
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-lg);
+    border-left: 3px solid var(--error);
+    font-size: var(--text-sm);
+  }
+
+  .empty-state-inline {
     display: flex;
     align-items: center;
-    gap: 1rem;
+    justify-content: center;
+    padding: var(--space-8) 0;
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+    font-style: italic;
   }
-  .section-divider::before,
-  .section-divider::after {
-    content: "";
-    flex: 1;
-    height: 1px;
-    background: var(--border);
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--space-3);
+  }
+
+  .section-title {
+    font-size: var(--text-xs);
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
   }
 </style>

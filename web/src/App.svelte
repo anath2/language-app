@@ -8,9 +8,7 @@ import TranslationResultIndex from '@/features/translation/translation-result/In
 import { router } from '@/lib/router.svelte';
 
 const currentPage = $derived(router.route.page);
-const translationId = $derived(
-  router.route.page === 'translation' ? router.route.id : null
-);
+const translationId = $derived(router.route.page === 'translation' ? router.route.id : null);
 
 // Check authentication on mount
 $effect(() => {

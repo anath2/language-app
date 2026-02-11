@@ -8,16 +8,8 @@
 
 /* Components */
 @import './components/base.css';
-@import './components/buttons.css';
-@import './components/cards.css';
-@import './components/forms.css';
 @import './components/feedback.css';
-@import './components/navbar.css';
-@import './components/segments.css';
-@import './components/segment-editing.css';
-@import './components/review.css';
+/* segments.css and segment-editing.css migrated to Svelte component <style> blocks */
 @import './components/jobs.css';
-@import './components/overlay.css';
 @import './components/login.css';
-@import './components/table.css';
 @import './components/utilities.css';

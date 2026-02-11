@@ -5,23 +5,15 @@
     padding: var(--space-3) var(--space-6);
     background: var(--surface);
     border-bottom: 1px solid var(--border);
-    box-shadow: 0 1px 3px var(--shadow);
     position: sticky;
     top: 0;
     z-index: var(--z-sticky);
   }
 
-  .nav-brand {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    font-weight: 600;
-    font-size: calc(var(--text-unit) * 1.257);
-    color: var(--text-primary);
-  }
-
-  .brand-icon {
-    font-size: var(--text-xl);
+  .logo-img {
+    height: 32px;
+    width: auto;
+    display: block;
   }
 
   .nav-main {
@@ -135,8 +127,8 @@
       padding: var(--space-3) var(--space-4);
     }
 
-    .brand-text {
-      display: none;
+    .logo-img {
+      height: 28px;
     }
 
     .nav-label {
@@ -164,7 +156,7 @@
   }
 
   .login-btn:hover {
-    background: rgba(124, 158, 178, 0.12);
+    background: var(--primary-alpha);
   }
 
   .account-btn {
@@ -173,5 +165,5 @@
   }
 
   .account-btn:hover {
-    background: rgba(124, 158, 178, 0.12);
+    background: var(--primary-alpha);
   }

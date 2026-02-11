@@ -1,12 +1,12 @@
 const pastelColors = [
-  '#FFB3BA',
-  '#BAFFC9',
-  '#BAE1FF',
-  '#FFFFBA',
-  '#FFD9BA',
-  '#E0BBE4',
-  '#C9F0FF',
-  '#FFDAB3',
+  '#C2E0D3', // celadon / jade green
+  '#E4C6BD', // cinnabar / terracotta pink
+  '#B8CEE8', // indigo / soft blue
+  '#E0D6B4', // amber / golden sand
+  '#D1BDE0', // plum / soft purple
+  '#E8D4B0', // persimmon / warm orange
+  '#B0D8D0', // teal / cool green
+  '#D0C4E0', // iris / lavender
 ];
 
 /**

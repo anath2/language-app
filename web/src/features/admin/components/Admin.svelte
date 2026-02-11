@@ -2,7 +2,8 @@
 import { onMount } from 'svelte';
 import { getJson, postJsonForm } from '@/lib/api';
 import type { AdminProfileResponse, ImportProgressResponse, UserProfile } from '@/lib/types';
-
+import Button from '@/ui/Button.svelte';
+import Card from '@/ui/Card.svelte';
 interface Props {
   onImportSuccess?: () => void;
 }
@@ -136,7 +137,7 @@ onMount(() => {
 
 <div class="space-y-6">
   <!-- Profile Section -->
-  <div class="input-card p-6">
+  <Card padding="6">
     <h2 class="font-semibold mb-4" style="color: var(--text-primary);">User Profile</h2>
 
     {#if loading}
@@ -179,51 +180,31 @@ onMount(() => {
           </div>
         </div>
 
-        <button type="submit" class="btn-primary px-6 py-2" disabled={saving}>
+        <Button type="submit" size="md" variant="primary" disabled={saving}>
           {saving ? "Saving..." : "Save Profile"}
-        </button>
+        </Button>
       </form>
     {/if}
-  </div>
-
-  <!-- Vocabulary Statistics -->
-  <div class="input-card p-6">
-    <h2 class="font-semibold mb-4" style="color: var(--text-primary);">Vocabulary Statistics</h2>
-
-    <div class="grid grid-cols-3 gap-4">
-      <div class="stat-card">
-        <h3 class="text-sm" style="color: var(--text-secondary);">Known</h3>
-        <p class="text-2xl font-semibold">{vocabStats.known}</p>
-      </div>
-      <div class="stat-card">
-        <h3 class="text-sm" style="color: var(--text-secondary);">Learning</h3>
-        <p class="text-2xl font-semibold">{vocabStats.learning}</p>
-      </div>
-      <div class="stat-card">
-        <h3 class="text-sm" style="color: var(--text-secondary);">Total</h3>
-        <p class="text-2xl font-semibold">{vocabStats.total}</p>
-      </div>
-    </div>
-  </div>
+  </Card>
 
   <!-- Progress Import/Export -->
-  <div class="input-card p-6">
+  <Card padding="6">
     <h2 class="font-semibold mb-4" style="color: var(--text-primary);">Progress Sync</h2>
 
     <div class="space-y-4">
       <div>
         <h3 class="font-medium mb-2" style="color: var(--text-secondary);">Export Progress</h3>
         <p class="text-sm mb-2" style="color: var(--text-secondary);">Download your learning progress as a JSON file</p>
-        <a href="/admin/progress/export" class="btn-primary px-4 py-2 inline-block">Export Progress</a>
+        <Button size="md" variant="secondary" onclick={() => { window.location.href = '/admin/progress/export'; }}>Export Progress</Button>
       </div>
 
       <div>
         <h3 class="font-medium mb-2" style="color: var(--text-secondary);">Import Progress</h3>
         <p class="text-sm mb-2" style="color: var(--text-secondary);">Upload a progress JSON file to restore your data</p>
-        <button class="btn-primary px-4 py-2" onclick={openImportModal}>Import Progress</button>
+        <Button size="md" variant="primary" onclick={openImportModal}>Import Progress</Button>
       </div>
     </div>
-  </div>
+  </Card>
 
   <!-- Messages -->
   {#if message}
@@ -253,13 +234,14 @@ onMount(() => {
         {/if}
 
         <div class="flex gap-2">
-          <button
-            class="btn-secondary px-4 py-2"
+          <Button
+            size="md"
+            variant="secondary"
             onclick={closeImportModal}
             disabled={importing}
           >
             Cancel
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -280,19 +262,12 @@ onMount(() => {
   .input-field:focus {
     outline: none;
     border-color: var(--border-focus);
-    box-shadow: 0 0 0 3px rgba(124, 158, 178, 0.15);
+    box-shadow: 0 0 0 3px rgba(108, 190, 237, 0.15);
   }
 
   .input-field:disabled {
     opacity: 0.6;
     cursor: not-allowed;
-  }
-
-  .stat-card {
-    background: var(--background-alt);
-    padding: 16px;
-    border-radius: 8px;
-    border: 1px solid var(--border);
   }
 
   .message {
@@ -335,8 +310,4 @@ onMount(() => {
     width: 90%;
   }
 
-  :global(.btn-secondary:disabled) {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
 </style>

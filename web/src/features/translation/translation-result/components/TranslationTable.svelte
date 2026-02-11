@@ -1,5 +1,7 @@
 <script lang="ts">
 import type { SegmentResult } from '@/features/translation/types';
+import Card from '@/ui/Card.svelte';
+import { ChevronDown } from '@lucide/svelte';
 
 const {
   results,
@@ -11,32 +13,120 @@ let showDetails = $state(false);
 </script>
 
 {#if results.length > 0}
-  <div class="p-4 mt-4 rounded-xl" style="background: var(--surface); box-shadow: 0 1px 3px var(--shadow); border: 1px solid var(--border);">
-    <button class="flex items-center justify-between w-full text-left" onclick={() => (showDetails = !showDetails)}>
-      <h3 class="font-semibold" style="color: var(--text-primary); font-size: var(--text-base);">Translation Details</h3>
-      <span style="color: var(--text-muted); font-size: var(--text-lg);">{showDetails ? "\u2212" : "+"}</span>
+  <Card padding="4" collapsible class="table-card">
+    <button class="table-toggle" onclick={() => (showDetails = !showDetails)}>
+      <h3 class="table-title">Translation Details</h3>
+      <span class="toggle-icon" class:open={showDetails}>
+        <ChevronDown size={18} />
+      </span>
     </button>
     {#if showDetails}
-      <div class="mt-3 overflow-x-auto">
-        <table class="w-full text-left">
+      <div class="table-wrap">
+        <table class="details-table">
           <thead>
-            <tr style="border-bottom: 1px solid var(--border);">
-              <th class="py-1.5 px-2 font-semibold uppercase tracking-wider" style="color: var(--text-muted); font-size: var(--text-xs);">Chinese</th>
-              <th class="py-1.5 px-2 font-semibold uppercase tracking-wider" style="color: var(--text-muted); font-size: var(--text-xs);">Pinyin</th>
-              <th class="py-1.5 px-2 font-semibold uppercase tracking-wider" style="color: var(--text-muted); font-size: var(--text-xs);">English</th>
+            <tr>
+              <th>Chinese</th>
+              <th>Pinyin</th>
+              <th>English</th>
             </tr>
           </thead>
           <tbody>
             {#each results as item}
-              <tr class="cursor-pointer translation-row" style="border-bottom: 1px solid var(--background-alt);">
-                <td class="py-2 px-2" style="font-family: var(--font-chinese); font-size: var(--text-chinese); color: var(--text-primary);">{item.segment}</td>
-                <td class="py-2 px-2" style="color: var(--text-secondary); font-size: var(--text-sm);">{item.pinyin}</td>
-                <td class="py-2 px-2" style="color: var(--secondary-dark); font-size: var(--text-sm);">{item.english}</td>
+              <tr>
+                <td class="cell-chinese">{item.segment}</td>
+                <td class="cell-pinyin">{item.pinyin}</td>
+                <td class="cell-english">{item.english}</td>
               </tr>
             {/each}
           </tbody>
         </table>
       </div>
     {/if}
-  </div>
+  </Card>
 {/if}
+
+<style>
+  :global(.table-card) {
+    margin-top: var(--space-4);
+  }
+
+  .table-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    padding: 0;
+    font-family: var(--font-body);
+  }
+
+  .table-title {
+    font-size: var(--text-base);
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+  }
+
+  .toggle-icon {
+    color: var(--text-muted);
+    transition: transform 0.2s ease;
+    display: flex;
+    align-items: center;
+  }
+
+  .toggle-icon.open {
+    transform: rotate(180deg);
+  }
+
+  .table-wrap {
+    margin-top: var(--space-3);
+    overflow-x: auto;
+  }
+
+  .details-table {
+    width: 100%;
+    text-align: left;
+    border-collapse: collapse;
+  }
+
+  .details-table th {
+    padding: var(--space-2);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .details-table td {
+    padding: var(--space-2);
+    font-size: var(--text-sm);
+    border-bottom: 1px solid var(--background-alt);
+  }
+
+  .details-table tbody tr {
+    transition: background 0.1s ease;
+  }
+
+  .details-table tbody tr:hover {
+    background: var(--background-alt);
+  }
+
+  .cell-chinese {
+    font-family: var(--font-chinese);
+    font-size: var(--text-chinese);
+    color: var(--text-primary);
+  }
+
+  .cell-pinyin {
+    color: var(--text-secondary);
+  }
+
+  .cell-english {
+    color: var(--secondary-dark);
+  }
+</style>

@@ -7,6 +7,7 @@ import type { VocabStatsResponse } from '@/features/translation/types';
 import { getJson } from '@/lib/api';
 import { router } from '@/lib/router.svelte';
 import Button from '@/ui/Button.svelte';
+import Card from '@/ui/Card.svelte';
 
 let vocabStats = $state({ known: 0, learning: 0, total: 0 });
 let loading = $state(true);
@@ -102,7 +103,7 @@ function openSnippetTranslation() {
       </div>
     </div>
 
-    <div class="vocab-review-card">
+    <Card padding="6" shadow>
       <div class="review-header">
         <h3 class="card-title">Review</h3>
         {#if isReviewMode && progress.total > 0}
@@ -178,7 +179,7 @@ function openSnippetTranslation() {
           {/if}
         </div>
       {/if}
-    </div>
+    </Card>
   </div>
 {/if}
 
