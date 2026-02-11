@@ -2,6 +2,8 @@
    Job Queue Cards
    =========================================== */
 
+/* TODO: migrate to translation-list */
+
 .job-card {
     position: relative;
     background: var(--surface);

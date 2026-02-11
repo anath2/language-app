@@ -1,4 +1,9 @@
+
 <script lang="ts">
+
+// TODO
+// Clean up and migration styles/components
+// fix svelte issues in translation-result
 import NavBar from '@/ui/NavBar.svelte';
 import Admin from '@/features/admin/components/Admin.svelte';
 import Login from '@/features/auth/components/Login.svelte';
