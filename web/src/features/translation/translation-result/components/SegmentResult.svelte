@@ -1,8 +1,9 @@
 <script lang="ts">
 import { tick } from 'svelte';
-import type { LoadingState } from '@/lib/types';
+import Button from '@/ui/Button.svelte';
 import type {
   DisplayParagraph,
+  LoadingState,
   ProgressState,
   SavedVocabInfo,
   SegmentResult,
@@ -14,9 +15,6 @@ const {
   displayParagraphs,
   savedVocabMap,
   progress,
-  fullTranslation,
-  loadingState,
-  errorMessage,
   onSaveVocab,
   onMarkKnown,
   onResumeLearning,
@@ -73,18 +71,10 @@ function getSegmentStyle(segment: SegmentResult) {
 }
 
 function getSegmentClasses(segment: SegmentResult) {
-  const classes = [
-    'segment',
-    'inline-block',
-    'px-2',
-    'py-1',
-    'rounded',
-    'border-2',
-    'border-transparent',
-  ];
+  const classes = ['segment'];
   if (segment.pending) classes.push('segment-pending');
   if (segment.pinyin || segment.english) {
-    classes.push('transition-all', 'duration-150', 'hover:-translate-y-px', 'hover:shadow-sm');
+    classes.push('segment-interactive');
   }
   const info = savedVocabMap.get(segment.segment);
   if (info) {
@@ -96,7 +86,6 @@ function getSegmentClasses(segment: SegmentResult) {
 
 async function handleSegmentHover(segment: SegmentResult, element: EventTarget | null) {
   if (tooltipPinned) return;
-  // Clear any pending hide timeout to prevent flickering
   if (tooltipHideTimeout !== null) {
     window.clearTimeout(tooltipHideTimeout);
     tooltipHideTimeout = null;
@@ -109,7 +98,6 @@ async function handleSegmentHover(segment: SegmentResult, element: EventTarget |
 
 function handleSegmentLeave() {
   if (!tooltipPinned) {
-    // Add small delay before hiding to allow moving to tooltip
     tooltipHideTimeout = window.setTimeout(() => {
       tooltipVisible = false;
     }, 150);
@@ -117,7 +105,6 @@ function handleSegmentLeave() {
 }
 
 function handleTooltipEnter() {
-  // Cancel hide when entering tooltip
   if (tooltipHideTimeout !== null) {
     window.clearTimeout(tooltipHideTimeout);
     tooltipHideTimeout = null;
@@ -133,7 +120,6 @@ function handleTooltipLeave() {
 function updateTooltipPosition() {
   if (!tooltipVisible || !tooltipRef) return;
 
-  // If we have a last hovered element and it's still in the DOM, reposition relative to it
   if (lastHoveredElement && document.contains(lastHoveredElement)) {
     const segRect = lastHoveredElement.getBoundingClientRect();
     const tooltipRect = tooltipRef.getBoundingClientRect();
@@ -142,7 +128,6 @@ function updateTooltipPosition() {
     let top = segRect.top - tooltipRect.height - 8;
 
     const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
 
     if (left < 8) left = 8;
     if (left + tooltipRect.width > viewportWidth - 8) {
@@ -194,25 +179,17 @@ async function showTooltip(segment: SegmentResult, element: EventTarget | null, 
   const segRect = element.getBoundingClientRect();
   const tooltipRect = tooltipRef.getBoundingClientRect();
 
-  // Calculate position relative to viewport (for fixed positioning)
-  // Center horizontally over the segment
   let left = segRect.left + segRect.width / 2 - tooltipRect.width / 2;
-  // Position above the segment with 8px gap
   let top = segRect.top - tooltipRect.height - 8;
 
-  // Keep tooltip within viewport bounds
   const viewportWidth = window.innerWidth;
-  const viewportHeight = window.innerHeight;
 
-  // Prevent going off left edge
   if (left < 8) {
     left = 8;
   }
-  // Prevent going off right edge
   if (left + tooltipRect.width > viewportWidth - 8) {
     left = viewportWidth - tooltipRect.width - 8;
   }
-  // If tooltip would go above viewport, show it below the segment instead
   if (top < 8) {
     top = segRect.bottom + 8;
   }
@@ -253,12 +230,12 @@ async function resumeLearning() {
 
 <svelte:window onclick={handleGlobalClick} onscroll={updateTooltipPosition} />
 
-<div class="relative space-y-3" bind:this={resultsContainer}>
+<div class="segment-results" bind:this={resultsContainer}>
   {#if progress.total > 0 && progress.current < progress.total}
     <div class="progress-container">
-      <div class="flex justify-between mb-1.5" style="font-size: var(--text-xs);">
-        <span style="color: var(--text-secondary);">Translating...</span>
-        <span style="color: var(--text-secondary);">{progress.current} / {progress.total}</span>
+      <div class="progress-header">
+        <span>Translating...</span>
+        <span>{progress.current} / {progress.total}</span>
       </div>
       <div class="progress-bar-bg">
         <div class="progress-bar-fill" style={`width: ${(progress.current / progress.total) * 100}%`}></div>
@@ -268,13 +245,13 @@ async function resumeLearning() {
 
   <div id="segments-container">
     {#each displayParagraphs as para}
-      <div class="paragraph flex flex-wrap gap-1" style={`margin-bottom: ${para.separator ? para.separator.split("\n").length * 0.4 : 0}rem; padding-left: ${para.indent ? para.indent.length * 0.5 : 0}rem;`}>
+      <div class="paragraph" style={`margin-bottom: ${para.separator ? para.separator.split("\n").length * 0.4 : 0}rem; padding-left: ${para.indent ? para.indent.length * 0.5 : 0}rem;`}>
         {#each para.segments as segment (segment.index)}
           <!-- svelte-ignore a11y_click_events_have_key_events -->
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <span
             class={getSegmentClasses(segment)}
-            style={`font-family: var(--font-chinese); font-size: var(--text-chinese); color: var(--text-primary); cursor: ${segment.pinyin || segment.english ? "pointer" : "default"}; ${getSegmentStyle(segment)}`}
+            style={getSegmentStyle(segment)}
             onmouseenter={(event: MouseEvent) => handleSegmentHover(segment, event.currentTarget)}
             onmouseleave={handleSegmentLeave}
             onclick={(event: MouseEvent) => {
@@ -291,7 +268,8 @@ async function resumeLearning() {
 
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
-    class={`word-tooltip ${tooltipVisible ? "" : "hidden"}`}
+    class="word-tooltip"
+    class:hidden={!tooltipVisible}
     bind:this={tooltipRef}
     style={`left: ${tooltip.x}px; top: ${tooltip.y}px;`}
     onmouseenter={handleTooltipEnter}
@@ -302,16 +280,170 @@ async function resumeLearning() {
     <div class="tooltip-actions">
       {#if tooltip.pinyin || tooltip.english}
         {#if !tooltip.vocabItemId}
-          <button class="tooltip-btn" type="button" onclick={saveVocab}>Save to Learn</button>
+          <Button variant="secondary" size="xs" shape="pill" onclick={saveVocab}>
+            Save to Learn
+          </Button>
         {:else if tooltip.status === "learning"}
-          <button class="tooltip-btn" type="button" onclick={markKnown}>Mark as Known</button>
+          <Button variant="secondary" size="xs" shape="pill" onclick={markKnown}>
+            Mark as Known
+          </Button>
         {:else if tooltip.status === "known"}
-          <button class="tooltip-btn" type="button" onclick={resumeLearning}>Resume Learning</button>
+          <Button variant="secondary" size="xs" shape="pill" onclick={resumeLearning}>
+            Resume Learning
+          </Button>
         {:else}
-          <button class="tooltip-btn" type="button" onclick={saveVocab}>Save to Learn</button>
+          <Button variant="secondary" size="xs" shape="pill" onclick={saveVocab}>
+            Save to Learn
+          </Button>
         {/if}
       {/if}
     </div>
-    <div class="tooltip-arrow"></div>
   </div>
 </div>
+
+<style>
+  .segment-results {
+    position: relative;
+  }
+
+  /* Progress Bar */
+  .progress-container {
+    margin-bottom: var(--space-3);
+  }
+
+  .progress-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: var(--space-2);
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+  }
+
+  .progress-bar-bg {
+    width: 100%;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--primary-light), var(--primary));
+    border-radius: 2px;
+    transition: width 0.3s ease;
+  }
+
+  /* Paragraphs */
+  .paragraph {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+  }
+
+  /* Segments */
+  .segment {
+    display: inline-block;
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-md);
+    border: 2px solid transparent;
+    font-family: var(--font-chinese);
+    font-size: var(--text-chinese);
+    color: var(--text-primary);
+    transition: all 0.15s ease;
+  }
+
+  .segment-interactive {
+    cursor: pointer;
+  }
+
+  .segment-interactive:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  }
+
+  /* Pending segment */
+  .segment-pending {
+    background: var(--background-alt) !important;
+    border: 2px dashed var(--border) !important;
+    opacity: 0.8;
+  }
+
+  .segment-pending:hover {
+    transform: none;
+    box-shadow: none;
+  }
+
+  /* SRS saved word opacity */
+  .segment.saved {
+    position: relative;
+    background: transparent !important;
+  }
+
+  .segment.saved::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: var(--segment-color, transparent);
+    opacity: var(--segment-opacity, 1);
+    z-index: -1;
+  }
+
+  .segment.struggling {
+    text-decoration: underline dotted var(--text-muted);
+  }
+
+  /* Tooltip */
+  .word-tooltip {
+    position: fixed;
+    z-index: var(--z-tooltip);
+    min-width: 140px;
+    max-width: 240px;
+    padding: var(--space-3) var(--space-4);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.04);
+    pointer-events: auto;
+    opacity: 0;
+    transform: translateY(4px);
+    animation: tooltipFadeIn 0.15s ease forwards;
+  }
+
+  .word-tooltip.hidden {
+    display: none;
+  }
+
+  @keyframes tooltipFadeIn {
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .tooltip-pinyin {
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--primary-dark);
+    margin-bottom: var(--space-1);
+    letter-spacing: var(--tracking-tight);
+  }
+
+  .tooltip-english {
+    font-family: var(--font-body);
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+    line-height: var(--leading-snug);
+    margin-bottom: var(--space-2);
+  }
+
+  .tooltip-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+  }
+
+</style>

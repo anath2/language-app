@@ -1,13 +1,15 @@
-// Review store - manages review queue and panel state
-// Located in features/vocab/stores/
+// Review store - manages review queue state
 
 import { getJson, postJson } from '@/lib/api';
-import type { ReviewAnswerResponse, ReviewCard, ReviewQueueResponse } from '@/lib/types';
+import type {
+  ReviewAnswerResponse,
+  ReviewCard,
+  ReviewQueueResponse,
+} from '@/features/translation/types';
 
 // State
 let queue = $state<ReviewCard[]>([]);
 let currentIndex = $state(0);
-let isOpen = $state(false);
 let isAnswerRevealed = $state(false);
 let isLoading = $state(false);
 
@@ -53,37 +55,6 @@ export async function gradeCard(grade: number): Promise<void> {
 
   currentIndex += 1;
   isAnswerRevealed = false;
-
-  // If we've gone through all cards, reload the queue
-  if (currentIndex >= queue.length) {
-    await loadQueue();
-  }
-}
-
-/**
- * Open the review panel
- */
-export function openPanel(): void {
-  isOpen = true;
-  void loadQueue();
-}
-
-/**
- * Close the review panel
- */
-export function closePanel(): void {
-  isOpen = false;
-}
-
-/**
- * Toggle the review panel
- */
-export function togglePanel(): void {
-  if (isOpen) {
-    closePanel();
-  } else {
-    openPanel();
-  }
 }
 
 // Export reactive state
@@ -93,9 +64,6 @@ export const reviewStore = {
   },
   get currentIndex() {
     return currentIndex;
-  },
-  get isOpen() {
-    return isOpen;
   },
   get isAnswerRevealed() {
     return isAnswerRevealed;
@@ -109,10 +77,10 @@ export const reviewStore = {
   get progress(): { current: number; total: number } {
     return { current: currentIndex + 1, total: queue.length };
   },
+  get isQueueExhausted(): boolean {
+    return queue.length > 0 && currentIndex >= queue.length;
+  },
   loadQueue,
   revealAnswer,
   gradeCard,
-  openPanel,
-  closePanel,
-  togglePanel,
 };

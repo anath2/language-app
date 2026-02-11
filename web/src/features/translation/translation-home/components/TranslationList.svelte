@@ -1,6 +1,8 @@
 <script lang="ts">
-import type { TranslationStatus, TranslationSummary } from '@/lib/types';
+import type { TranslationStatus, TranslationSummary } from '@/features/translation/types';
 import { formatTimeAgo } from '@/lib/utils';
+import Button from '@/ui/Button.svelte';
+import { Trash2 } from '@lucide/svelte';
 
 const {
   translations,
@@ -55,15 +57,20 @@ const statusLabels: Record<TranslationStatus, string> = {
               {translation.segment_count} segments
             {/if}
           </span>
-          <button
+          <Button
+            variant="ghost"
+            size="xs"
+            iconOnly
             class="job-delete-btn"
-            onclick={(e: MouseEvent) => { e.stopPropagation(); onDelete(translation.id); }}
             title="Delete"
+            ariaLabel="Delete translation"
+            onclick={(e: MouseEvent) => {
+              e.stopPropagation();
+              onDelete(translation.id);
+            }}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
-            </svg>
-          </button>
+            <Trash2 size={14} />
+          </Button>
         </div>
       </div>
     {/each}

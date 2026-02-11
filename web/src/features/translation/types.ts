@@ -1,4 +1,38 @@
-export type { LoadingState, VocabStatus } from '../../lib/types';
+export type TranslationStatus = 'pending' | 'processing' | 'completed' | 'failed';
+export type LoadingState = 'idle' | 'loading' | 'error';
+export type VocabStatus = 'unknown' | 'learning' | 'known';
+
+export interface TranslationSummary {
+  id: string;
+  created_at: string;
+  status: TranslationStatus;
+  source_type: string;
+  input_preview: string;
+  full_translation_preview: string | null;
+  segment_count: number | null;
+  total_segments: number | null;
+}
+
+export interface ListTranslationsResponse {
+  translations: TranslationSummary[];
+  total: number;
+}
+
+export interface TranslationDetailResponse {
+  id: string;
+  created_at: string;
+  status: TranslationStatus;
+  source_type: string;
+  input_text: string;
+  full_translation: string | null;
+  error_message: string | null;
+  paragraphs: ParagraphResult[] | null;
+}
+
+export interface CreateTranslationResponse {
+  translation_id: string;
+  status: TranslationStatus;
+}
 
 export interface TranslationResult {
   segment: string;
@@ -77,11 +111,67 @@ export type StreamEvent =
   | StreamCompleteEvent
   | StreamErrorEvent;
 
+export interface ReviewCard {
+  vocab_item_id: string;
+  headword: string;
+  pinyin: string;
+  english: string;
+  snippets: string[];
+}
+
+export interface ReviewQueueResponse {
+  cards: ReviewCard[];
+  due_count: number;
+}
+
+export interface ReviewAnswerResponse {
+  vocab_item_id: string;
+  next_due_at: string | null;
+  interval_days: number;
+  remaining_due: number;
+}
+
+export interface VocabSrsInfoItem {
+  vocab_item_id: string;
+  headword: string;
+  pinyin: string;
+  english: string;
+  opacity: number;
+  is_struggling: boolean;
+  status: VocabStatus;
+}
+
+export interface VocabSrsInfoListResponse {
+  items: VocabSrsInfoItem[];
+}
+
+export interface RecordLookupResponse {
+  vocab_item_id: string;
+  opacity: number;
+  is_struggling: boolean;
+}
+
+export interface SaveVocabResponse {
+  vocab_item_id: string;
+}
+
+export interface DueCountResponse {
+  due_count: number;
+}
+
+export interface CreateTextResponse {
+  id: string;
+}
+
+export interface ExtractTextResponse {
+  text: string;
+}
+
 export interface SavedVocabInfo {
   vocabItemId: string;
   opacity: number;
   isStruggling: boolean;
-  status: import('../../lib/types').VocabStatus;
+  status: VocabStatus;
 }
 
 export interface TooltipState {
@@ -89,11 +179,19 @@ export interface TooltipState {
   pinyin: string;
   english: string;
   vocabItemId: string | null;
-  status: import('../../lib/types').VocabStatus | '';
+  status: VocabStatus | '';
   x: number;
   y: number;
 }
 
 export interface TranslateBatchResponse {
   translations: TranslationResult[];
+}
+
+export interface VocabStatsResponse {
+  vocabStats: {
+    known: number;
+    learning: number;
+    total: number;
+  };
 }
