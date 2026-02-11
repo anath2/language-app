@@ -17,6 +17,7 @@ web/.vite/
 
 # Environment variables
 .env
+.env.test
 
 # LLM stuff 
 .cursor
