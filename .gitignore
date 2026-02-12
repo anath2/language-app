@@ -17,6 +17,7 @@ web/.vite/
 
 # Environment variables
 .env
+.env.test
 
 # LLM stuff 
 .cursor
@@ -26,8 +27,10 @@ web/.vite/
 .pytest_cache
 .ruff_cache
 
-# database
-*.db
+# data
+data
+tmp
+
 
 # Misc
 .DS_Store
