@@ -215,7 +215,7 @@ func parseSegmentsFromResponse(v any) []string {
 			return segments
 		}
 	}
-	raw := strings.TrimSpace(toString(v))
+	raw := normalizeJSONLikePayload(strings.TrimSpace(toString(v)))
 	if raw == "" {
 		return nil
 	}
@@ -268,7 +268,7 @@ func parseTranslationFromResponse(v any) (string, string) {
 	if m, ok := v.(map[string]any); ok {
 		return normalizeModelField(toString(m["pinyin"])), normalizeModelField(toString(m["english"]))
 	}
-	raw := strings.TrimSpace(toString(v))
+	raw := normalizeJSONLikePayload(strings.TrimSpace(toString(v)))
 	if raw == "" {
 		return "", ""
 	}
@@ -277,6 +277,35 @@ func parseTranslationFromResponse(v any) (string, string) {
 		return "", ""
 	}
 	return normalizeModelField(toString(payload["pinyin"])), normalizeModelField(toString(payload["english"]))
+}
+
+func normalizeJSONLikePayload(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+
+	// Handle markdown fenced payloads like:
+	// ```json
+	// {"pinyin":"...","english":"..."}
+	// ```
+	if strings.HasPrefix(raw, "```") {
+		parts := strings.Split(raw, "\n")
+		if len(parts) >= 2 {
+			parts = parts[1:]
+		}
+		if len(parts) > 0 {
+			last := strings.TrimSpace(parts[len(parts)-1])
+			if strings.HasPrefix(last, "```") {
+				parts = parts[:len(parts)-1]
+			}
+		}
+		raw = strings.TrimSpace(strings.Join(parts, "\n"))
+	}
+
+	// Some providers prepend "json" without fences.
+	raw = strings.TrimSpace(strings.TrimPrefix(raw, "json"))
+	return raw
 }
 
 func normalizeModelField(value string) string {

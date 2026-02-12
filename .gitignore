@@ -30,7 +30,9 @@ web/.vite/
 # data
 data
 tmp
-
+.db
+.db-shm
+.db-wal
 
 # Misc
 .DS_Store
