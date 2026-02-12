@@ -143,5 +143,5 @@ Artifacts:
 - To test with alternate model/base URL quickly, set env vars inline:
 
 ```bash
-OPENROUTER_MODEL="your/model" OPENROUTER_BASE_URL="https://openrouter.ai/api/v1" ./scripts/e2e_curl.sh
+OPENAI_MODEL="your/model" OPENAI_BASE_URL="https://openrouter.ai/api/v1" ./scripts/e2e_curl.sh
 ```

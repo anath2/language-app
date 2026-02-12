@@ -11,7 +11,6 @@ import (
 	"net/url"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/XiaoConstantine/dspy-go/pkg/core"
 	"github.com/XiaoConstantine/dspy-go/pkg/llms"
@@ -20,7 +19,7 @@ import (
 	"github.com/anath2/language-app/internal/translation"
 )
 
-const llmTimeout = 2 * time.Second
+const llmTimeout = 10 * time.Minute
 
 type DSPyProvider struct {
 	segmenter  *modules.Predict
@@ -31,10 +30,13 @@ type DSPyProvider struct {
 func NewDSPyProvider(cfg config.Config) (*DSPyProvider, error) {
 	llms.EnsureFactory()
 
-	modelID := core.ModelID(strings.TrimSpace(cfg.OpenRouterModel))
-	baseURL, path := normalizeOpenAIEndpoint(cfg.OpenRouterBaseURL)
+	modelID := core.ModelID(strings.TrimSpace(cfg.OpenAIModel))
+	baseURL, path, err := normalizeOpenAIEndpoint(cfg.OpenAIBaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid OPENAI_BASE_URL %q: %w", cfg.OpenAIBaseURL, err)
+	}
 	options := []llms.OpenAIOption{
-		llms.WithAPIKey(cfg.OpenRouterAPIKey),
+		llms.WithAPIKey(cfg.OpenAIAPIKey),
 		llms.WithOpenAIBaseURL(baseURL),
 		llms.WithOpenAIPath(path),
 		llms.WithOpenAITimeout(llmTimeout),
@@ -46,11 +48,11 @@ func NewDSPyProvider(cfg config.Config) (*DSPyProvider, error) {
 	if err != nil {
 		return nil, fmt.Errorf("initialize dspy-go llm: %w", err)
 	}
-	if cfg.OpenRouterDebugLog {
+	if cfg.OpenAIDebugLog {
 		client := openAILLM.GetHTTPClient()
 		client.Timeout = llmTimeout
-		client.Transport = &openRouterDebugRoundTripper{base: client.Transport}
-		log.Printf("openrouter debug enabled: base_url=%s path=%s model=%s", baseURL, path, modelID)
+		client.Transport = &openAIDebugRoundTripper{base: client.Transport}
+		log.Printf("openai-compatible debug enabled: base_url=%s path=%s model=%s", baseURL, path, modelID)
 	}
 
 	segmentSig := core.NewSignature(
@@ -60,7 +62,7 @@ func NewDSPyProvider(cfg config.Config) (*DSPyProvider, error) {
 		[]core.OutputField{
 			{Field: core.NewField("segments", core.WithDescription("Array of segmented words in order"))},
 		},
-	).WithInstruction("Split the Chinese text into meaningful segments and return segments as an ordered JSON array.")
+	).WithInstruction("Split the Chinese text into meaningful segments of words and return segments as an ordered JSON array.")
 
 	translateSig := core.NewSignature(
 		[]core.InputField{
@@ -100,16 +102,16 @@ func (p *DSPyProvider) Segment(ctx context.Context, text string) ([]string, erro
 
 	res, err := p.segmenter.Process(ctx, map[string]any{"text": text})
 	if err != nil {
-		log.Printf("dspy segment fallback activated: err=%v text_preview=%q", err, preview(text, 40))
-		return fallbackSegments(text), nil
+		log.Printf("dspy segment failed: err=%v text_preview=%q", err, preview(text, 40))
+		return nil, fmt.Errorf("segment text with dspy: %w", err)
 	}
 	segments := parseSegments(res["segments"])
 	if len(segments) == 0 {
 		segments = parseSegmentsFromResponse(res["response"])
 	}
 	if len(segments) == 0 {
-		log.Printf("dspy segment fallback activated: empty segments text_preview=%q raw_response=%v", preview(text, 40), res)
-		return fallbackSegments(text), nil
+		log.Printf("dspy segment failed: empty segments text_preview=%q raw_response=%v", preview(text, 40), res)
+		return nil, fmt.Errorf("segment text with dspy: empty or invalid segments response")
 	}
 	return segments, nil
 }
@@ -199,7 +201,7 @@ func parseSegments(v any) []string {
 		if s == "" {
 			return nil
 		}
-		return fallbackSegments(s)
+		return parseSegmentsString(s)
 	}
 }
 
@@ -217,11 +219,46 @@ func parseSegmentsFromResponse(v any) []string {
 	if raw == "" {
 		return nil
 	}
+	if segments := parseSegmentsString(raw); len(segments) > 0 {
+		return segments
+	}
 	var payload map[string]any
 	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
 		return nil
 	}
 	return parseSegments(payload["segments"])
+}
+
+func parseSegmentsString(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	lower := strings.ToLower(raw)
+	if strings.HasPrefix(lower, "segments:") {
+		raw = strings.TrimSpace(raw[len("segments:"):])
+	}
+	if raw == "" {
+		return nil
+	}
+
+	var listPayload []any
+	if err := json.Unmarshal([]byte(raw), &listPayload); err == nil {
+		out := make([]string, 0, len(listPayload))
+		for _, it := range listPayload {
+			s := strings.TrimSpace(toString(it))
+			if s != "" {
+				out = append(out, s)
+			}
+		}
+		return out
+	}
+
+	var mapPayload map[string]any
+	if err := json.Unmarshal([]byte(raw), &mapPayload); err == nil {
+		return parseSegments(mapPayload["segments"])
+	}
+	return nil
 }
 
 func parseTranslationFromResponse(v any) (string, string) {
@@ -259,17 +296,6 @@ func normalizeModelField(value string) string {
 		value = strings.TrimSpace(value[1 : len(value)-1])
 	}
 	return value
-}
-
-func fallbackSegments(text string) []string {
-	out := make([]string, 0, len([]rune(text)))
-	for _, r := range []rune(text) {
-		if unicode.IsSpace(r) {
-			continue
-		}
-		out = append(out, string(r))
-	}
-	return out
 }
 
 func fallbackTranslation(segment string) translation.SegmentResult {
@@ -321,20 +347,20 @@ func preview(s string, max int) string {
 	return string(runes[:max]) + "..."
 }
 
-func newOpenRouterDebugHTTPClient(timeout time.Duration) *http.Client {
+func newOpenAIDebugHTTPClient(timeout time.Duration) *http.Client {
 	return &http.Client{
 		Timeout: timeout,
-		Transport: &openRouterDebugRoundTripper{
+		Transport: &openAIDebugRoundTripper{
 			base: http.DefaultTransport,
 		},
 	}
 }
 
-type openRouterDebugRoundTripper struct {
+type openAIDebugRoundTripper struct {
 	base http.RoundTripper
 }
 
-func (rt *openRouterDebugRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+func (rt *openAIDebugRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	base := rt.base
 	if base == nil {
 		base = http.DefaultTransport
@@ -342,11 +368,11 @@ func (rt *openRouterDebugRoundTripper) RoundTrip(req *http.Request) (*http.Respo
 	start := time.Now()
 	resp, err := base.RoundTrip(req)
 	if err != nil {
-		log.Printf("openrouter upstream request failed: method=%s url=%s err=%v elapsed_ms=%d", req.Method, req.URL.String(), err, time.Since(start).Milliseconds())
+		log.Printf("openai-compatible upstream request failed: method=%s url=%s err=%v elapsed_ms=%d", req.Method, req.URL.String(), err, time.Since(start).Milliseconds())
 		return nil, err
 	}
 
-	log.Printf("openrouter upstream response: method=%s url=%s status=%d elapsed_ms=%d", req.Method, req.URL.String(), resp.StatusCode, time.Since(start).Milliseconds())
+	log.Printf("openai-compatible upstream response: method=%s url=%s status=%d elapsed_ms=%d", req.Method, req.URL.String(), resp.StatusCode, time.Since(start).Milliseconds())
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		return resp, nil
 	}
@@ -356,7 +382,7 @@ func (rt *openRouterDebugRoundTripper) RoundTrip(req *http.Request) (*http.Respo
 	}
 	bodyBytes, readErr := io.ReadAll(resp.Body)
 	if readErr != nil {
-		log.Printf("openrouter upstream non-2xx body read failed: status=%d err=%v", resp.StatusCode, readErr)
+		log.Printf("openai-compatible upstream non-2xx body read failed: status=%d err=%v", resp.StatusCode, readErr)
 		resp.Body = io.NopCloser(bytes.NewReader(nil))
 		return resp, nil
 	}
@@ -366,38 +392,36 @@ func (rt *openRouterDebugRoundTripper) RoundTrip(req *http.Request) (*http.Respo
 	if len(snippet) > 1000 {
 		snippet = snippet[:1000] + "..."
 	}
-	log.Printf("openrouter upstream non-2xx body: status=%d body=%s", resp.StatusCode, snippet)
+	log.Printf("openai-compatible upstream non-2xx body: status=%d body=%s", resp.StatusCode, snippet)
 	return resp, nil
 }
 
-func normalizeOpenAIEndpoint(rawBaseURL string) (string, string) {
+func normalizeOpenAIEndpoint(rawBaseURL string) (string, string, error) {
 	baseURL := strings.TrimSpace(rawBaseURL)
 	baseURL = strings.TrimRight(baseURL, "/")
-	defaultPath := "/v1/chat/completions"
 	if baseURL == "" {
-		return "https://api.openai.com", defaultPath
+		return "", "", fmt.Errorf("must be a full URL ending with /v1")
 	}
 
 	parsed, err := url.Parse(baseURL)
 	if err != nil {
-		return baseURL, defaultPath
+		return "", "", fmt.Errorf("parse URL: %w", err)
+	}
+	if parsed.Scheme == "" || parsed.Host == "" {
+		return "", "", fmt.Errorf("must include scheme and host")
+	}
+	if parsed.RawQuery != "" || parsed.Fragment != "" {
+		return "", "", fmt.Errorf("must not include query string or fragment")
 	}
 	path := strings.TrimRight(parsed.Path, "/")
-
-	if strings.Contains(strings.ToLower(parsed.Host), "openrouter.ai") {
-		switch {
-		case path == "":
-			parsed.Path = "/api/v1"
-			return strings.TrimRight(parsed.String(), "/"), "/chat/completions"
-		case strings.HasSuffix(path, "/api/v1"), strings.HasSuffix(path, "/v1"):
-			return strings.TrimRight(parsed.String(), "/"), "/chat/completions"
-		default:
-			return strings.TrimRight(parsed.String(), "/"), defaultPath
-		}
+	if path == "" || !strings.HasSuffix(path, "/v1") {
+		return "", "", fmt.Errorf("path must end with /v1")
+	}
+	if strings.Contains(path, "/chat/completions") {
+		return "", "", fmt.Errorf("must be a base URL only; do not include /chat/completions")
 	}
 
-	if strings.HasSuffix(path, "/v1") {
-		return strings.TrimRight(parsed.String(), "/"), "/chat/completions"
-	}
-	return strings.TrimRight(parsed.String(), "/"), defaultPath
+	parsed.Path = path
+	parsed.RawPath = ""
+	return strings.TrimRight(parsed.String(), "/"), "/chat/completions", nil
 }

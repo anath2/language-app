@@ -27,10 +27,10 @@ web/.vite/
 .pytest_cache
 .ruff_cache
 
-# database
-*.db
-.db-wal
-.db-shm
+# data
+data
+tmp
+
 
 # Misc
 .DS_Store

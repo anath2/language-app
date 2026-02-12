@@ -8,18 +8,20 @@ import (
 	"github.com/joho/godotenv"
 )
 
-func TestLoadRequiresOpenRouterEnv(t *testing.T) {
+func TestLoadRequiresOpenAIEnv(t *testing.T) {
 	repoRoot := createTempRepoRoot(t)
 	withChdir(t, repoRoot)
 
 	t.Setenv("APP_PASSWORD", "pw")
 	t.Setenv("APP_SECRET_KEY", "secret")
+	t.Setenv("OPENAI_API_KEY", "")
 	t.Setenv("OPENROUTER_API_KEY", "")
+	t.Setenv("OPENAI_MODEL", "")
 	t.Setenv("OPENROUTER_MODEL", "")
 
 	_, err := Load()
 	if err == nil {
-		t.Fatal("expected error when OPENROUTER vars are missing")
+		t.Fatal("expected error when OPENAI vars are missing")
 	}
 }
 
@@ -28,14 +30,16 @@ func TestLoadFromDotenvThenValidate(t *testing.T) {
 	withChdir(t, repoRoot)
 
 	envPath := filepath.Join(repoRoot, ".env")
-	envContent := "APP_PASSWORD=testpass\nAPP_SECRET_KEY=testsecret\nOPENROUTER_API_KEY=or-key\nOPENROUTER_MODEL=openai/gpt-4o-mini\nSECURE_COOKIES=false\nCEDICT_PATH=custom/cedict_ts.u8\n"
+	envContent := "APP_PASSWORD=testpass\nAPP_SECRET_KEY=testsecret\nOPENAI_API_KEY=oa-key\nOPENAI_MODEL=openai/gpt-4o-mini\nSECURE_COOKIES=false\nCEDICT_PATH=custom/cedict_ts.u8\n"
 	if err := os.WriteFile(envPath, []byte(envContent), 0o644); err != nil {
 		t.Fatalf("write .env: %v", err)
 	}
 
 	t.Setenv("APP_PASSWORD", "")
 	t.Setenv("APP_SECRET_KEY", "")
+	t.Setenv("OPENAI_API_KEY", "")
 	t.Setenv("OPENROUTER_API_KEY", "")
+	t.Setenv("OPENAI_MODEL", "")
 	t.Setenv("OPENROUTER_MODEL", "")
 	t.Setenv("SECURE_COOKIES", "")
 
@@ -47,11 +51,11 @@ func TestLoadFromDotenvThenValidate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load config: %v", err)
 	}
-	if cfg.OpenRouterAPIKey != "or-key" {
-		t.Fatalf("unexpected OPENROUTER_API_KEY: %q", cfg.OpenRouterAPIKey)
+	if cfg.OpenAIAPIKey != "oa-key" {
+		t.Fatalf("unexpected OPENAI_API_KEY: %q", cfg.OpenAIAPIKey)
 	}
-	if cfg.OpenRouterModel != "openai/gpt-4o-mini" {
-		t.Fatalf("unexpected OPENROUTER_MODEL: %q", cfg.OpenRouterModel)
+	if cfg.OpenAIModel != "openai/gpt-4o-mini" {
+		t.Fatalf("unexpected OPENAI_MODEL: %q", cfg.OpenAIModel)
 	}
 	if cfg.SecureCookies {
 		t.Fatal("expected secure cookies false from dotenv")
@@ -67,8 +71,8 @@ func TestLoadCedictPathAliases(t *testing.T) {
 
 	t.Setenv("APP_PASSWORD", "pw")
 	t.Setenv("APP_SECRET_KEY", "secret")
-	t.Setenv("OPENROUTER_API_KEY", "or-key")
-	t.Setenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")
+	t.Setenv("OPENAI_API_KEY", "oa-key")
+	t.Setenv("OPENAI_MODEL", "openai/gpt-4o-mini")
 	t.Setenv("CEDICT_PATH", "")
 	t.Setenv("CEDIT_PATH", "alias/cedit_path.u8")
 	t.Setenv("CCEDICT_PATH", "")
@@ -79,6 +83,69 @@ func TestLoadCedictPathAliases(t *testing.T) {
 	}
 	if cfg.CedictPath != "alias/cedit_path.u8" {
 		t.Fatalf("unexpected cedit alias path: %q", cfg.CedictPath)
+	}
+}
+
+func TestLoadValidatesOpenAIBaseURL(t *testing.T) {
+	repoRoot := createTempRepoRoot(t)
+	withChdir(t, repoRoot)
+
+	t.Setenv("APP_PASSWORD", "pw")
+	t.Setenv("APP_SECRET_KEY", "secret")
+	t.Setenv("OPENAI_API_KEY", "oa-key")
+	t.Setenv("OPENAI_MODEL", "openai/gpt-4o-mini")
+	t.Setenv("OPENAI_BASE_URL", "https://openrouter.ai/api/v1/chat/completions")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error for invalid OPENAI_BASE_URL")
+	}
+}
+
+func TestLoadNormalizesOpenAIBaseURL(t *testing.T) {
+	repoRoot := createTempRepoRoot(t)
+	withChdir(t, repoRoot)
+
+	t.Setenv("APP_PASSWORD", "pw")
+	t.Setenv("APP_SECRET_KEY", "secret")
+	t.Setenv("OPENAI_API_KEY", "oa-key")
+	t.Setenv("OPENAI_MODEL", "openai/gpt-4o-mini")
+	t.Setenv("OPENAI_BASE_URL", "http://127.0.0.1:11434/v1/")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	if cfg.OpenAIBaseURL != "http://127.0.0.1:11434/v1" {
+		t.Fatalf("unexpected normalized OPENAI_BASE_URL: %q", cfg.OpenAIBaseURL)
+	}
+}
+
+func TestLoadSupportsLegacyOpenRouterEnvNames(t *testing.T) {
+	repoRoot := createTempRepoRoot(t)
+	withChdir(t, repoRoot)
+
+	t.Setenv("APP_PASSWORD", "pw")
+	t.Setenv("APP_SECRET_KEY", "secret")
+	t.Setenv("OPENAI_API_KEY", "")
+	t.Setenv("OPENAI_MODEL", "")
+	t.Setenv("OPENAI_BASE_URL", "")
+	t.Setenv("OPENROUTER_API_KEY", "or-key")
+	t.Setenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")
+	t.Setenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	if cfg.OpenAIAPIKey != "or-key" {
+		t.Fatalf("unexpected API key from legacy env: %q", cfg.OpenAIAPIKey)
+	}
+	if cfg.OpenAIModel != "openai/gpt-4o-mini" {
+		t.Fatalf("unexpected model from legacy env: %q", cfg.OpenAIModel)
+	}
+	if cfg.OpenAIBaseURL != "https://openrouter.ai/api/v1" {
+		t.Fatalf("unexpected base URL from legacy env: %q", cfg.OpenAIBaseURL)
 	}
 }
 

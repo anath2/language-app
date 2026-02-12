@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -22,10 +23,10 @@ type Config struct {
 	MigrationsDir        string
 	TranslationDBPath    string
 	CedictPath           string
-	OpenRouterAPIKey     string
-	OpenRouterModel      string
-	OpenRouterBaseURL    string
-	OpenRouterDebugLog   bool
+	OpenAIAPIKey         string
+	OpenAIModel          string
+	OpenAIBaseURL        string
+	OpenAIDebugLog       bool
 }
 
 func Load() (Config, error) {
@@ -38,13 +39,19 @@ func Load() (Config, error) {
 	if appSecretKey == "" {
 		return Config{}, fmt.Errorf("APP_SECRET_KEY environment variable is required")
 	}
-	openRouterAPIKey := os.Getenv("OPENROUTER_API_KEY")
-	if openRouterAPIKey == "" {
-		return Config{}, fmt.Errorf("OPENROUTER_API_KEY environment variable is required")
+	openAIAPIKey := envFirstOrDefault([]string{"OPENAI_API_KEY", "OPENROUTER_API_KEY"}, "")
+	if openAIAPIKey == "" {
+		return Config{}, fmt.Errorf("OPENAI_API_KEY environment variable is required (or legacy OPENROUTER_API_KEY)")
 	}
-	openRouterModel := os.Getenv("OPENROUTER_MODEL")
-	if openRouterModel == "" {
-		return Config{}, fmt.Errorf("OPENROUTER_MODEL environment variable is required")
+	openAIModel := envFirstOrDefault([]string{"OPENAI_MODEL", "OPENROUTER_MODEL"}, "")
+	if openAIModel == "" {
+		return Config{}, fmt.Errorf("OPENAI_MODEL environment variable is required (or legacy OPENROUTER_MODEL)")
+	}
+	openAIBaseURL, err := normalizeAndValidateOpenAIBaseURL(
+		envFirstOrDefault([]string{"OPENAI_BASE_URL", "OPENROUTER_BASE_URL"}, "https://openrouter.ai/api/v1"),
+	)
+	if err != nil {
+		return Config{}, fmt.Errorf("invalid OPENAI_BASE_URL: %w", err)
 	}
 
 	sessionHours := defaultSessionMaxAgeHours
@@ -83,10 +90,10 @@ func Load() (Config, error) {
 		MigrationsDir:        envOrDefault("LANGUAGE_APP_MIGRATIONS_DIR", filepath.Join(repoRoot, "server", "migrations")),
 		TranslationDBPath:    envOrDefault("LANGUAGE_APP_DB_PATH", filepath.Join(repoRoot, "server", "data", "language_app.db")),
 		CedictPath:           envFirstOrDefault([]string{"CEDICT_PATH", "CEDIT_PATH", "CCEDICT_PATH"}, filepath.Join(repoRoot, "server", "data", "cedict_ts.u8")),
-		OpenRouterAPIKey:     openRouterAPIKey,
-		OpenRouterModel:      openRouterModel,
-		OpenRouterBaseURL:    envOrDefault("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
-		OpenRouterDebugLog:   strings.EqualFold(os.Getenv("OPENROUTER_DEBUG_LOG"), "true"),
+		OpenAIAPIKey:         openAIAPIKey,
+		OpenAIModel:          openAIModel,
+		OpenAIBaseURL:        openAIBaseURL,
+		OpenAIDebugLog:       strings.EqualFold(envFirstOrDefault([]string{"OPENAI_DEBUG_LOG", "OPENROUTER_DEBUG_LOG"}, ""), "true"),
 	}, nil
 }
 
@@ -127,4 +134,34 @@ func envFirstOrDefault(keys []string, fallback string) string {
 		}
 	}
 	return fallback
+}
+
+func normalizeAndValidateOpenAIBaseURL(raw string) (string, error) {
+	baseURL := strings.TrimRight(strings.TrimSpace(raw), "/")
+	if baseURL == "" {
+		return "", fmt.Errorf("must be a full URL ending with /v1")
+	}
+
+	parsed, err := url.Parse(baseURL)
+	if err != nil {
+		return "", fmt.Errorf("parse URL: %w", err)
+	}
+	if parsed.Scheme == "" || parsed.Host == "" {
+		return "", fmt.Errorf("must include scheme and host")
+	}
+	if parsed.RawQuery != "" || parsed.Fragment != "" {
+		return "", fmt.Errorf("must not include query string or fragment")
+	}
+
+	path := strings.TrimRight(parsed.Path, "/")
+	if path == "" || !strings.HasSuffix(path, "/v1") {
+		return "", fmt.Errorf("path must end with /v1")
+	}
+	if strings.Contains(path, "/chat/completions") {
+		return "", fmt.Errorf("must be a base URL only; do not include /chat/completions")
+	}
+
+	parsed.Path = path
+	parsed.RawPath = ""
+	return strings.TrimRight(parsed.String(), "/"), nil
 }

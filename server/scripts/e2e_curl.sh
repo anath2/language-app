@@ -174,7 +174,7 @@ CURRENT_BODY="$ARTIFACT_DIR/create_translation.body"
 curl -sS -D "$ARTIFACT_DIR/create_translation.hdr" -o "$ARTIFACT_DIR/create_translation.body" \
   -b "$COOKIE_JAR" -H "Content-Type: application/json" \
   -X POST "$BASE_URL/api/translations" \
-  -d '{"input_text":"你好世界","source_type":"text"}'
+  -d '{"input_text":"人工智能改变世界","source_type":"text"}'
 assert_status 200 "$(status_from_headers "$ARTIFACT_DIR/create_translation.hdr")" "create_translation_status"
 translation_id="$(extract_json_value "translation_id" "$ARTIFACT_DIR/create_translation.body")"
 if [[ -z "$translation_id" ]]; then
@@ -225,7 +225,7 @@ CURRENT_BODY="$ARTIFACT_DIR/create_text.body"
 curl -sS -D "$ARTIFACT_DIR/create_text.hdr" -o "$ARTIFACT_DIR/create_text.body" \
   -b "$COOKIE_JAR" -H "Content-Type: application/json" \
   -X POST "$BASE_URL/api/texts" \
-  -d '{"raw_text":"你好世界","source_type":"text","metadata":{"source":"e2e"}}'
+  -d '{"raw_text":"人工智能改变世界","source_type":"text","metadata":{"source":"e2e"}}'
 assert_status 200 "$(status_from_headers "$ARTIFACT_DIR/create_text.hdr")" "create_text_status"
 text_id="$(extract_json_value "id" "$ARTIFACT_DIR/create_text.body")"
 if [[ -z "$text_id" ]]; then
@@ -285,7 +285,7 @@ CURRENT_BODY="$ARTIFACT_DIR/translate_batch.body"
 curl -sS -D "$ARTIFACT_DIR/translate_batch.hdr" -o "$ARTIFACT_DIR/translate_batch.body" \
   -b "$COOKIE_JAR" -H "Content-Type: application/json" \
   -X POST "$BASE_URL/api/segments/translate-batch" \
-  -d '{"segments":["你","好"],"context":"你好世界"}'
+  -d '{"segments":["人工智能","改变","世界"],"context":"人工智能改变世界"}'
 assert_status 200 "$(status_from_headers "$ARTIFACT_DIR/translate_batch.hdr")" "translate_batch_status"
 assert_contains "\"translations\"" "$ARTIFACT_DIR/translate_batch.body" "translate_batch_shape"
 
