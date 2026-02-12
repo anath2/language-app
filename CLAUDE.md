@@ -25,8 +25,11 @@ cd server && go test ./...
 # Run a specific Go test package
 cd server && go test ./internal/queue/ -v
 
-# E2E curl tests (server must be running)
-cd server && bash scripts/e2e_curl.sh
+# Integration/E2E tests (default, no upstream API calls)
+cd server && go test ./tests/integration -v
+
+# Upstream-gated integration tests (.env.test, only when explicitly requested)
+cd server && go test ./tests/integration -v -args -upstream
 
 # Legacy Python server (reference only)
 cd server_old && uv run uvicorn app.server:app --reload
@@ -82,7 +85,13 @@ Requires `.env` file in `server/` (or repo root):
 
 ## Testing Patterns
 
-**Go**: Standard `testing` package. `dspy_provider_endpoint_test.go` tests the LLM integration (requires running API endpoint). `guards_cedict_test.go` tests segment filtering and dictionary logic. `config_test.go` and `server_test.go` test configuration and router setup. `queue/manager_test.go` tests the job manager.
+**Go**: Standard `testing` package. `dspy_provider_endpoint_test.go` tests base URL normalization. `guards_cedict_test.go` tests segment filtering and dictionary logic. `config_test.go` and `server_test.go` test configuration and router setup. `queue/manager_test.go` tests the job manager. `tests/integration` contains JSON REST integration coverage; upstream LLM tests are opt-in via `-upstream`.
+
+When touching code under `server/internal/intelligence/`, run the upstream integration tests in `server/tests/integration/upstream_llm_test.go`:
+
+```bash
+cd server && go test ./tests/integration -v -run '^TestUpstream' -args -upstream
+```
 
 **Python (legacy)**: Tests mock DSPy's `ChainOfThought` and `Predict` at the module level to avoid API calls. Environment variables are set before importing `app.server`.
 

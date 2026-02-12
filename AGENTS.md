@@ -1,38 +1,25 @@
 # AGENTS.md
 
 ## Project Overview
-Language App is a FastAPI web application that segments Chinese text into words, provides pinyin transliteration, and English translations. It uses DSPy with OpenRouter for LLM-powered processing and supports OCR extraction from images.
+Language App is a Go REST API that segments Chinese text into words, provides pinyin transliteration, and English translations. It uses DSPy with OpenAI-compatible upstream APIs and supports SRS vocabulary workflows.
 
 ## Commands
 ```bash
-# Run development server
+# Run Go server
 cd server
-uv run uvicorn app.server:app --reload
+go run cmd/server/main.go
 
-# Run frontend dev server
-cd web
-npm install
-npm run dev
-
-# Run all tests
+# Run all Go tests (includes default integration tests)
 cd server
-uv run pytest
+go test ./...
 
-# Run specific test file
+# Run integration tests package only
 cd server
-uv run pytest tests/test_pipeline.py -v
+go test ./tests/integration -v
 
-# Type checking
+# Run upstream-gated integration tests (.env.test required)
 cd server
-uv run pyright
-
-# Linting
-cd server
-uv run ruff check .
-
-# Format code
-cd server
-uv run ruff format .
+go test ./tests/integration -v -args -upstream
 ```
 
 ## Architecture
@@ -63,7 +50,14 @@ Optional:
 - `SECURE_COOKIES` (set `false` for local HTTP development)
 
 ## Testing Pattern
-Tests mock DSPy `ChainOfThought` and `Predict` at the module level to avoid API calls. Environment variables are set before importing `app.server`.
+Default integration tests avoid upstream API calls and run with local temp DBs. Upstream-dependent integration tests are opt-in with `-upstream` and load `.env.test`.
+
+When touching code under `server/internal/intelligence/`, run the upstream integration tests in `server/tests/integration/upstream_llm_test.go`:
+
+```bash
+cd server
+go test ./tests/integration -v -run '^TestUpstream' -args -upstream
+```
 
 ## Key Conventions
 - Segment editing currently uses stub API calls for split/join; replace with real backend endpoints when implemented.
