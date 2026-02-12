@@ -17,9 +17,6 @@ type Config struct {
 	AppSecretKey         string
 	SessionMaxAgeSeconds int
 	SecureCookies        bool
-	ViteDevServer        string
-	WebPublicCSSDir      string
-	WebDistDir           string
 	MigrationsDir        string
 	TranslationDBPath    string
 	CedictPath           string
@@ -84,9 +81,6 @@ func Load() (Config, error) {
 		AppSecretKey:         appSecretKey,
 		SessionMaxAgeSeconds: sessionHours * 3600,
 		SecureCookies:        secureCookies,
-		ViteDevServer:        os.Getenv("VITE_DEV_SERVER"),
-		WebPublicCSSDir:      filepath.Join(repoRoot, "web", "public", "css"),
-		WebDistDir:           filepath.Join(repoRoot, "web", "dist"),
 		MigrationsDir:        envOrDefault("LANGUAGE_APP_MIGRATIONS_DIR", filepath.Join(repoRoot, "server", "migrations")),
 		TranslationDBPath:    envOrDefault("LANGUAGE_APP_DB_PATH", filepath.Join(repoRoot, "server", "data", "language_app.db")),
 		CedictPath:           envFirstOrDefault([]string{"CEDICT_PATH", "CEDIT_PATH", "CCEDICT_PATH"}, filepath.Join(repoRoot, "server", "data", "cedict_ts.u8")),

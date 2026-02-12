@@ -15,7 +15,7 @@ func WriteJSON(w http.ResponseWriter, status int, payload any) {
 }
 
 func NotImplementedJSON(w http.ResponseWriter) {
-	WriteJSON(w, http.StatusNotImplemented, map[string]string{"error": "not implemented yet"})
+	WriteJSON(w, http.StatusNotImplemented, map[string]string{"detail": "not implemented yet"})
 }
 
 func parseIntDefault(raw string, fallback int) int {

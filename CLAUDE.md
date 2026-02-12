@@ -4,169 +4,92 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Language App - A FastAPI web application that segments Chinese text into words, provides pinyin transliteration, and English translations. Uses DSPy with OpenRouter for LLM-powered processing and supports OCR extraction from images.
+Language App - A web application that segments Chinese text into words, provides pinyin transliteration, and English translations. Uses dspy-go with OpenAI-compatible endpoints for LLM-powered processing. Includes OCR text extraction, SRS vocabulary review, and segment editing.
+
+The project is migrating from Python (FastAPI) to Go. The Go backend in `server/` is the active implementation. The legacy Python backend lives in `server_old/` for reference.
+
+This is a sparse worktree (`feature/go-migration` branch) containing only `server/` and `server_old/`. The frontend (`web/`) lives in a separate worktree.
 
 ## Commands
 
 ```bash
-# Run development server
-cd server
-uv run uvicorn app.server:app --reload
+# Run Go server (from server/ directory)
+go run cmd/server/main.go
 
-# Run frontend dev server
-cd web
-npm install
-npm run dev
+# Run database migrations manually
+go run cmd/migrate/main.go
 
-# Run all tests
-cd server
-uv run pytest
+# Run Go tests
+cd server && go test ./...
 
-# Run specific test file
-cd server
-uv run pytest tests/test_pipeline.py -v
+# Run a specific Go test package
+cd server && go test ./internal/queue/ -v
 
-# Type checking (backend)
-cd server
-uv run pyright
+# E2E curl tests (server must be running)
+cd server && bash scripts/e2e_curl.sh
 
-# Type checking (frontend)
-cd web
-npm run typecheck
-
-# Frontend production build
-cd web
-npm run build
-
-# Linting
-cd server
-uv run ruff check .
-
-# Format code
-cd server
-uv run ruff format .
+# Legacy Python server (reference only)
+cd server_old && uv run uvicorn app.server:app --reload
+cd server_old && uv run pytest
+cd server_old && uv run ruff check .
+cd server_old && uv run ruff format .
 ```
 
 ## Architecture
 
-### Backend
+### Go Backend (`server/`)
 
-**DSPy Pipeline Pattern**: The core processing uses DSPy's declarative approach with typed Signatures:
-- `Segmenter` - Segments Chinese text into word list
-- `Translator` - Batch translates segments to (pinyin, english) tuples
-- `OCRExtractor` - Extracts Chinese text from images
-- `Pipeline` - Orchestrates segmenter → translator flow with both sync (`forward`) and async (`aforward`) methods
+**Entry point**: `cmd/server/main.go` — loads config from env, starts HTTP server.
 
-**API Structure**: Dual endpoint pattern - JSON endpoints (`/translate-text`, `/translate-image`) for API consumers and HTML fragment endpoints (`/translate-html`, `/translate-image-html`) for HTMX frontend. Streaming endpoint `/translate-stream` provides SSE for real-time translation progress.
+**Package structure** (`internal/`):
+- `config/` — Environment variable loading with legacy key fallbacks (`OPENAI_*` preferred, `OPENROUTER_*` supported). Validates config at startup.
+- `http/` — Chi router setup, middleware (auth, timeout, CORS), route registration, and handlers. `server.go` is the initialization point that wires together all dependencies.
+- `http/handlers/` — Request handlers organized by domain. `deps.go` holds the shared dependency configuration (`ConfigureDependencies`).
+- `http/routes/` — Route group registration: `auth.go`, `translation.go`, `api.go`, `admin.go`.
+- `http/middleware/` — Auth (session cookie-based) and timeout middleware. Timeout is skipped for SSE streaming endpoints.
+- `intelligence/` — LLM integration via `dspy-go`. `Provider` interface with `DSPyProvider` implementation. CC-CEDICT dictionary for context-aware translation. `guards.go` has segment skip/punctuation logic.
+- `queue/` — In-memory job manager for background translation processing. Tracks running jobs with mutex. Resumes restartable jobs on startup. Progress persisted to DB.
+- `translation/` — SQLite persistence layer (`Store`). Translation CRUD, progress tracking, segment results, vocab, SRS state.
+- `migrations/` — Goose migration runner. SQL files in `server/migrations/` (auto-run on server startup).
 
-**Thread Safety**: Pipeline uses lazy initialization with a lock (`get_pipeline()`) to ensure safe concurrent access.
+**Key patterns**:
+- Dependency injection via `handlers.ConfigureDependencies(store, manager, provider)` — package-level vars, not a DI container.
+- `intelligence.Provider` interface allows swapping LLM backends for testing.
+- Translation jobs flow: `POST /api/translations` → `store.Create()` → `manager.StartProcessing()` → background goroutine segments + translates one-by-one → progress saved to DB → SSE stream reads from DB.
+- Migrations run automatically in `NewRouter()` before serving requests.
+- Go server default port is `:8080` (override with `APP_ADDR` or `PORT`).
 
-**Persistence Layer** (`app/persistence/`): SQLite-based local storage with migration system. Tables: `texts`, `segments`, `events`, `vocab_items`, `vocab_occurrences`, `vocab_lookups`, `srs_state`, `user_profile`. Uses context manager `db_conn()` for connections. DB location defaults to `app/data/language_app.db`, override with `LANGUAGE_APP_DB_PATH` env var.
+### Route Contract
 
-**SRS System** (`app/persistence/srs.py`): SM-2 spaced repetition algorithm with passive lookup tracking. Tracks vocabulary through status transitions (unknown → learning → known) and calculates opacity for UI visualization based on review recency.
-
-**Dictionary Integration** (`app/cedict.py`): CC-CEDICT dictionary loaded at startup. Definitions are passed to the LLM for context-aware translation selection.
-
-### Frontend
-
-**File Structure**:
-```
-server/
-├── app/
-│   ├── static/        # Legacy HTMX frontend (still served)
-│   └── templates/
-web/                   # Svelte 5 SPA (primary frontend)
-├── public/css/        # Global CSS (variables, base, segments)
-├── src/
-│   ├── App.svelte     # Root orchestrator — translations, vocab, review, layout
-│   ├── main.ts        # Entry point (mount API)
-│   ├── app.css        # Minimal reset
-│   ├── lib/
-│   │   ├── api.ts     # Typed fetch wrappers (getJson, postJson, deleteRequest)
-│   │   ├── utils.ts   # Pure helpers (formatTimeAgo)
-│   │   ├── types.ts   # Shared types (translation, review, vocab — no segment types)
-│   │   └── router.svelte.ts  # pushState/popstate router (routes: /, /translations/:id)
-│   ├── features/
-│   │   └── segments/          # Segment feature module
-│   │       ├── types.ts       # All segment-related types
-│   │       ├── api.ts         # translateBatch API call
-│   │       ├── utils.ts       # getPastelColor
-│   │       ├── Segments.svelte        # Top-level orchestrator (streaming, edit toggle)
-│   │       ├── SegmentDisplay.svelte  # Normal mode: segments + tooltips + vocab
-│   │       ├── SegmentEditor.svelte   # Edit mode: split/join with pending tracking
-│   │       └── TranslationTable.svelte # Collapsible details table
-│   └── components/
-│       ├── ReviewPanel.svelte        # SRS review slide-out panel (~110 lines)
-│       ├── TranslateForm.svelte      # Text input + OCR upload form (~130 lines)
-│       └── TranslationList.svelte     # Translation card list (~70 lines, stateless)
-├── vite.config.js     # Dev proxy to FastAPI on :8000
-├── tsconfig.json      # Strict TS, verbatimModuleSyntax
-└── package.json       # Svelte 5.49.2, Vite 7.3.1, TS 5.6
-```
-
-**Svelte 5 Conventions**:
-
-*Runes (reactivity)*:
-- `$state()` for all mutable reactive state — typed inline (e.g. `let x = $state<Foo[]>([])`)
-- `$derived()` / `$derived.by()` for computed values. Prefer `$derived` over `$effect` for state synchronization.
-- `$effect()` only for true side effects (fetching data on mount, DOM interactions). Keep effects minimal.
-- `$props()` for component props (replaces `export let`). Destructure with an interface type.
-- `$bindable()` for two-way bindable props.
-
-*Event handling*:
-- Use `onclick`, `oninput` etc. (properties, not `on:click` directives) — Svelte 5 convention.
-- Use callback props instead of `createEventDispatcher`. No event modifier support; wrap handlers manually (e.g. `preventDefault`).
-
-*Snippets & children*:
-- Use `{#snippet name(params)}` / `{@render name()}` instead of slots.
-- Content inside component tags becomes the `children` snippet prop.
-
-*Component patterns*:
-- TypeScript in `<script lang="ts">` — no preprocessor needed for type-only features in Svelte 5.
-- Interfaces for all data shapes defined at the top of the component script.
-- `mount()` API for entry point (not `new App()`).
-
-*State sharing (when components are split)*:
-- For cross-component state, use `.svelte.ts` files with `$state` wrapped in object getters/setters or classes (raw exported `$state` vars lose reactivity across modules).
-- For deeply nested component trees, use type-safe context (`setContext`/`getContext` with a `createContext` helper).
-
-*Styling*:
-- Global CSS in `web/public/css/` (variables, base, segments) — loaded via `index.html`.
-- Component-scoped styles via `<style>` blocks where appropriate.
-
-**Segment Editing UX**:
-- Click segment → tooltip with Edit button
-- Edit mode shows character boundaries with clickable split points
-- Join indicators (⊕) appear between adjacent segments
-- Direct click actions (no confirmation popovers)
-- Undo button appears after split/join operations
-
-## Development Servers
-
-The frontend dev server (`web/`, Vite on port 5173) is always running. Do not attempt to start it. The backend server (`server/`, FastAPI on port 8000) is also assumed running. Vite proxies API requests to the backend automatically.
-
-After making frontend changes, verify with `cd web && npm run typecheck` — do not restart the dev server.
+Full route inventory is frozen in `server/docs/route_contract.md`. Key patterns:
+- Session cookie auth with three unauthenticated response modes (HTMX → 401 + HX-Redirect, HTML → 303 redirect, JSON → 401)
+- SPA fallback: non-API paths serve `index.html`
+- SSE streaming at `/api/translations/{id}/stream`
 
 ## Environment Variables
 
-Requires `.env` file with:
-- `OPENROUTER_API_KEY` - Required for LLM processing
-- `OPENROUTER_MODEL` - Model identifier for OpenRouter
-- `APP_PASSWORD` - Required for authentication
-- `APP_SECRET_KEY` - Required for signing session cookies
-- `SESSION_MAX_AGE_HOURS` - Optional, defaults to 168 (7 days)
-- `SECURE_COOKIES` - Optional, set to `false` for local HTTP development (defaults to `true`)
+Requires `.env` file in `server/` (or repo root):
+- `OPENAI_API_KEY` (or legacy `OPENROUTER_API_KEY`) — Required for LLM
+- `OPENAI_MODEL` (or legacy `OPENROUTER_MODEL`) — Model identifier
+- `OPENAI_BASE_URL` (or legacy `OPENROUTER_BASE_URL`) — Must end with `/v1`. Defaults to `https://openrouter.ai/api/v1`
+- `APP_PASSWORD` — Required for authentication
+- `APP_SECRET_KEY` — Required for signing session cookies
+- `SESSION_MAX_AGE_HOURS` — Optional, defaults to 168 (7 days)
+- `SECURE_COOKIES` — Optional, set to `false` for local HTTP development (defaults to `true`)
+- `LANGUAGE_APP_DB_PATH` — Optional, defaults to `server/data/language_app.db`
+- `CEDICT_PATH` — Optional, defaults to `server/data/cedict_ts.u8`
+- `OPENAI_DEBUG_LOG` — Optional, set `true` to log upstream LLM requests
 
-## Testing Pattern
+## Testing Patterns
 
-Tests mock DSPy's `ChainOfThought` and `Predict` at the module level to avoid API calls while testing orchestration logic. Environment variables are set before importing `app.server`.
+**Go**: Standard `testing` package. `dspy_provider_endpoint_test.go` tests the LLM integration (requires running API endpoint). `guards_cedict_test.go` tests segment filtering and dictionary logic. `config_test.go` and `server_test.go` test configuration and router setup. `queue/manager_test.go` tests the job manager.
+
+**Python (legacy)**: Tests mock DSPy's `ChainOfThought` and `Predict` at the module level to avoid API calls. Environment variables are set before importing `app.server`.
 
 ## Key Conventions
 
-- API layer in `web/src/lib/api.ts` — generic typed fetch wrappers; all endpoints proxied through Vite dev server
-- SSE streaming for real-time translation progress (in `features/segments/Segments.svelte`)
-- Minimal pushState router in `lib/router.svelte.ts` — routes: `/` (home), `/translations/:id` (detail view). Browser back/forward supported.
-- No external state management library — all state is local `$state` runes in App.svelte and Segments.svelte
-- Segment editing (split/join) uses `POST /api/segments/translate-batch` to re-translate modified segments
-- SRS opacity: 1.0 = new/struggling word (full color), 0 = known word (no highlight)
-- Pastel colors cycle through 8 options based on segment index
+- Environment variable keys prefer `OPENAI_*` prefix; `OPENROUTER_*` still supported as fallback
+- CC-CEDICT pinyin is preferred over LLM-generated pinyin when available
+- SRS opacity: 1.0 = new/struggling word (full highlight), 0 = known word (no highlight)
+- Segment editing (split/join) re-translates via `POST /api/segments/translate-batch`
+- SSE streaming delivers segment-by-segment translation progress

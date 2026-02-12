@@ -7,7 +7,6 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,25 +22,6 @@ func newTestConfig(t *testing.T) config.Config {
 
 	tmp := t.TempDir()
 	serverRoot := detectServerRoot(t)
-	cssDir := filepath.Join(tmp, "css")
-	distDir := filepath.Join(tmp, "dist")
-	assetsDir := filepath.Join(distDir, "assets")
-
-	if err := os.MkdirAll(cssDir, 0o755); err != nil {
-		t.Fatalf("create css dir: %v", err)
-	}
-	if err := os.MkdirAll(assetsDir, 0o755); err != nil {
-		t.Fatalf("create assets dir: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(cssDir, "base.css"), []byte("body{}"), 0o644); err != nil {
-		t.Fatalf("write css file: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(distDir, "index.html"), []byte("<!doctype html><html><body>app</body></html>"), 0o644); err != nil {
-		t.Fatalf("write index file: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(assetsDir, "app.js"), []byte("console.log('ok');"), 0o644); err != nil {
-		t.Fatalf("write asset file: %v", err)
-	}
 
 	return config.Config{
 		Addr:                 ":0",
@@ -49,8 +29,6 @@ func newTestConfig(t *testing.T) config.Config {
 		AppSecretKey:         "test-secret",
 		SessionMaxAgeSeconds: 3600,
 		SecureCookies:        false,
-		WebPublicCSSDir:      cssDir,
-		WebDistDir:           distDir,
 		MigrationsDir:        filepath.Join(serverRoot, "migrations"),
 		TranslationDBPath:    filepath.Join(tmp, "translations.db"),
 		OpenAIAPIKey:         "test-openrouter-key",
@@ -84,16 +62,14 @@ func detectServerRoot(t *testing.T) string {
 func loginAndGetSessionCookie(t *testing.T, router http.Handler, password string) string {
 	t.Helper()
 
-	form := url.Values{}
-	form.Set("password", password)
-
-	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	payload, _ := json.Marshal(map[string]string{"password": password})
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(payload))
+	req.Header.Set("Content-Type", "application/json")
 	res := httptest.NewRecorder()
 	router.ServeHTTP(res, req)
 
-	if res.Code != http.StatusSeeOther {
-		t.Fatalf("expected login to return 303, got %d", res.Code)
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected login to return 200, got %d", res.Code)
 	}
 
 	setCookies := res.Result().Cookies()
@@ -118,10 +94,7 @@ func TestRouteContractWithAuthenticatedSession(t *testing.T) {
 		status int
 	}{
 		{name: "health", method: http.MethodGet, path: "/health", status: http.StatusOK},
-		{name: "login page", method: http.MethodGet, path: "/login", status: http.StatusSeeOther},
-		{name: "logout", method: http.MethodPost, path: "/logout", status: http.StatusSeeOther},
-		{name: "home", method: http.MethodGet, path: "/", status: http.StatusOK},
-		{name: "translations page", method: http.MethodGet, path: "/translations", status: http.StatusOK},
+		{name: "logout", method: http.MethodPost, path: "/api/auth/logout", status: http.StatusOK},
 		{name: "create translation", method: http.MethodPost, path: "/api/translations", status: http.StatusBadRequest},
 		{name: "list translations", method: http.MethodGet, path: "/api/translations", status: http.StatusOK},
 		{name: "get translation", method: http.MethodGet, path: "/api/translations/123", status: http.StatusNotFound},
@@ -138,13 +111,11 @@ func TestRouteContractWithAuthenticatedSession(t *testing.T) {
 		{name: "review answer", method: http.MethodPost, path: "/api/review/answer", status: http.StatusBadRequest},
 		{name: "review count", method: http.MethodGet, path: "/api/review/count", status: http.StatusOK},
 		{name: "translate batch", method: http.MethodPost, path: "/api/segments/translate-batch", status: http.StatusBadRequest},
-		{name: "admin page", method: http.MethodGet, path: "/admin", status: http.StatusOK},
-		{name: "export progress", method: http.MethodGet, path: "/admin/progress/export", status: http.StatusOK},
-		{name: "import progress", method: http.MethodPost, path: "/admin/progress/import", status: http.StatusBadRequest},
-		{name: "get profile", method: http.MethodGet, path: "/admin/api/profile", status: http.StatusOK},
-		{name: "update profile", method: http.MethodPost, path: "/admin/api/profile", status: http.StatusOK},
-		{name: "extract text no file", method: http.MethodPost, path: "/extract-text", status: http.StatusBadRequest},
-		{name: "spa fallback", method: http.MethodGet, path: "/deep/link", status: http.StatusOK},
+		{name: "export progress", method: http.MethodGet, path: "/api/admin/progress/export", status: http.StatusOK},
+		{name: "import progress", method: http.MethodPost, path: "/api/admin/progress/import", status: http.StatusBadRequest},
+		{name: "get profile", method: http.MethodGet, path: "/api/admin/profile", status: http.StatusOK},
+		{name: "update profile", method: http.MethodPost, path: "/api/admin/profile", status: http.StatusBadRequest},
+		{name: "extract text no file", method: http.MethodPost, path: "/api/extract-text", status: http.StatusBadRequest},
 	}
 
 	for _, tc := range tests {
@@ -171,13 +142,6 @@ func TestRouteContractWithAuthenticatedSession(t *testing.T) {
 	}
 	if got := sseRes.Header().Get("Content-Type"); !strings.HasPrefix(got, "text/event-stream") {
 		t.Fatalf("expected SSE content type, got %q", got)
-	}
-
-	cssReq := httptest.NewRequest(http.MethodGet, "/css/base.css", nil)
-	cssRes := httptest.NewRecorder()
-	router.ServeHTTP(cssRes, cssReq)
-	if cssRes.Code != http.StatusOK {
-		t.Fatalf("expected css file status 200, got %d", cssRes.Code)
 	}
 }
 
@@ -418,7 +382,7 @@ func TestAdminAndOCRContracts(t *testing.T) {
 	router := httprouter.NewRouter(cfg)
 	sessionCookie := loginAndGetSessionCookie(t, router, cfg.AppPassword)
 
-	getProfileReq := httptest.NewRequest(http.MethodGet, "/admin/api/profile", nil)
+	getProfileReq := httptest.NewRequest(http.MethodGet, "/api/admin/profile", nil)
 	getProfileReq.Header.Set("Cookie", sessionCookie)
 	getProfileRes := httptest.NewRecorder()
 	router.ServeHTTP(getProfileRes, getProfileReq)
@@ -431,7 +395,7 @@ func TestAdminAndOCRContracts(t *testing.T) {
 		"email":    "a@example.com",
 		"language": "zh-CN",
 	})
-	updateProfileReq := httptest.NewRequest(http.MethodPost, "/admin/api/profile", bytes.NewReader(updateProfilePayload))
+	updateProfileReq := httptest.NewRequest(http.MethodPost, "/api/admin/profile", bytes.NewReader(updateProfilePayload))
 	updateProfileReq.Header.Set("Cookie", sessionCookie)
 	updateProfileReq.Header.Set("Content-Type", "application/json")
 	updateProfileRes := httptest.NewRecorder()
@@ -440,7 +404,7 @@ func TestAdminAndOCRContracts(t *testing.T) {
 		t.Fatalf("expected update profile status 200, got %d", updateProfileRes.Code)
 	}
 
-	exportReq := httptest.NewRequest(http.MethodGet, "/admin/progress/export", nil)
+	exportReq := httptest.NewRequest(http.MethodGet, "/api/admin/progress/export", nil)
 	exportReq.Header.Set("Cookie", sessionCookie)
 	exportRes := httptest.NewRecorder()
 	router.ServeHTTP(exportRes, exportReq)
@@ -458,7 +422,7 @@ func TestAdminAndOCRContracts(t *testing.T) {
 	_, _ = part.Write([]byte("fake-image-bytes"))
 	_ = writer.Close()
 
-	ocrReq := httptest.NewRequest(http.MethodPost, "/extract-text", &body)
+	ocrReq := httptest.NewRequest(http.MethodPost, "/api/extract-text", &body)
 	ocrReq.Header.Set("Cookie", sessionCookie)
 	ocrReq.Header.Set("Content-Type", writer.FormDataContentType())
 	ocrRes := httptest.NewRecorder()
@@ -497,36 +461,6 @@ func TestTranslationSSENotFound(t *testing.T) {
 func TestAuthBehaviorParity(t *testing.T) {
 	cfg := newTestConfig(t)
 	router := httprouter.NewRouter(cfg)
-
-	t.Run("htmx unauthenticated", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/texts/1", nil)
-		req.Header.Set("HX-Request", "true")
-		res := httptest.NewRecorder()
-
-		router.ServeHTTP(res, req)
-
-		if res.Code != http.StatusUnauthorized {
-			t.Fatalf("expected 401, got %d", res.Code)
-		}
-		if got := res.Header().Get("HX-Redirect"); got != "/login" {
-			t.Fatalf("expected HX-Redirect /login, got %q", got)
-		}
-	})
-
-	t.Run("html unauthenticated", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/texts/1", nil)
-		req.Header.Set("Accept", "text/html")
-		res := httptest.NewRecorder()
-
-		router.ServeHTTP(res, req)
-
-		if res.Code != http.StatusSeeOther {
-			t.Fatalf("expected 303, got %d", res.Code)
-		}
-		if got := res.Header().Get("Location"); got != "/login" {
-			t.Fatalf("expected redirect to /login, got %q", got)
-		}
-	})
 
 	t.Run("api unauthenticated", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/texts/1", nil)

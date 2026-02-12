@@ -161,24 +161,13 @@ func Auth(cfg config.Config, sessionManager *SessionManager) func(http.Handler) 
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			path := r.URL.Path
 
-			if path == "/login" || path == "/health" || strings.HasPrefix(path, "/css/") {
+			if path == "/api/auth/login" || path == "/health" {
 				next.ServeHTTP(w, r)
 				return
 			}
 
 			if sessionManager.VerifySessionFromRequest(r) {
 				next.ServeHTTP(w, r)
-				return
-			}
-
-			if r.Header.Get("HX-Request") == "true" {
-				w.Header().Set("HX-Redirect", "/login")
-				w.WriteHeader(http.StatusUnauthorized)
-				return
-			}
-
-			if strings.Contains(r.Header.Get("Accept"), "text/html") {
-				http.Redirect(w, r, "/login", http.StatusSeeOther)
 				return
 			}
 

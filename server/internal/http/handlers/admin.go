@@ -3,16 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
-	"strings"
-
-	"github.com/anath2/language-app/internal/config"
 )
-
-func AdminPage(cfg config.Config) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		ServeSPA(cfg).ServeHTTP(w, r)
-	}
-}
 
 func ExportProgress(w http.ResponseWriter, r *http.Request) {
 	if err := validateDependencies(); err != nil {
@@ -93,26 +84,14 @@ func UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		WriteJSON(w, http.StatusInternalServerError, map[string]string{"detail": err.Error()})
 		return
 	}
-	ctype := r.Header.Get("Content-Type")
-	var name, email, language string
-	if strings.Contains(ctype, "application/json") {
-		var payload map[string]string
-		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-			WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": "Invalid JSON payload"})
-			return
-		}
-		name = payload["name"]
-		email = payload["email"]
-		language = payload["language"]
-	} else {
-		if err := r.ParseForm(); err != nil {
-			WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": "Invalid form payload"})
-			return
-		}
-		name = r.FormValue("name")
-		email = r.FormValue("email")
-		language = r.FormValue("language")
+	var payload map[string]string
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": "Invalid JSON payload"})
+		return
 	}
+	name := payload["name"]
+	email := payload["email"]
+	language := payload["language"]
 	profile, err := sharedStore.UpsertUserProfile(name, email, language)
 	if err != nil {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": err.Error()})

@@ -141,32 +141,13 @@ curl -sS -D "$ARTIFACT_DIR/unauth_json.hdr" -o "$ARTIFACT_DIR/unauth_json.body" 
 assert_status 401 "$(status_from_headers "$ARTIFACT_DIR/unauth_json.hdr")" "unauth_json_status"
 assert_contains "\"detail\":\"Not authenticated\"" "$ARTIFACT_DIR/unauth_json.body" "unauth_json_body"
 
-CURRENT_HDR="$ARTIFACT_DIR/unauth_htmx.hdr"
-CURRENT_BODY="$ARTIFACT_DIR/unauth_htmx.body"
-curl -sS -D "$ARTIFACT_DIR/unauth_htmx.hdr" -o "$ARTIFACT_DIR/unauth_htmx.body" \
-  -H "HX-Request: true" "$BASE_URL/api/texts/1"
-assert_status 401 "$(status_from_headers "$ARTIFACT_DIR/unauth_htmx.hdr")" "unauth_htmx_status"
-assert_contains "Hx-Redirect: /login" "$ARTIFACT_DIR/unauth_htmx.hdr" "unauth_htmx_header"
-
-CURRENT_HDR="$ARTIFACT_DIR/unauth_html.hdr"
-CURRENT_BODY="$ARTIFACT_DIR/unauth_html.body"
-curl -sS -D "$ARTIFACT_DIR/unauth_html.hdr" -o "$ARTIFACT_DIR/unauth_html.body" \
-  -H "Accept: text/html" "$BASE_URL/api/texts/1"
-assert_status 303 "$(status_from_headers "$ARTIFACT_DIR/unauth_html.hdr")" "unauth_html_status"
-assert_contains "Location: /login" "$ARTIFACT_DIR/unauth_html.hdr" "unauth_html_header"
-
 echo "==> Login and session"
 CURRENT_HDR="$ARTIFACT_DIR/login.hdr"
 CURRENT_BODY="$ARTIFACT_DIR/login.body"
 curl -sS -D "$ARTIFACT_DIR/login.hdr" -o "$ARTIFACT_DIR/login.body" -c "$COOKIE_JAR" \
-  -X POST -d "password=${APP_PASSWORD}" "$BASE_URL/login"
-assert_status 303 "$(status_from_headers "$ARTIFACT_DIR/login.hdr")" "login_status"
-
-CURRENT_HDR="$ARTIFACT_DIR/translations_page.hdr"
-CURRENT_BODY="$ARTIFACT_DIR/translations_page.body"
-curl -sS -D "$ARTIFACT_DIR/translations_page.hdr" -o "$ARTIFACT_DIR/translations_page.body" \
-  -b "$COOKIE_JAR" "$BASE_URL/translations"
-assert_status 200 "$(status_from_headers "$ARTIFACT_DIR/translations_page.hdr")" "translations_page_status"
+  -X POST -H "Content-Type: application/json" \
+  -d "{\"password\":\"${APP_PASSWORD}\"}" "$BASE_URL/api/auth/login"
+assert_status 200 "$(status_from_headers "$ARTIFACT_DIR/login.hdr")" "login_status"
 
 echo "==> Translation CRUD + SSE"
 CURRENT_HDR="$ARTIFACT_DIR/create_translation.hdr"
@@ -293,21 +274,21 @@ echo "==> Admin + OCR checks"
 CURRENT_HDR="$ARTIFACT_DIR/profile_get.hdr"
 CURRENT_BODY="$ARTIFACT_DIR/profile_get.body"
 curl -sS -D "$ARTIFACT_DIR/profile_get.hdr" -o "$ARTIFACT_DIR/profile_get.body" \
-  -b "$COOKIE_JAR" "$BASE_URL/admin/api/profile"
+  -b "$COOKIE_JAR" "$BASE_URL/api/admin/profile"
 assert_status 200 "$(status_from_headers "$ARTIFACT_DIR/profile_get.hdr")" "profile_get_status"
 
 CURRENT_HDR="$ARTIFACT_DIR/profile_post.hdr"
 CURRENT_BODY="$ARTIFACT_DIR/profile_post.body"
 curl -sS -D "$ARTIFACT_DIR/profile_post.hdr" -o "$ARTIFACT_DIR/profile_post.body" \
   -b "$COOKIE_JAR" -H "Content-Type: application/json" \
-  -X POST "$BASE_URL/admin/api/profile" \
+  -X POST "$BASE_URL/api/admin/profile" \
   -d '{"name":"E2E User","email":"e2e@example.com","language":"zh-CN"}'
 assert_status 200 "$(status_from_headers "$ARTIFACT_DIR/profile_post.hdr")" "profile_post_status"
 
 CURRENT_HDR="$ARTIFACT_DIR/export_progress.hdr"
 CURRENT_BODY="$ARTIFACT_DIR/export_progress.body"
 curl -sS -D "$ARTIFACT_DIR/export_progress.hdr" -o "$ARTIFACT_DIR/export_progress.body" \
-  -b "$COOKIE_JAR" "$BASE_URL/admin/progress/export"
+  -b "$COOKIE_JAR" "$BASE_URL/api/admin/progress/export"
 assert_status 200 "$(status_from_headers "$ARTIFACT_DIR/export_progress.hdr")" "export_progress_status"
 
 printf '{"vocab_items":[],"srs_state":[],"vocab_lookups":[]}' > "$ARTIFACT_DIR/import_payload.json"
@@ -315,7 +296,7 @@ CURRENT_HDR="$ARTIFACT_DIR/import_progress.hdr"
 CURRENT_BODY="$ARTIFACT_DIR/import_progress.body"
 curl -sS -D "$ARTIFACT_DIR/import_progress.hdr" -o "$ARTIFACT_DIR/import_progress.body" \
   -b "$COOKIE_JAR" \
-  -X POST "$BASE_URL/admin/progress/import" \
+  -X POST "$BASE_URL/api/admin/progress/import" \
   -F "file=@$ARTIFACT_DIR/import_payload.json;type=application/json"
 assert_status 200 "$(status_from_headers "$ARTIFACT_DIR/import_progress.hdr")" "import_progress_status"
 
@@ -323,7 +304,7 @@ printf "fake-image-bytes" > "$ARTIFACT_DIR/dummy.png"
 CURRENT_HDR="$ARTIFACT_DIR/extract_text.hdr"
 CURRENT_BODY="$ARTIFACT_DIR/extract_text.body"
 curl -sS -D "$ARTIFACT_DIR/extract_text.hdr" -o "$ARTIFACT_DIR/extract_text.body" \
-  -b "$COOKIE_JAR" -X POST "$BASE_URL/extract-text" \
+  -b "$COOKIE_JAR" -X POST "$BASE_URL/api/extract-text" \
   -F "image=@$ARTIFACT_DIR/dummy.png;type=image/png"
 assert_status 200 "$(status_from_headers "$ARTIFACT_DIR/extract_text.hdr")" "extract_text_status"
 
@@ -348,12 +329,9 @@ done
 assert_status 200 "$code" "health_after_restart"
 
 curl -sS -D "$ARTIFACT_DIR/login_restart.hdr" -o "$ARTIFACT_DIR/login_restart.body" -c "$COOKIE_JAR" \
-  -X POST -d "password=${APP_PASSWORD}" "$BASE_URL/login"
-assert_status 303 "$(status_from_headers "$ARTIFACT_DIR/login_restart.hdr")" "login_after_restart"
-
-curl -sS -D "$ARTIFACT_DIR/translations_after_restart.hdr" -o "$ARTIFACT_DIR/translations_after_restart.body" \
-  -b "$COOKIE_JAR" "$BASE_URL/translations"
-assert_status 200 "$(status_from_headers "$ARTIFACT_DIR/translations_after_restart.hdr")" "translations_after_restart"
+  -X POST -H "Content-Type: application/json" \
+  -d "{\"password\":\"${APP_PASSWORD}\"}" "$BASE_URL/api/auth/login"
+assert_status 200 "$(status_from_headers "$ARTIFACT_DIR/login_restart.hdr")" "login_after_restart"
 
 {
   echo "translation_id=$translation_id"

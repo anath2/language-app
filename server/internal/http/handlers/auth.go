@@ -1,49 +1,40 @@
 package handlers
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"github.com/anath2/language-app/internal/config"
 	"github.com/anath2/language-app/internal/http/middleware"
 )
 
-func LoginPage(cfg config.Config, sessionManager *middleware.SessionManager) http.HandlerFunc {
+func Login(cfg config.Config, sessionManager *middleware.SessionManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if sessionManager.VerifySessionFromRequest(r) {
-			http.Redirect(w, r, "/", http.StatusSeeOther)
-			return
+		var payload struct {
+			Password string `json:"password"`
 		}
-		ServeSPA(cfg).ServeHTTP(w, r)
-	}
-}
-
-func LoginSubmit(cfg config.Config, sessionManager *middleware.SessionManager) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if err := r.ParseForm(); err != nil {
-			http.Error(w, "Invalid form", http.StatusBadRequest)
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": "Invalid JSON payload"})
 			return
 		}
 
-		password := r.FormValue("password")
-		if !sessionManager.VerifyPassword(password, cfg.AppPassword) {
-			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-			w.WriteHeader(http.StatusUnauthorized)
-			_, _ = w.Write([]byte("Invalid password"))
+		if !sessionManager.VerifyPassword(payload.Password, cfg.AppPassword) {
+			WriteJSON(w, http.StatusUnauthorized, map[string]string{"detail": "Invalid password"})
 			return
 		}
 
 		if err := sessionManager.SetSessionCookie(w, r); err != nil {
-			http.Error(w, "Could not create session", http.StatusInternalServerError)
+			WriteJSON(w, http.StatusInternalServerError, map[string]string{"detail": "Could not create session"})
 			return
 		}
 
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+		WriteJSON(w, http.StatusOK, map[string]bool{"ok": true})
 	}
 }
 
 func Logout(sessionManager *middleware.SessionManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		sessionManager.ClearSessionCookie(w, r)
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		WriteJSON(w, http.StatusOK, map[string]bool{"ok": true})
 	}
 }

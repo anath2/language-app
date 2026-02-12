@@ -1,51 +1,39 @@
-# Route Contract Freeze
+# Route Contract
 
-This document freezes the Python server contract from `server_old/` so Go migration can preserve path and behavior parity.
+This document defines the REST API route contract for the Go backend.
 
 ## Global Auth Behavior
 
 - Session cookie name: `session`
-- Excluded paths from auth: `GET/POST /login`, `GET /health`, any `/css/*`
-- Unauthenticated request behavior:
-  - HTMX (`HX-Request: true`) -> `401` with header `HX-Redirect: /login`
-  - HTML request (`Accept` contains `text/html`) -> `303` redirect to `/login`
-  - API/other -> `401` JSON `{"detail":"Not authenticated"}`
-
-## Static + SPA
-
-- `GET /css/*` static assets from `web/public/css`
-- `GET /assets/*` static assets from `web/dist/assets`
-- SPA fallback for non-API/static paths (`/{path:path}`), except `/api/*`, `/css/*`, `/assets/*`
+- Excluded paths from auth: `POST /api/auth/login`, `GET /health`
+- Unauthenticated request response: `401` JSON `{"detail":"Not authenticated"}`
 
 ## Route Inventory
 
-| Method | Path | Domain | Typical Response | Auth Required |
+| Method | Path | Tag | Typical Response | Auth Required |
 | --- | --- | --- | --- | --- |
 | GET | `/health` | health | JSON `{"status":"ok"}` | no |
-| GET | `/login` | auth | HTML (SPA) or redirect | no |
-| POST | `/login` | auth | `303` redirect or `401` | no |
-| POST | `/logout` | auth | `303` redirect | yes |
-| GET | `/` | auth/ui | HTML (SPA) | yes |
-| GET | `/translations` | auth/ui | HTML (SPA) | yes |
+| POST | `/api/auth/login` | auth | JSON `{"ok":true}` + Set-Cookie | no |
+| POST | `/api/auth/logout` | auth | JSON `{"ok":true}` | yes |
 | POST | `/api/translations` | translations | JSON | yes |
 | GET | `/api/translations` | translations | JSON | yes |
 | GET | `/api/translations/{translation_id}` | translations | JSON | yes |
 | GET | `/api/translations/{translation_id}/status` | translations | JSON | yes |
 | DELETE | `/api/translations/{translation_id}` | translations | JSON | yes |
-| GET | `/api/translations/{translation_id}/stream` | translations | SSE | yes |
-| POST | `/api/texts` | api | JSON | yes |
-| GET | `/api/texts/{text_id}` | api | JSON | yes |
-| POST | `/api/events` | api | JSON | yes |
-| POST | `/api/vocab/save` | api | JSON | yes |
-| POST | `/api/vocab/status` | api | JSON | yes |
-| POST | `/api/vocab/lookup` | api | JSON | yes |
-| GET | `/api/vocab/srs-info` | api | JSON | yes |
-| GET | `/api/review/queue` | api | JSON | yes |
-| POST | `/api/review/answer` | api | JSON | yes |
-| GET | `/api/review/count` | api | JSON | yes |
-| POST | `/api/segments/translate-batch` | api | JSON | yes |
-| GET | `/admin` | admin | HTML (SPA) | yes |
-| GET | `/admin/progress/export` | admin | JSON file download | yes |
-| POST | `/admin/progress/import` | admin | JSON | yes |
-| GET | `/admin/api/profile` | admin | JSON | yes |
-| POST | `/admin/api/profile` | admin | JSON | yes |
+| GET | `/api/translations/{translation_id}/stream` | translations | SSE (`text/event-stream`) | yes |
+| POST | `/api/texts` | texts | JSON | yes |
+| GET | `/api/texts/{text_id}` | texts | JSON | yes |
+| POST | `/api/events` | events | JSON | yes |
+| POST | `/api/vocab/save` | vocab | JSON | yes |
+| POST | `/api/vocab/status` | vocab | JSON | yes |
+| POST | `/api/vocab/lookup` | vocab | JSON | yes |
+| GET | `/api/vocab/srs-info` | vocab | JSON | yes |
+| GET | `/api/review/queue` | review | JSON | yes |
+| POST | `/api/review/answer` | review | JSON | yes |
+| GET | `/api/review/count` | review | JSON | yes |
+| POST | `/api/segments/translate-batch` | segments | JSON | yes |
+| GET | `/api/admin/progress/export` | admin | JSON file download | yes |
+| POST | `/api/admin/progress/import` | admin | JSON | yes |
+| GET | `/api/admin/profile` | admin | JSON | yes |
+| POST | `/api/admin/profile` | admin | JSON | yes |
+| POST | `/api/extract-text` | ocr | JSON | yes |

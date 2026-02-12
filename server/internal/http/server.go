@@ -57,25 +57,22 @@ func NewRouter(cfg config.Config) stdhttp.Handler {
 	r.Use(chimiddleware.Recoverer)
 	r.Use(middleware.TimeoutUnlessStream(60 * time.Second))
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins: []string{"*"},
-		AllowedMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type", "HX-Request"},
+		AllowedOrigins:   []string{"*"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
+		AllowCredentials: true,
 	}))
 
 	sessionManager := middleware.NewSessionManager(cfg)
 	r.Use(middleware.Auth(cfg, sessionManager))
 
 	r.Get("/health", handlers.Health)
-	r.Post("/extract-text", handlers.ExtractText)
-	r.Handle("/css/*", handlers.StaticFileHandler("/css/", cfg.WebPublicCSSDir))
-	r.Handle("/assets/*", handlers.StaticFileHandler("/assets/", cfg.WebDistDir+"/assets"))
+	r.Post("/api/extract-text", handlers.ExtractText)
 
 	routes.RegisterAuthRoutes(r, cfg, sessionManager)
 	routes.RegisterTranslationRoutes(r)
 	routes.RegisterAPIRoutes(r)
-	routes.RegisterAdminRoutes(r, cfg)
-
-	r.Get("/*", handlers.SPAFallback(cfg))
+	routes.RegisterAdminRoutes(r)
 
 	return r
 }
