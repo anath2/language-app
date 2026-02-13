@@ -1,103 +1,82 @@
 // Authentication state and methods
-// Located in features/auth/stores/
 
-const API_BASE = import.meta.env.DEV ? '/api' : `http://${window.location.host}/api`;
+class AuthStore {
+  isAuthenticated = $state(false);
+  isLoading = $state(true);
+  error = $state<string>('');
 
-// Authentication state
-let isAuthenticated = $state(false);
-let isLoading = $state(true);
-let error = $state<string>('');
+  /**
+   * Checks the current authentication status by hitting a lightweight authenticated endpoint.
+   */
+  async checkAuthStatus(): Promise<void> {
+    try {
+      const response = await fetch('/api/review/count', {
+        method: 'GET',
+        credentials: 'include',
+      });
 
-/**
- * Checks the current authentication status by attempting to access the API.
- */
-export async function checkAuthStatus(): Promise<void> {
-  try {
-    const response = await fetch(API_BASE, {
-      method: 'GET',
-      credentials: 'include',
-    });
-
-    if (response.ok) {
-      isAuthenticated = true;
-    } else if (response.status === 401) {
-      isAuthenticated = false;
-    } else {
-      console.error('Unexpected response checking auth status:', response.status);
-      isAuthenticated = false;
+      if (response.ok) {
+        this.isAuthenticated = true;
+      } else if (response.status === 401) {
+        this.isAuthenticated = false;
+      } else {
+        console.error('Unexpected response checking auth status:', response.status);
+        this.isAuthenticated = false;
+      }
+    } catch (error) {
+      console.error('Error checking auth status:', error);
+      this.isAuthenticated = false;
+    } finally {
+      this.isLoading = false;
     }
-  } catch (error) {
-    console.error('Error checking auth status:', error);
-    isAuthenticated = false;
-  } finally {
-    isLoading = false;
   }
-}
 
-/**
- * Attempts to log in with the provided password.
- */
-export async function login(password: string): Promise<boolean> {
-  try {
-    error = '';
-    const formData = new URLSearchParams();
-    formData.append('password', password);
+  /**
+   * Attempts to log in with the provided password.
+   */
+  async login(password: string): Promise<boolean> {
+    try {
+      this.error = '';
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+        credentials: 'include',
+      });
 
-    const response = await fetch('/login', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: formData.toString(),
-      credentials: 'include',
-    });
-
-    if (response.ok) {
-      isAuthenticated = true;
-      return true;
-    } else if (response.status === 401) {
-      error = 'Invalid password';
-      return false;
-    } else {
-      error = 'Login failed. Please try again.';
+      if (response.ok) {
+        this.isAuthenticated = true;
+        return true;
+      } else if (response.status === 401) {
+        this.error = 'Invalid password';
+        return false;
+      } else {
+        this.error = 'Login failed. Please try again.';
+        return false;
+      }
+    } catch (err) {
+      console.error('Error during login:', err);
+      this.error = 'Network error. Please check your connection.';
       return false;
     }
-  } catch (err) {
-    console.error('Error during login:', err);
-    error = 'Network error. Please check your connection.';
-    return false;
+  }
+
+  /**
+   * Logs out the current user.
+   */
+  async logout(): Promise<void> {
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch (error) {
+      console.error('Error during logout:', error);
+    } finally {
+      this.isAuthenticated = false;
+      window.location.href = '/';
+    }
   }
 }
 
-/**
- * Logs out the current user.
- */
-export async function logout(): Promise<void> {
-  try {
-    await fetch('/logout', {
-      method: 'POST',
-      credentials: 'include',
-    });
-  } catch (error) {
-    console.error('Error during logout:', error);
-  } finally {
-    isAuthenticated = false;
-    window.location.href = '/';
-  }
-}
-
-// Export reactive state
-export const auth = {
-  get isAuthenticated() {
-    return isAuthenticated;
-  },
-  get isLoading() {
-    return isLoading;
-  },
-  get error() {
-    return error;
-  },
-  checkAuthStatus,
-  login,
-  logout,
-};
+export const auth = new AuthStore();

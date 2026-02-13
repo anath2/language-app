@@ -28,7 +28,7 @@ $effect(() => {
 
 async function loadStats() {
   try {
-    const response = await getJson<VocabStatsResponse>('/admin/api/profile');
+    const response = await getJson<VocabStatsResponse>('/api/admin/profile');
     vocabStats = response.vocabStats;
   } catch (error) {
     console.error('Failed to load vocab stats:', error);

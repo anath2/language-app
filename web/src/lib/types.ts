@@ -17,9 +17,5 @@ export interface AdminProfileResponse {
 
 export interface ImportProgressResponse {
   success: boolean;
-  counts?: {
-    vocab_items: number;
-    srs_state: number;
-    vocab_lookups: number;
-  };
+  counts: Record<string, number>;
 }

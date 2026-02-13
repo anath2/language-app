@@ -26,7 +26,7 @@ export interface TranslationDetailResponse {
   input_text: string;
   full_translation: string | null;
   error_message: string | null;
-  paragraphs: ParagraphResult[] | null;
+  paragraphs: ParagraphMeta[] | null;
 }
 
 export interface CreateTranslationResponse {

@@ -9,118 +9,132 @@ import type {
   TranslationSummary,
 } from '@/features/translation/types';
 
-// State
-let translations = $state<TranslationSummary[]>([]);
-let currentTranslation = $state<TranslationDetailResponse | null>(null);
-let loadingState = $state<LoadingState>('idle');
-let errorMessage = $state('');
+class TranslationStore {
+  translations = $state<TranslationSummary[]>([]);
+  currentTranslation = $state<TranslationDetailResponse | null>(null);
+  loadingState = $state<LoadingState>('idle');
+  errorMessage = $state('');
 
-/**
- * Load the list of translations
- */
-export async function loadTranslations(limit: number = 20): Promise<void> {
-  try {
-    const data = await getJson<ListTranslationsResponse>(`/api/translations?limit=${limit}`);
-    translations = data.translations || [];
-  } catch (error) {
-    console.error('Failed to load translations:', error);
-    translations = [];
+  private getCreatedTranslationId(data: CreateTranslationResponse): string | null {
+    return data.translation_id ?? null;
   }
-}
 
-/**
- * Load a specific translation by ID
- */
-export async function loadTranslation(id: string): Promise<void> {
-  loadingState = 'loading';
-  errorMessage = '';
+  private createOptimisticSummary(id: string, text: string, status?: string): TranslationSummary {
+    const trimmed = text.trim();
+    const previewLimit = 120;
+    const inputPreview =
+      trimmed.length > previewLimit ? `${trimmed.slice(0, previewLimit - 3)}...` : trimmed;
 
-  try {
-    const data = await getJson<TranslationDetailResponse>(`/api/translations/${id}`);
-    currentTranslation = data;
-    loadingState = 'idle';
-  } catch (error) {
-    console.error('Failed to load translation:', error);
-    errorMessage = 'Failed to load translation';
-    loadingState = 'error';
-  }
-}
-
-/**
- * Submit a new translation
- */
-export async function submitTranslation(text: string): Promise<string | null> {
-  if (!text.trim()) return null;
-
-  loadingState = 'loading';
-  errorMessage = '';
-
-  try {
-    const data = await postJson<CreateTranslationResponse>('/api/translations', {
-      input_text: text,
+    return {
+      id,
+      created_at: new Date().toISOString(),
+      status: (status as TranslationSummary['status']) ?? 'pending',
       source_type: 'text',
-    });
-
-    // Refresh the list
-    await loadTranslations();
-
-    loadingState = 'idle';
-    return data.translation_id;
-  } catch (error) {
-    console.error('Failed to submit translation:', error);
-    errorMessage = 'Failed to submit translation';
-    loadingState = 'error';
-    return null;
+      input_preview: inputPreview,
+      full_translation_preview: null,
+      segment_count: null,
+      total_segments: null,
+    };
   }
-}
 
-/**
- * Delete a translation
- */
-export async function deleteTranslation(id: string): Promise<boolean> {
-  try {
-    await deleteRequest(`/api/translations/${id}`);
-
-    // If we're deleting the current translation, clear it
-    if (currentTranslation?.id === id) {
-      currentTranslation = null;
+  /**
+   * Load the list of translations
+   */
+  async loadTranslations(limit: number = 20): Promise<void> {
+    try {
+      const data = await getJson<ListTranslationsResponse>(`/api/translations?limit=${limit}`);
+      this.translations = data.translations || [];
+    } catch (error) {
+      console.error('Failed to load translations:', error);
     }
+  }
 
-    // Refresh the list
-    await loadTranslations();
-    return true;
-  } catch (error) {
-    console.error('Failed to delete translation:', error);
-    return false;
+  /**
+   * Load a specific translation by ID
+   */
+  async loadTranslation(id: string): Promise<void> {
+    this.loadingState = 'loading';
+    this.errorMessage = '';
+
+    try {
+      const data = await getJson<TranslationDetailResponse>(`/api/translations/${id}`);
+      this.currentTranslation = data;
+      this.loadingState = 'idle';
+    } catch (error) {
+      console.error('Failed to load translation:', error);
+      this.errorMessage = 'Failed to load translation';
+      this.loadingState = 'error';
+    }
+  }
+
+  /**
+   * Submit a new translation
+   */
+  async submitTranslation(text: string): Promise<string | null> {
+    if (!text.trim()) return null;
+
+    this.loadingState = 'loading';
+    this.errorMessage = '';
+
+    try {
+      const data = await postJson<CreateTranslationResponse>('/api/translations', {
+        input_text: text,
+        source_type: 'text',
+      });
+      const translationId = this.getCreatedTranslationId(data);
+      if (!translationId) {
+        throw new Error('Translation created but no ID was returned');
+      }
+
+      // Insert immediately so the home list updates without waiting for refetch.
+      if (!this.translations.some((translation) => translation.id === translationId)) {
+        this.translations = [
+          this.createOptimisticSummary(translationId, text, data.status),
+          ...this.translations,
+        ];
+      }
+
+      this.loadingState = 'idle';
+      // Keep local list in sync with server fields (counts/status/previews).
+      void this.loadTranslations();
+      return translationId;
+    } catch (error) {
+      console.error('Failed to submit translation:', error);
+      this.errorMessage = 'Failed to submit translation';
+      this.loadingState = 'error';
+      return null;
+    }
+  }
+
+  /**
+   * Delete a translation
+   */
+  async deleteTranslation(id: string): Promise<boolean> {
+    try {
+      await deleteRequest(`/api/translations/${id}`);
+
+      // If we're deleting the current translation, clear it
+      if (this.currentTranslation?.id === id) {
+        this.currentTranslation = null;
+      }
+
+      // Refresh the list
+      await this.loadTranslations();
+      return true;
+    } catch (error) {
+      console.error('Failed to delete translation:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Clear the current translation
+   */
+  clearCurrentTranslation(): void {
+    this.currentTranslation = null;
+    this.loadingState = 'idle';
+    this.errorMessage = '';
   }
 }
 
-/**
- * Clear the current translation
- */
-export function clearCurrentTranslation(): void {
-  currentTranslation = null;
-  loadingState = 'idle';
-  errorMessage = '';
-}
-
-// Export reactive state
-export const translationStore = {
-  get translations() {
-    return translations;
-  },
-  get currentTranslation() {
-    return currentTranslation;
-  },
-  get loadingState() {
-    return loadingState;
-  },
-  get errorMessage() {
-    return errorMessage;
-  },
-  loadTranslations,
-  loadTranslation,
-  submitTranslation,
-  deleteTranslation,
-  clearCurrentTranslation,
-};
+export const translationStore = new TranslationStore();

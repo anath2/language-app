@@ -7,7 +7,6 @@ import { translationStore } from '@/features/translation/stores/translationStore
 import TranslationResult from './components/TranslationResult.svelte';
 import type {
   CreateTextResponse,
-  ParagraphResult,
   RecordLookupResponse,
   SavedVocabInfo,
   SaveVocabResponse,
@@ -19,7 +18,6 @@ import type {
 const { translationId, onBack }: { translationId: string | null; onBack: () => void } = $props();
 
 let currentTranslationStatus = $state<string | null>(null);
-let currentParagraphs = $state<ParagraphResult[] | null>(null);
 let currentFullTranslation = $state<string | null>(null);
 let detailLoading = $state(false);
 
@@ -39,23 +37,14 @@ $effect(() => {
 async function loadTranslationFromRoute(id: string) {
   detailLoading = true;
   currentTranslationStatus = null;
-  currentParagraphs = null;
   currentFullTranslation = null;
 
   try {
     const detail = await getJson<TranslationDetailResponse>(`/api/translations/${id}`);
     currentRawText = detail.input_text;
     currentTextId = null;
-
-    if (detail.status === 'completed' && detail.paragraphs) {
-      currentTranslationStatus = 'completed';
-      currentParagraphs = detail.paragraphs;
-      currentFullTranslation = detail.full_translation || null;
-    } else if (detail.status === 'processing' || detail.status === 'pending') {
-      currentTranslationStatus = detail.status;
-    } else if (detail.status === 'failed') {
-      currentTranslationStatus = 'failed';
-    }
+    currentFullTranslation = detail.full_translation || null;
+    currentTranslationStatus = detail.status;
   } catch (_error) {
     currentTranslationStatus = 'failed';
   } finally {
@@ -66,7 +55,6 @@ async function loadTranslationFromRoute(id: string) {
 function clearDetailState() {
   detailLoading = false;
   currentTranslationStatus = null;
-  currentParagraphs = null;
   currentFullTranslation = null;
 }
 
@@ -231,7 +219,6 @@ async function onRecordLookup(headword: string, vocabItemId: string) {
         <TranslationResult
           translationId={translationId}
           translationStatus={currentTranslationStatus}
-          paragraphs={currentParagraphs}
           fullTranslation={currentFullTranslation}
           rawText={currentRawText}
           {savedVocabMap}

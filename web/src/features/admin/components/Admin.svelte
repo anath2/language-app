@@ -1,6 +1,6 @@
 <script lang="ts">
 import { onMount } from 'svelte';
-import { getJson, postJsonForm } from '@/lib/api';
+import { getJson, postJson, postJsonForm } from '@/lib/api';
 import type { AdminProfileResponse, ImportProgressResponse, UserProfile } from '@/lib/types';
 import Button from '@/ui/Button.svelte';
 import Card from '@/ui/Card.svelte';
@@ -27,7 +27,7 @@ let language = $state('');
 
 async function loadProfile() {
   try {
-    const response = await getJson<AdminProfileResponse>('/admin/api/profile');
+    const response = await getJson<AdminProfileResponse>('/api/admin/profile');
     profile = response.profile;
     vocabStats = response.vocabStats;
 
@@ -49,12 +49,11 @@ async function saveProfile(e: Event) {
   message = null;
 
   try {
-    const data = new FormData();
-    data.append('name', name);
-    data.append('email', email);
-    data.append('language', language);
-
-    const response = await postJsonForm<{ profile: UserProfile }>('/admin/api/profile', data);
+    const response = await postJson<{ profile: UserProfile }>('/api/admin/profile', {
+      name,
+      email,
+      language,
+    });
     profile = response.profile;
     message = { type: 'success', text: 'Profile saved successfully' };
   } catch (error) {
@@ -81,17 +80,21 @@ async function handleFileSelect(e: Event) {
     const formData = new FormData();
     formData.append('file', file, file.name);
 
-    const response = await fetch('/admin/progress/import', {
+    const response = await fetch('/api/admin/progress/import', {
       method: 'POST',
       body: formData,
+      credentials: 'include',
     });
 
     const result = (await response.json()) as ImportProgressResponse;
 
-    if (result.success && result.counts) {
+    if (result.success) {
+      const countEntries = Object.entries(result.counts)
+        .map(([key, val]) => `${val} ${key.replace(/_/g, ' ')}`)
+        .join(', ');
       message = {
         type: 'success',
-        text: `Import successful! Added ${result.counts.vocab_items} vocabulary items, ${result.counts.srs_state} review states, and ${result.counts.vocab_lookups} lookups.`,
+        text: `Import successful! Added ${countEntries}.`,
       };
       importModalOpen = false;
       onImportSuccess();
@@ -195,7 +198,7 @@ onMount(() => {
       <div>
         <h3 class="font-medium mb-2" style="color: var(--text-secondary);">Export Progress</h3>
         <p class="text-sm mb-2" style="color: var(--text-secondary);">Download your learning progress as a JSON file</p>
-        <Button size="md" variant="secondary" onclick={() => { window.location.href = '/admin/progress/export'; }}>Export Progress</Button>
+        <Button size="md" variant="secondary" onclick={() => { window.location.href = '/api/admin/progress/export'; }}>Export Progress</Button>
       </div>
 
       <div>
