@@ -309,7 +309,7 @@ func replayCompletedStream(w http.ResponseWriter, flusher http.Flusher, item tra
 
 	current := 0
 	for paraIdx, para := range item.Paragraphs {
-		for segIdx, seg := range para.Translations {
+		for _, seg := range para.Translations {
 			current++
 			emitSSE(w, map[string]any{
 				"type":    "progress",
@@ -319,7 +319,7 @@ func replayCompletedStream(w http.ResponseWriter, flusher http.Flusher, item tra
 					"segment":         seg.Segment,
 					"pinyin":          seg.Pinyin,
 					"english":         seg.English,
-					"index":           segIdx,
+					"index":           current - 1,
 					"paragraph_index": paraIdx,
 				},
 			})
