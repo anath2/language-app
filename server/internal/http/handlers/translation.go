@@ -67,7 +67,7 @@ func CreateTranslation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	item, err := sharedStore.Create(req.InputText, req.SourceType)
+	item, err := sharedTranslations.Create(req.InputText, req.SourceType)
 	if err != nil {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": err.Error()})
 		return
@@ -93,7 +93,7 @@ func ListTranslations(w http.ResponseWriter, r *http.Request) {
 	offset := parseIntDefault(query.Get("offset"), 0)
 	status := strings.TrimSpace(query.Get("status"))
 
-	items, total, err := sharedStore.List(limit, offset, status)
+	items, total, err := sharedTranslations.List(limit, offset, status)
 	if err != nil {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": err.Error()})
 		return
@@ -126,7 +126,7 @@ func GetTranslation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	translationID := pathParam(r, "translation_id")
-	item, ok := sharedStore.Get(translationID)
+	item, ok := sharedTranslations.Get(translationID)
 	if !ok {
 		WriteJSON(w, http.StatusNotFound, map[string]string{"detail": "Translation not found"})
 		return
@@ -151,7 +151,7 @@ func GetTranslationStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	translationID := pathParam(r, "translation_id")
-	item, ok := sharedStore.Get(translationID)
+	item, ok := sharedTranslations.Get(translationID)
 	if !ok {
 		WriteJSON(w, http.StatusNotFound, map[string]string{"detail": "Translation not found"})
 		return
@@ -172,7 +172,7 @@ func DeleteTranslation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	translationID := pathParam(r, "translation_id")
-	if !sharedStore.Delete(translationID) {
+	if !sharedTranslations.Delete(translationID) {
 		WriteJSON(w, http.StatusNotFound, map[string]string{"detail": "Translation not found"})
 		return
 	}
@@ -199,7 +199,7 @@ func TranslationStream(w http.ResponseWriter, r *http.Request) {
 	}
 
 	translationID := pathParam(r, "translation_id")
-	item, exists := sharedStore.Get(translationID)
+	item, exists := sharedTranslations.Get(translationID)
 	if !exists {
 		emitSSE(w, map[string]any{"type": "error", "message": "Translation not found"})
 		flusher.Flush()
@@ -234,7 +234,7 @@ func streamLiveProgress(ctx context.Context, w http.ResponseWriter, flusher http
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			item, exists := sharedStore.Get(translationID)
+			item, exists := sharedTranslations.Get(translationID)
 			if !exists {
 				emitSSE(w, map[string]any{"type": "error", "message": "Translation not found"})
 				flusher.Flush()
@@ -283,7 +283,7 @@ func streamLiveProgress(ctx context.Context, w http.ResponseWriter, flusher http
 			lastProgress = len(progress.Results)
 
 			if progress.Status == "completed" || item.Status == "completed" {
-				fresh, _ := sharedStore.Get(translationID)
+				fresh, _ := sharedTranslations.Get(translationID)
 				emitSSE(w, map[string]any{
 					"type":            "complete",
 					"paragraphs":      fresh.Paragraphs,

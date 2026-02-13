@@ -10,7 +10,7 @@ func ExportProgress(w http.ResponseWriter, r *http.Request) {
 		WriteJSON(w, http.StatusInternalServerError, map[string]string{"detail": err.Error()})
 		return
 	}
-	jsonContent, err := sharedStore.ExportProgressJSON()
+	jsonContent, err := sharedSRS.ExportProgressJSON()
 	if err != nil {
 		WriteJSON(w, http.StatusInternalServerError, map[string]string{"detail": err.Error()})
 		return
@@ -42,7 +42,7 @@ func ImportProgress(w http.ResponseWriter, r *http.Request) {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": "File too large. Maximum size is 1024KB."})
 		return
 	}
-	counts, err := sharedStore.ImportProgressJSON(string(buf[:n]))
+	counts, err := sharedSRS.ImportProgressJSON(string(buf[:n]))
 	if err != nil {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": err.Error()})
 		return
@@ -58,7 +58,7 @@ func GetProfile(w http.ResponseWriter, r *http.Request) {
 		WriteJSON(w, http.StatusInternalServerError, map[string]string{"detail": err.Error()})
 		return
 	}
-	profile, ok := sharedStore.GetUserProfile()
+	profile, ok := sharedProfile.GetUserProfile()
 	var profileObj any
 	if ok {
 		profileObj = map[string]any{
@@ -72,9 +72,9 @@ func GetProfile(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, map[string]any{
 		"profile": profileObj,
 		"vocabStats": map[string]int{
-			"known":    sharedStore.CountVocabByStatus("known"),
-			"learning": sharedStore.CountVocabByStatus("learning"),
-			"total":    sharedStore.CountTotalVocab(),
+			"known":    sharedSRS.CountVocabByStatus("known"),
+			"learning": sharedSRS.CountVocabByStatus("learning"),
+			"total":    sharedSRS.CountTotalVocab(),
 		},
 	})
 }
@@ -92,7 +92,7 @@ func UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	name := payload["name"]
 	email := payload["email"]
 	language := payload["language"]
-	profile, err := sharedStore.UpsertUserProfile(name, email, language)
+	profile, err := sharedProfile.UpsertUserProfile(name, email, language)
 	if err != nil {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": err.Error()})
 		return

@@ -29,7 +29,7 @@ func NewRouter(cfg config.Config) stdhttp.Handler {
 		}
 	}
 
-	store, err := translation.NewStore(cfg.TranslationDBPath)
+	db, err := translation.NewDB(cfg.TranslationDBPath)
 	if err != nil {
 		log.Printf("failed to initialize translation store: %v", err)
 		return stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
@@ -37,6 +37,10 @@ func NewRouter(cfg config.Config) stdhttp.Handler {
 			_, _ = w.Write([]byte("Server initialization error"))
 		})
 	}
+	translationStore := translation.NewTranslationStore(db)
+	textEventStore := translation.NewTextEventStore(db)
+	srsStore := translation.NewSRSStore(db)
+	profileStore := translation.NewProfileStore(db)
 	provider, err := intelligence.NewDSPyProvider(cfg)
 	if err != nil {
 		log.Printf("failed to initialize intelligence provider: %v", err)
@@ -45,8 +49,8 @@ func NewRouter(cfg config.Config) stdhttp.Handler {
 			_, _ = w.Write([]byte("Server initialization error"))
 		})
 	}
-	manager := queue.NewManager(store, provider)
-	handlers.ConfigureDependencies(store, manager, provider)
+	manager := queue.NewManager(translationStore, provider)
+	handlers.ConfigureDependencies(translationStore, textEventStore, srsStore, profileStore, manager, provider)
 	manager.ResumeRestartableJobs()
 
 	r := chi.NewRouter()

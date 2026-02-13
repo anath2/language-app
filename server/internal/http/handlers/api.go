@@ -142,7 +142,7 @@ func CreateText(w http.ResponseWriter, r *http.Request) {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": "Invalid JSON payload"})
 		return
 	}
-	rec, err := sharedStore.CreateText(req.RawText, req.SourceType, req.Metadata)
+	rec, err := sharedTextEvents.CreateText(req.RawText, req.SourceType, req.Metadata)
 	if err != nil {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": err.Error()})
 		return
@@ -156,7 +156,7 @@ func GetText(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	textID := pathParam(r, "text_id")
-	rec, ok := sharedStore.GetText(textID)
+	rec, ok := sharedTextEvents.GetText(textID)
 	if !ok {
 		WriteJSON(w, http.StatusNotFound, map[string]string{"detail": "Not found"})
 		return
@@ -181,7 +181,7 @@ func CreateEvent(w http.ResponseWriter, r *http.Request) {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": "Invalid JSON payload"})
 		return
 	}
-	id, err := sharedStore.CreateEvent(req.EventType, req.TextID, req.SegmentID, req.Payload)
+	id, err := sharedTextEvents.CreateEvent(req.EventType, req.TextID, req.SegmentID, req.Payload)
 	if err != nil {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": err.Error()})
 		return
@@ -199,7 +199,7 @@ func SaveVocab(w http.ResponseWriter, r *http.Request) {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": "Invalid JSON payload"})
 		return
 	}
-	id, err := sharedStore.SaveVocabItem(req.Headword, req.Pinyin, req.English, req.TextID, req.SegmentID, req.Snippet, req.Status)
+	id, err := sharedSRS.SaveVocabItem(req.Headword, req.Pinyin, req.English, req.TextID, req.SegmentID, req.Snippet, req.Status)
 	if err != nil {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": err.Error()})
 		return
@@ -217,7 +217,7 @@ func UpdateVocabStatus(w http.ResponseWriter, r *http.Request) {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": "Invalid JSON payload"})
 		return
 	}
-	err := sharedStore.UpdateVocabStatus(req.VocabItemID, req.Status)
+	err := sharedSRS.UpdateVocabStatus(req.VocabItemID, req.Status)
 	if err != nil {
 		if err == translation.ErrNotFound {
 			WriteJSON(w, http.StatusNotFound, map[string]string{"detail": "Vocab item not found"})
@@ -239,7 +239,7 @@ func RecordLookup(w http.ResponseWriter, r *http.Request) {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": "Invalid JSON payload"})
 		return
 	}
-	info, ok := sharedStore.RecordLookup(req.VocabItemID)
+	info, ok := sharedSRS.RecordLookup(req.VocabItemID)
 	if !ok {
 		WriteJSON(w, http.StatusNotFound, map[string]string{"detail": "Vocab item not found"})
 		return
@@ -262,7 +262,7 @@ func GetVocabSRSInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	parts := strings.Split(headwords, ",")
-	items, err := sharedStore.GetVocabSRSInfo(parts)
+	items, err := sharedSRS.GetVocabSRSInfo(parts)
 	if err != nil {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": err.Error()})
 		return
@@ -288,7 +288,7 @@ func GetReviewQueue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	limit := parseIntDefault(r.URL.Query().Get("limit"), 10)
-	cards, err := sharedStore.GetReviewQueue(limit)
+	cards, err := sharedSRS.GetReviewQueue(limit)
 	if err != nil {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": err.Error()})
 		return
@@ -305,7 +305,7 @@ func GetReviewQueue(w http.ResponseWriter, r *http.Request) {
 	}
 	WriteJSON(w, http.StatusOK, reviewQueueResponse{
 		Cards:    respCards,
-		DueCount: sharedStore.GetDueCount(),
+		DueCount: sharedSRS.GetDueCount(),
 	})
 }
 
@@ -319,7 +319,7 @@ func RecordReviewAnswer(w http.ResponseWriter, r *http.Request) {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": "Invalid JSON payload"})
 		return
 	}
-	res, ok, err := sharedStore.RecordReviewAnswer(req.VocabItemID, req.Grade)
+	res, ok, err := sharedSRS.RecordReviewAnswer(req.VocabItemID, req.Grade)
 	if err != nil {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": err.Error()})
 		return
@@ -341,7 +341,7 @@ func GetReviewCount(w http.ResponseWriter, r *http.Request) {
 		WriteJSON(w, http.StatusInternalServerError, map[string]string{"detail": err.Error()})
 		return
 	}
-	WriteJSON(w, http.StatusOK, dueCountResponse{DueCount: sharedStore.GetDueCount()})
+	WriteJSON(w, http.StatusOK, dueCountResponse{DueCount: sharedSRS.GetDueCount()})
 }
 
 func TranslateBatch(w http.ResponseWriter, r *http.Request) {
@@ -371,7 +371,7 @@ func TranslateBatch(w http.ResponseWriter, r *http.Request) {
 		storeSegments = append(storeSegments, translated)
 	}
 	if req.TranslationID != nil && req.ParagraphIdx != nil {
-		if err := sharedStore.UpdateTranslationSegments(*req.TranslationID, *req.ParagraphIdx, storeSegments); err != nil {
+		if err := sharedTranslations.UpdateTranslationSegments(*req.TranslationID, *req.ParagraphIdx, storeSegments); err != nil {
 			WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": err.Error()})
 			return
 		}

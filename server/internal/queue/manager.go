@@ -27,15 +27,26 @@ type Progress struct {
 }
 
 type Manager struct {
-	store    *translation.Store
+	store    translationStore
 	provider intelligence.Provider
 	mu       sync.RWMutex
 	running  map[string]struct{}
 }
 
+type translationStore interface {
+	ListRestartableTranslationIDs() ([]string, error)
+	Get(id string) (translation.Translation, bool)
+	ClaimTranslationJob(translationID string, leaseDuration time.Duration) (bool, error)
+	Fail(id string, message string) error
+	SetProcessing(id string, total int) error
+	Complete(id string) error
+	GetProgressSnapshot(id string) (translation.ProgressSnapshot, bool)
+	AddProgressSegment(id string, result translation.SegmentResult) (int, int, error)
+}
+
 const jobLeaseDuration = 30 * time.Second
 
-func NewManager(store *translation.Store, provider intelligence.Provider) *Manager {
+func NewManager(store translationStore, provider intelligence.Provider) *Manager {
 	return &Manager{
 		store:    store,
 		provider: provider,
