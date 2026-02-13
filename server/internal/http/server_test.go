@@ -289,6 +289,29 @@ func TestTranslationSSEFlow(t *testing.T) {
 	if last["type"] != "complete" && last["type"] != "error" {
 		t.Fatalf("expected last SSE event to be complete or error, got %v", last["type"])
 	}
+
+	expectedProgressIndex := 0
+	for _, line := range dataLines {
+		var event map[string]any
+		if err := json.Unmarshal([]byte(line), &event); err != nil {
+			t.Fatalf("invalid SSE json in stream: %v", err)
+		}
+		if event["type"] != "progress" {
+			continue
+		}
+		result, ok := event["result"].(map[string]any)
+		if !ok {
+			t.Fatal("expected progress event result payload")
+		}
+		index, ok := result["index"].(float64)
+		if !ok {
+			t.Fatalf("expected numeric result.index, got %T", result["index"])
+		}
+		if int(index) != expectedProgressIndex {
+			t.Fatalf("expected progress result.index=%d, got %d", expectedProgressIndex, int(index))
+		}
+		expectedProgressIndex++
+	}
 }
 
 func TestCoreAPIPersistenceFlow(t *testing.T) {
