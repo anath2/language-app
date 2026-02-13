@@ -82,38 +82,40 @@ func (m *Manager) StartProcessing(translationID string) {
 		return
 	}
 
-	ctx := context.Background()
-	segments, err := m.provider.Segment(ctx, item.InputText)
-	if err != nil {
-		_ = m.store.Fail(translationID, "Failed to segment translation input")
-		m.removeRunning(translationID)
-		return
-	}
-	total := len(segments)
-	if total == 0 {
-		_ = m.store.Fail(translationID, "No translatable segments found")
-		m.removeRunning(translationID)
-		return
-	}
-
-	startIndex := item.Progress
-	if item.Status == "pending" {
-		startIndex = 0
-		if err := m.store.SetProcessing(translationID, total); err != nil {
+	go func(item translation.Translation) {
+		ctx := context.Background()
+		segments, err := m.provider.Segment(ctx, item.InputText)
+		if err != nil {
+			_ = m.store.Fail(translationID, "Failed to segment translation input")
 			m.removeRunning(translationID)
 			return
 		}
-	}
-
-	if startIndex >= len(segments) {
-		if err := m.store.Complete(translationID); err != nil {
-			_ = m.store.Fail(translationID, "Failed to complete translation")
+		total := len(segments)
+		if total == 0 {
+			_ = m.store.Fail(translationID, "No translatable segments found")
+			m.removeRunning(translationID)
+			return
 		}
-		m.removeRunning(translationID)
-		return
-	}
 
-	go m.runJob(ctx, translationID, item.InputText, segments, startIndex)
+		startIndex := item.Progress
+		if item.Status == "pending" {
+			startIndex = 0
+			if err := m.store.SetProcessing(translationID, total); err != nil {
+				m.removeRunning(translationID)
+				return
+			}
+		}
+
+		if startIndex >= len(segments) {
+			if err := m.store.Complete(translationID); err != nil {
+				_ = m.store.Fail(translationID, "Failed to complete translation")
+			}
+			m.removeRunning(translationID)
+			return
+		}
+
+		m.runJob(ctx, translationID, item.InputText, segments, startIndex)
+	}(item)
 }
 
 func (m *Manager) GetProgress(translationID string) (Progress, bool) {
