@@ -45,10 +45,11 @@ async function extractTextFromImage() {
   ocrLoading = true;
   try {
     const formData = new FormData();
-    formData.append('file', ocrFile);
-    const res = await fetch('/extract-text', {
+    formData.append('image', ocrFile);
+    const res = await fetch('/api/extract-text', {
       method: 'POST',
       body: formData,
+      credentials: 'include',
     });
     if (!res.ok) {
       const data = (await res.json()) as { detail?: string };

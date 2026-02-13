@@ -7,80 +7,67 @@ import type {
   ReviewQueueResponse,
 } from '@/features/translation/types';
 
-// State
-let queue = $state<ReviewCard[]>([]);
-let currentIndex = $state(0);
-let isAnswerRevealed = $state(false);
-let isLoading = $state(false);
+class ReviewStore {
+  queue = $state<ReviewCard[]>([]);
+  currentIndex = $state(0);
+  isAnswerRevealed = $state(false);
+  isLoading = $state(false);
 
-/**
- * Load the review queue from the server
- */
-export async function loadQueue(limit: number = 20): Promise<void> {
-  isLoading = true;
-  try {
-    const data = await getJson<ReviewQueueResponse>(`/api/review/queue?limit=${limit}`);
-    queue = data.cards || [];
-    currentIndex = 0;
-    isAnswerRevealed = false;
-  } catch (error) {
-    console.error('Failed to load review queue:', error);
-    queue = [];
-  } finally {
-    isLoading = false;
-  }
-}
-
-/**
- * Reveal the answer for the current card
- */
-export function revealAnswer(): void {
-  isAnswerRevealed = true;
-}
-
-/**
- * Grade the current card and move to the next
- */
-export async function gradeCard(grade: number): Promise<void> {
-  if (!queue[currentIndex]) return;
-
-  try {
-    await postJson<ReviewAnswerResponse>('/api/review/answer', {
-      vocab_item_id: queue[currentIndex].vocab_item_id,
-      grade,
-    });
-  } catch (error) {
-    console.error('Failed to record grade:', error);
-  }
-
-  currentIndex += 1;
-  isAnswerRevealed = false;
-}
-
-// Export reactive state
-export const reviewStore = {
-  get queue() {
-    return queue;
-  },
-  get currentIndex() {
-    return currentIndex;
-  },
-  get isAnswerRevealed() {
-    return isAnswerRevealed;
-  },
-  get isLoading() {
-    return isLoading;
-  },
   get currentCard(): ReviewCard | null {
-    return queue[currentIndex] || null;
-  },
+    return this.queue[this.currentIndex] || null;
+  }
+
   get progress(): { current: number; total: number } {
-    return { current: currentIndex + 1, total: queue.length };
-  },
+    return { current: this.currentIndex + 1, total: this.queue.length };
+  }
+
   get isQueueExhausted(): boolean {
-    return queue.length > 0 && currentIndex >= queue.length;
-  },
-  loadQueue,
-  revealAnswer,
-  gradeCard,
-};
+    return this.queue.length > 0 && this.currentIndex >= this.queue.length;
+  }
+
+  /**
+   * Load the review queue from the server
+   */
+  async loadQueue(limit: number = 20): Promise<void> {
+    this.isLoading = true;
+    try {
+      const data = await getJson<ReviewQueueResponse>(`/api/review/queue?limit=${limit}`);
+      this.queue = data.cards || [];
+      this.currentIndex = 0;
+      this.isAnswerRevealed = false;
+    } catch (error) {
+      console.error('Failed to load review queue:', error);
+      this.queue = [];
+    } finally {
+      this.isLoading = false;
+    }
+  }
+
+  /**
+   * Reveal the answer for the current card
+   */
+  revealAnswer(): void {
+    this.isAnswerRevealed = true;
+  }
+
+  /**
+   * Grade the current card and move to the next
+   */
+  async gradeCard(grade: number): Promise<void> {
+    if (!this.queue[this.currentIndex]) return;
+
+    try {
+      await postJson<ReviewAnswerResponse>('/api/review/answer', {
+        vocab_item_id: this.queue[this.currentIndex].vocab_item_id,
+        grade,
+      });
+    } catch (error) {
+      console.error('Failed to record grade:', error);
+    }
+
+    this.currentIndex += 1;
+    this.isAnswerRevealed = false;
+  }
+}
+
+export const reviewStore = new ReviewStore();

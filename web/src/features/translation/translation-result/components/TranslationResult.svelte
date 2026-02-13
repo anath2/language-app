@@ -20,7 +20,6 @@ import type {
 const {
   translationId,
   translationStatus,
-  paragraphs: initialParagraphs,
   fullTranslation: initialFullTranslation,
   rawText,
   savedVocabMap,
@@ -33,7 +32,6 @@ const {
 }: {
   translationId: string | null;
   translationStatus: string | null;
-  paragraphs: ParagraphResult[] | null;
   fullTranslation: string | null;
   rawText: string;
   savedVocabMap: Map<string, SavedVocabInfo>;
@@ -64,8 +62,6 @@ let lastTranslationId = $state<string | null>(null);
 $effect(() => {
   const currentId = translationId;
   const currentStatus = translationStatus;
-  const currentParagraphs = initialParagraphs;
-  const currentFullTranslation = initialFullTranslation;
 
   if (currentId !== lastTranslationId) {
     lastTranslationId = currentId;
@@ -76,13 +72,11 @@ $effect(() => {
       return;
     }
 
-    if (currentStatus === 'completed' && currentParagraphs) {
-      applyCompletedJob(currentParagraphs, currentFullTranslation);
-    } else if (currentStatus === 'processing' || currentStatus === 'pending') {
-      void streamTranslation(currentId);
-    } else if (currentStatus === 'failed') {
+    if (currentStatus === 'failed') {
       loadingState = 'error';
       errorMessage = 'Translation failed';
+    } else if (currentStatus) {
+      void streamTranslation(currentId);
     } else {
       loadingState = 'loading';
     }
@@ -126,19 +120,6 @@ function buildDisplayParagraphs(
   });
 }
 
-function applyCompletedJob(paragraphs: ParagraphResult[], fullTrans: string | null) {
-  fullTranslation = fullTrans || '';
-  paragraphMeta = paragraphs.map((para) => ({
-    segment_count: para.translations.length,
-    indent: para.indent,
-    separator: para.separator,
-  }));
-  translationResults = flattenParagraphs(paragraphs);
-  progress = { current: translationResults.length, total: translationResults.length };
-  loadingState = 'idle';
-  onSegmentsChanged(translationResults);
-}
-
 function flattenParagraphs(paragraphs: ParagraphResult[]): SegmentResultType[] {
   const results: SegmentResultType[] = [];
   paragraphs.forEach((para, paraIdx) => {
@@ -169,7 +150,9 @@ async function streamTranslation(streamId: string) {
   loadingState = 'loading';
 
   try {
-    const response = await fetch(`/api/translations/${streamId}/stream`);
+    const response = await fetch(`/api/translations/${streamId}/stream`, {
+      credentials: 'include',
+    });
     if (!response.body) {
       throw new Error('Streaming unavailable');
     }
