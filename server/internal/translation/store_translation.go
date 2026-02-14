@@ -132,7 +132,7 @@ func (s *TranslationStore) List(limit int, offset int, status string) ([]Transla
 	return nil, 0, fmt.Errorf("list translations: database remained locked")
 }
 
-func (s *TranslationStore) SetProcessing(id string, total int) error {
+func (s *TranslationStore) SetProcessing(id string, total int, sentenceCount int) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return fmt.Errorf("begin set processing tx: %w", err)
@@ -148,14 +148,20 @@ func (s *TranslationStore) SetProcessing(id string, total int) error {
 		return ErrNotFound
 	}
 
-	if _, err := tx.Exec(
-		`INSERT INTO translation_paragraphs (id, translation_id, paragraph_idx, indent, separator)
-		 VALUES (?, ?, 0, '', '')
-		 ON CONFLICT (translation_id, paragraph_idx) DO NOTHING`,
-		fmt.Sprintf("%s:%d", id, 0),
-		id,
-	); err != nil {
-		return fmt.Errorf("ensure default paragraph: %w", err)
+	if sentenceCount < 0 {
+		sentenceCount = 0
+	}
+	for sentenceIdx := 0; sentenceIdx < sentenceCount; sentenceIdx++ {
+		if _, err := tx.Exec(
+			`INSERT INTO translation_paragraphs (id, translation_id, paragraph_idx, indent, separator)
+			 VALUES (?, ?, ?, '', '')
+			 ON CONFLICT (translation_id, paragraph_idx) DO NOTHING`,
+			fmt.Sprintf("%s:%d", id, sentenceIdx),
+			id,
+			sentenceIdx,
+		); err != nil {
+			return fmt.Errorf("ensure sentence row %d: %w", sentenceIdx, err)
+		}
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -164,7 +170,7 @@ func (s *TranslationStore) SetProcessing(id string, total int) error {
 	return nil
 }
 
-func (s *TranslationStore) AddProgressSegment(id string, result SegmentResult) (int, int, error) {
+func (s *TranslationStore) AddProgressSegment(id string, result SegmentResult, sentenceIndex int) (int, int, error) {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return 0, 0, fmt.Errorf("begin add progress tx: %w", err)
@@ -183,10 +189,21 @@ func (s *TranslationStore) AddProgressSegment(id string, result SegmentResult) (
 
 	segIdx := progress
 	if _, err := tx.Exec(
-		`INSERT INTO translation_segments (id, translation_id, paragraph_idx, seg_idx, segment_text, pinyin, english, created_at)
-		 VALUES (?, ?, 0, ?, ?, ?, ?, ?)`,
-		fmt.Sprintf("%s:%d:%d", id, 0, segIdx),
+		`INSERT INTO translation_paragraphs (id, translation_id, paragraph_idx, indent, separator)
+		 VALUES (?, ?, ?, '', '')
+		 ON CONFLICT (translation_id, paragraph_idx) DO NOTHING`,
+		fmt.Sprintf("%s:%d", id, sentenceIndex),
 		id,
+		sentenceIndex,
+	); err != nil {
+		return 0, 0, fmt.Errorf("ensure sentence row: %w", err)
+	}
+	if _, err := tx.Exec(
+		`INSERT INTO translation_segments (id, translation_id, paragraph_idx, seg_idx, segment_text, pinyin, english, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		fmt.Sprintf("%s:%d:%d", id, sentenceIndex, segIdx),
+		id,
+		sentenceIndex,
 		segIdx,
 		result.Segment,
 		result.Pinyin,
@@ -328,7 +345,7 @@ func (s *TranslationStore) GetProgressSnapshot(id string) (ProgressSnapshot, boo
 	snapshot.Results = make([]SegmentProgressEntry, 0)
 	for rows.Next() {
 		var seg SegmentProgressEntry
-		if err := rows.Scan(&seg.Segment, &seg.Pinyin, &seg.English, &seg.Index, &seg.ParagraphIndex); err != nil {
+		if err := rows.Scan(&seg.Segment, &seg.Pinyin, &seg.English, &seg.Index, &seg.SentenceIndex); err != nil {
 			return ProgressSnapshot{}, false
 		}
 		snapshot.Results = append(snapshot.Results, seg)

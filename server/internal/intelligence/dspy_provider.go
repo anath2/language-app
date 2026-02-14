@@ -9,6 +9,8 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -20,6 +22,7 @@ import (
 )
 
 const llmTimeout = 10 * time.Minute
+const defaultSegmentationInstruction = "Split the Chinese text into meaningful segments of words and return segments as an ordered JSON array."
 
 type DSPyProvider struct {
 	segmenter  *modules.Predict
@@ -55,6 +58,7 @@ func NewDSPyProvider(cfg config.Config) (*DSPyProvider, error) {
 		log.Printf("openai-compatible debug enabled: base_url=%s path=%s model=%s", baseURL, path, modelID)
 	}
 
+	segmentInstruction := loadCompiledSegmentationInstruction(cfg)
 	segmentSig := core.NewSignature(
 		[]core.InputField{
 			{Field: core.NewField("text", core.WithDescription("Chinese sentence to segment"))},
@@ -62,7 +66,7 @@ func NewDSPyProvider(cfg config.Config) (*DSPyProvider, error) {
 		[]core.OutputField{
 			{Field: core.NewField("segments", core.WithDescription("Array of segmented words in order"))},
 		},
-	).WithInstruction("Split the Chinese text into meaningful segments of words and return segments as an ordered JSON array.")
+	).WithInstruction(segmentInstruction)
 
 	translateSig := core.NewSignature(
 		[]core.InputField{
@@ -92,6 +96,38 @@ func NewDSPyProvider(cfg config.Config) (*DSPyProvider, error) {
 		translator: translator,
 		cedict:     cedict,
 	}, nil
+}
+
+func loadCompiledSegmentationInstruction(cfg config.Config) string {
+	paths := candidateCompiledInstructionPaths(cfg)
+	for _, path := range paths {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		instruction := strings.TrimSpace(string(data))
+		if instruction == "" {
+			log.Printf("segmentation instruction file empty, falling back: path=%s", path)
+			continue
+		}
+		log.Printf("loaded compiled segmentation instruction: path=%s", path)
+		return instruction
+	}
+	log.Printf("compiled segmentation instruction not found, using default instruction")
+	return defaultSegmentationInstruction
+}
+
+func candidateCompiledInstructionPaths(cfg config.Config) []string {
+	out := make([]string, 0, 3)
+	if cedictPath := strings.TrimSpace(cfg.CedictPath); cedictPath != "" {
+		// Typical layout: server/data/cedict_ts.u8 -> server/data/jepa/compiled_instruction.txt.
+		out = append(out, filepath.Join(filepath.Dir(cedictPath), "jepa", "compiled_instruction.txt"))
+	}
+	out = append(out,
+		filepath.Join("server", "data", "jepa", "compiled_instruction.txt"),
+		filepath.Join("data", "jepa", "compiled_instruction.txt"),
+	)
+	return out
 }
 
 func (p *DSPyProvider) Segment(ctx context.Context, text string) ([]string, error) {

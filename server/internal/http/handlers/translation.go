@@ -258,7 +258,7 @@ func streamLiveProgress(ctx context.Context, w http.ResponseWriter, flusher http
 					"type":           "start",
 					"translation_id": translationID,
 					"total":          progress.Total,
-					"paragraphs":     paragraphInfo(item.Paragraphs),
+					"sentences":      sentenceInfo(item.Paragraphs),
 				})
 				flusher.Flush()
 				startSent = true
@@ -271,11 +271,11 @@ func streamLiveProgress(ctx context.Context, w http.ResponseWriter, flusher http
 					"current": i + 1,
 					"total":   progress.Total,
 					"result": map[string]any{
-						"segment":         result.Segment,
-						"pinyin":          result.Pinyin,
-						"english":         result.English,
-						"index":           result.Index,
-						"paragraph_index": result.ParagraphIndex,
+						"segment":        result.Segment,
+						"pinyin":         result.Pinyin,
+						"english":        result.English,
+						"index":          result.Index,
+						"sentence_index": result.SentenceIndex,
 					},
 				})
 				flusher.Flush()
@@ -286,7 +286,7 @@ func streamLiveProgress(ctx context.Context, w http.ResponseWriter, flusher http
 				fresh, _ := sharedTranslations.Get(translationID)
 				emitSSE(w, map[string]any{
 					"type":            "complete",
-					"paragraphs":      fresh.Paragraphs,
+					"sentences":       fresh.Paragraphs,
 					"fullTranslation": fresh.FullTranslation,
 				})
 				flusher.Flush()
@@ -302,7 +302,7 @@ func replayCompletedStream(w http.ResponseWriter, flusher http.Flusher, item tra
 		"type":            "start",
 		"translation_id":  item.ID,
 		"total":           item.Total,
-		"paragraphs":      paragraphInfo(item.Paragraphs),
+		"sentences":       sentenceInfo(item.Paragraphs),
 		"fullTranslation": item.FullTranslation,
 	})
 	flusher.Flush()
@@ -316,11 +316,11 @@ func replayCompletedStream(w http.ResponseWriter, flusher http.Flusher, item tra
 				"current": current,
 				"total":   item.Total,
 				"result": map[string]any{
-					"segment":         seg.Segment,
-					"pinyin":          seg.Pinyin,
-					"english":         seg.English,
-					"index":           current - 1,
-					"paragraph_index": paraIdx,
+					"segment":        seg.Segment,
+					"pinyin":         seg.Pinyin,
+					"english":        seg.English,
+					"index":          current - 1,
+					"sentence_index": paraIdx,
 				},
 			})
 			flusher.Flush()
@@ -329,7 +329,7 @@ func replayCompletedStream(w http.ResponseWriter, flusher http.Flusher, item tra
 
 	emitSSE(w, map[string]any{
 		"type":            "complete",
-		"paragraphs":      item.Paragraphs,
+		"sentences":       item.Paragraphs,
 		"fullTranslation": item.FullTranslation,
 	})
 	flusher.Flush()
@@ -344,13 +344,13 @@ func emitSSE(w http.ResponseWriter, payload any) {
 	_, _ = fmt.Fprintf(w, "data: %s\n\n", data)
 }
 
-func paragraphInfo(paragraphs []translation.ParagraphResult) []map[string]any {
-	out := make([]map[string]any, 0, len(paragraphs))
-	for _, para := range paragraphs {
+func sentenceInfo(sentences []translation.ParagraphResult) []map[string]any {
+	out := make([]map[string]any, 0, len(sentences))
+	for _, sentence := range sentences {
 		out = append(out, map[string]any{
-			"segment_count": len(para.Translations),
-			"indent":        para.Indent,
-			"separator":     para.Separator,
+			"segment_count": len(sentence.Translations),
+			"indent":        sentence.Indent,
+			"separator":     sentence.Separator,
 		})
 	}
 	return out

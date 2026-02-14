@@ -33,11 +33,11 @@ type ParagraphResult struct {
 }
 
 type SegmentProgressEntry struct {
-	Segment        string
-	Pinyin         string
-	English        string
-	Index          int
-	ParagraphIndex int
+	Segment       string
+	Pinyin        string
+	English       string
+	Index         int
+	SentenceIndex int
 }
 
 type ProgressSnapshot struct {
