@@ -1,0 +1,1 @@
+Produce a JSON-formatted array of text segments representing the Chinese input. The segments must be arranged in order such that concatenating them yields the exact original text. Maintain absolute fidelity to the input, preserving every character, symbol, and line break. Group standard multi-character vocabulary (e.g., 人工智能) into single tokens. Output the array exclusively.

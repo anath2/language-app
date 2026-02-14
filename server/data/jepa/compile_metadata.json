@@ -1,0 +1,19 @@
+{
+  "model_id": "z-ai/glm-4.7-flash",
+  "dataset_path": "data/jepa/sentences_20.csv",
+  "dataset_units": 20,
+  "generated_at_utc": "2026-02-14T14:52:16Z",
+  "compile_elapsed": "1m41.232164166s",
+  "best_fitness": 0.8999999999999999,
+  "generations_executed": 1,
+  "population_size": 2,
+  "max_generations": 1,
+  "evaluation_batch_size": 1,
+  "reflection_frequency": 2,
+  "stagnation_limit": 2,
+  "extra": {
+    "accuracy_delta": -0.050000000000000044,
+    "baseline_accuracy": 0.4,
+    "compiled_accuracy": 0.35
+  }
+}
