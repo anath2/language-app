@@ -148,6 +148,12 @@ func (p *DSPyProvider) Segment(ctx context.Context, text string) ([]string, erro
 		segments = parseSegmentsFromResponse(res["response"])
 	}
 	if len(segments) == 0 {
+		segments = parseLooseSegments(toString(res["segments"]))
+	}
+	if len(segments) == 0 {
+		segments = parseLooseSegments(toString(res["response"]))
+	}
+	if len(segments) == 0 {
 		log.Printf("dspy segment failed: empty segments text_preview=%q raw_response=%v", preview(text, 40), res)
 		return nil, fmt.Errorf("segment text with dspy: empty or invalid segments response")
 	}
@@ -269,6 +275,10 @@ func parseSegmentsFromResponse(v any) []string {
 	if segments := parseSegmentsString(raw); len(segments) > 0 {
 		return segments
 	}
+	// Handle newline-separated format: "segments:\n如何\n评价\n..."
+	if segments := parseNewlineSegments(raw); len(segments) > 0 {
+		return segments
+	}
 	var payload map[string]any
 	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
 		return nil
@@ -331,6 +341,43 @@ func parseSegmentsString(raw string) []string {
 		return parseSegments(arr)
 	}
 	return nil
+}
+
+// parseNewlineSegments handles "segments:\n如何\n评价\n..." format (one segment per line).
+func parseNewlineSegments(raw string) []string {
+	raw = strings.TrimSpace(segmentsKeyPrefix.ReplaceAllString(raw, ""))
+	if raw == "" {
+		return nil
+	}
+	lines := strings.Split(raw, "\n")
+	out := make([]string, 0, len(lines))
+	for _, line := range lines {
+		s := strings.TrimSpace(line)
+		if s != "" && !isMetadataSegment(s) {
+			out = append(out, s)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// parseLooseSegments splits on whitespace, commas, and pipes as a last-resort fallback
+// when the model returns non-JSON output (e.g. space-separated words).
+func parseLooseSegments(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	raw = strings.ReplaceAll(raw, "\n", " ")
+	raw = strings.ReplaceAll(raw, ",", " ")
+	raw = strings.ReplaceAll(raw, "|", " ")
+	parts := strings.Fields(raw)
+	if len(parts) == 0 {
+		return nil
+	}
+	return parts
 }
 
 func parseTranslationFromResponse(v any) (string, string) {

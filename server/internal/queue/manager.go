@@ -111,7 +111,11 @@ func (m *Manager) StartProcessing(translationID string) {
 		}
 		queued, err := m.segmentInputBySentence(ctx, sentences)
 		if err != nil {
-			_ = m.store.Fail(translationID, "Failed to segment translation input")
+			msg := err.Error()
+			if len(msg) > 200 {
+				msg = msg[:200] + "..."
+			}
+			_ = m.store.Fail(translationID, "Failed to segment: "+msg)
 			m.removeRunning(translationID)
 			return
 		}
