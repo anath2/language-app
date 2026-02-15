@@ -1,19 +1,19 @@
 {
-  "model_id": "z-ai/glm-4.7-flash",
+  "model_id": "google/gemini-2.5-flash-lite",
   "dataset_path": "data/jepa/sentences_20.csv",
-  "dataset_units": 20,
-  "generated_at_utc": "2026-02-14T14:52:16Z",
-  "compile_elapsed": "1m41.232164166s",
+  "dataset_units": 14,
+  "generated_at_utc": "2026-02-15T08:32:38Z",
+  "compile_elapsed": "5m59.691924209s",
   "best_fitness": 0.8999999999999999,
   "generations_executed": 1,
-  "population_size": 2,
-  "max_generations": 1,
-  "evaluation_batch_size": 1,
+  "population_size": 12,
+  "max_generations": 6,
+  "evaluation_batch_size": 4,
   "reflection_frequency": 2,
-  "stagnation_limit": 2,
+  "stagnation_limit": 3,
   "extra": {
-    "accuracy_delta": -0.050000000000000044,
-    "baseline_accuracy": 0.4,
-    "compiled_accuracy": 0.35
+    "accuracy_delta": 0.16666666666666674,
+    "baseline_accuracy": 0.6666666666666666,
+    "compiled_accuracy": 0.8333333333333334
   }
 }

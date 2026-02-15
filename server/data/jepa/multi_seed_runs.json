@@ -1,0 +1,137 @@
+[
+  {
+    "seed": 101,
+    "train_size": 14,
+    "eval_size": 6,
+    "base_instruction": "You are an expert Chinese segmenter. Non-negotiable constraints: 1) Concatenated output segments must exactly reconstruct original input text. 2) Preserve all punctuation, symbols, ASCII, and whitespace in order. 3) Never insert, delete, normalize, paraphrase, or translate characters. Segmentation preference: Prefer lexicalized multi-character words and stable named entities when boundaries are ambiguous. Return only the segments array.",
+    "baseline_eval": {
+      "ExactMatches": 4,
+      "TotalCases": 6,
+      "ReconstructionFail": 0,
+      "TotalLatency": 13368014625,
+      "Errors": 0
+    },
+    "compiled_eval": {
+      "ExactMatches": 5,
+      "TotalCases": 6,
+      "ReconstructionFail": 0,
+      "TotalLatency": 4451035374,
+      "Errors": 0
+    },
+    "accuracy_delta": 0.16666666666666674,
+    "reconstruction_delta": 0,
+    "errors_delta": 0,
+    "latency_delta_ms": -1486,
+    "promotable": true
+  },
+  {
+    "seed": 102,
+    "train_size": 14,
+    "eval_size": 6,
+    "base_instruction": "You are an expert Chinese segmenter. Non-negotiable constraints: 1) Concatenated output segments must exactly reconstruct original input text. 2) Preserve all punctuation, symbols, ASCII, and whitespace in order. 3) Never insert, delete, normalize, paraphrase, or translate characters. Segmentation preference: Prefer semantically coherent compounds while preserving exact punctuation attachment. Return only the segments array.",
+    "baseline_eval": {
+      "ExactMatches": 3,
+      "TotalCases": 6,
+      "ReconstructionFail": 0,
+      "TotalLatency": 4739568959,
+      "Errors": 0
+    },
+    "compiled_eval": {
+      "ExactMatches": 3,
+      "TotalCases": 6,
+      "ReconstructionFail": 1,
+      "TotalLatency": 5358700377,
+      "Errors": 0
+    },
+    "accuracy_delta": 0,
+    "reconstruction_delta": 1,
+    "errors_delta": 0,
+    "latency_delta_ms": 103,
+    "promotable": false,
+    "reject_reasons": [
+      "accuracy_delta_not_positive",
+      "reconstruction_failures_increased"
+    ]
+  },
+  {
+    "seed": 103,
+    "train_size": 14,
+    "eval_size": 6,
+    "base_instruction": "You are an expert Chinese segmenter. Non-negotiable constraints: 1) Concatenated output segments must exactly reconstruct original input text. 2) Preserve all punctuation, symbols, ASCII, and whitespace in order. 3) Never insert, delete, normalize, paraphrase, or translate characters. Segmentation preference: Prefer natural spoken-word grouping for particles and function words without breaking reconstruction. Return only the segments array.",
+    "baseline_eval": {
+      "ExactMatches": 4,
+      "TotalCases": 6,
+      "ReconstructionFail": 0,
+      "TotalLatency": 4347693042,
+      "Errors": 0
+    },
+    "compiled_eval": {
+      "ExactMatches": 5,
+      "TotalCases": 6,
+      "ReconstructionFail": 0,
+      "TotalLatency": 4854130166,
+      "Errors": 0
+    },
+    "accuracy_delta": 0.16666666666666674,
+    "reconstruction_delta": 0,
+    "errors_delta": 0,
+    "latency_delta_ms": 84,
+    "promotable": true
+  },
+  {
+    "seed": 104,
+    "train_size": 14,
+    "eval_size": 6,
+    "base_instruction": "You are an expert Chinese segmenter. Non-negotiable constraints: 1) Concatenated output segments must exactly reconstruct original input text. 2) Preserve all punctuation, symbols, ASCII, and whitespace in order. 3) Never insert, delete, normalize, paraphrase, or translate characters. Segmentation preference: Prefer lexicalized multi-character words and stable named entities when boundaries are ambiguous. Return only the segments array.",
+    "baseline_eval": {
+      "ExactMatches": 3,
+      "TotalCases": 6,
+      "ReconstructionFail": 0,
+      "TotalLatency": 4688922667,
+      "Errors": 0
+    },
+    "compiled_eval": {
+      "ExactMatches": 3,
+      "TotalCases": 6,
+      "ReconstructionFail": 0,
+      "TotalLatency": 4412721624,
+      "Errors": 0
+    },
+    "accuracy_delta": 0,
+    "reconstruction_delta": 0,
+    "errors_delta": 0,
+    "latency_delta_ms": -46,
+    "promotable": false,
+    "reject_reasons": [
+      "accuracy_delta_not_positive"
+    ]
+  },
+  {
+    "seed": 105,
+    "train_size": 14,
+    "eval_size": 6,
+    "base_instruction": "You are an expert Chinese segmenter. Non-negotiable constraints: 1) Concatenated output segments must exactly reconstruct original input text. 2) Preserve all punctuation, symbols, ASCII, and whitespace in order. 3) Never insert, delete, normalize, paraphrase, or translate characters. Segmentation preference: Prefer semantically coherent compounds while preserving exact punctuation attachment. Return only the segments array.",
+    "baseline_eval": {
+      "ExactMatches": 6,
+      "TotalCases": 6,
+      "ReconstructionFail": 0,
+      "TotalLatency": 3889387042,
+      "Errors": 0
+    },
+    "compiled_eval": {
+      "ExactMatches": 6,
+      "TotalCases": 6,
+      "ReconstructionFail": 0,
+      "TotalLatency": 4067363751,
+      "Errors": 0
+    },
+    "accuracy_delta": 0,
+    "reconstruction_delta": 0,
+    "errors_delta": 0,
+    "latency_delta_ms": 29,
+    "promotable": false,
+    "reject_reasons": [
+      "accuracy_delta_not_positive"
+    ]
+  }
+]
