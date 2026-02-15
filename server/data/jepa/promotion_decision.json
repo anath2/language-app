@@ -1,0 +1,12 @@
+{
+  "promoted": true,
+  "selected_seed": 101,
+  "reason": "selected_best_promotable_candidate",
+  "candidate_count": 5,
+  "promotable_seeds": [
+    101,
+    103
+  ],
+  "selected_accuracy_delta": 0.16666666666666674,
+  "generated_at_utc": "2026-02-15T08:32:38Z"
+}
