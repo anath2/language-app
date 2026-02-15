@@ -16,7 +16,13 @@ func main() {
 	datasetPath := flag.String("dataset", segmentation.DefaultCSVPath, "CSV dataset path (sentence-level)")
 	artifactsDir := flag.String("artifacts-dir", segmentation.DefaultArtifactsDir, "output directory for GEPA artifacts")
 	modelOverride := flag.String("model", "", "override model id (defaults to OPENAI_MODEL)")
-	maxUnits := flag.Int("max-units", 20, "max sentence units to use for quick GEPA compile")
+	maxUnits := flag.Int("max-units", 20, "max sentence units to use during each seed run")
+	trainRatio := flag.Float64("train-ratio", 0.7, "train split ratio (rest used for holdout evaluation)")
+	seeds := flag.Int("seeds", 3, "number of optimization seeds")
+	baseSeed := flag.Int("base-seed", 101, "starting seed value")
+	population := flag.Int("population", 8, "GEPA population size")
+	generations := flag.Int("generations", 4, "GEPA max generations")
+	evalBatch := flag.Int("eval-batch", 3, "GEPA evaluation batch size")
 	flag.Parse()
 
 	_ = godotenv.Load()
@@ -42,44 +48,45 @@ func main() {
 	core.SetDefaultLLM(llm)
 	core.GlobalConfig.TeacherLLM = llm
 
-	gepaCfg := segmentation.QuickBudgetGEPAConfig()
-	result, err := segmentation.CompileGEPASentenceLevel(
+	gepaCfg := segmentation.ModerateFastGEPAConfig()
+	gepaCfg.PopulationSize = *population
+	gepaCfg.MaxGenerations = *generations
+	gepaCfg.EvaluationBatchSize = *evalBatch
+	runs, summary, decision, err := segmentation.RunMultiSeedOptimization(
 		context.Background(),
 		llm,
+		cfg.OpenAIModel,
 		corpus,
-		segmentation.HardenedInstruction,
-		gepaCfg,
+		*datasetPath,
+		*seeds,
+		*baseSeed,
+		*trainRatio,
 		*maxUnits,
+		gepaCfg,
 	)
 	if err != nil {
-		log.Fatalf("gepa compile failed: %v", err)
+		log.Fatalf("multi-seed optimization failed: %v", err)
 	}
 
-	baselineProgram := segmentation.NewGEPASegmentationProgram(llm, segmentation.HardenedInstruction)
-	compiledProgram := segmentation.NewGEPASegmentationProgram(llm, result.BestInstruction)
-	baselineEval := segmentation.EvaluateSentenceLevelProgram(context.Background(), baselineProgram, corpus)
-	compiledEval := segmentation.EvaluateSentenceLevelProgram(context.Background(), compiledProgram, corpus)
-
-	if err := segmentation.WriteGEPAArtifacts(
+	if err := segmentation.WriteOptimizationCampaignArtifacts(
 		*artifactsDir,
 		cfg.OpenAIModel,
 		*datasetPath,
 		gepaCfg,
-		result,
-		baselineEval,
-		compiledEval,
+		runs,
+		summary,
+		decision,
 	); err != nil {
 		log.Fatalf("failed to write artifacts: %v", err)
 	}
 
 	log.Printf(
-		"gepa complete model=%s dataset_units=%d compile_elapsed=%s baseline_acc=%.2f compiled_acc=%.2f acc_delta=%.2f artifacts_dir=%s",
+		"gepa campaign complete model=%s seeds=%d promotable=%d mean_acc_delta=%.3f promoted=%t artifacts_dir=%s",
 		cfg.OpenAIModel,
-		result.DatasetUnits,
-		result.CompileElapsed,
-		segmentation.AccuracyOf(baselineEval),
-		segmentation.AccuracyOf(compiledEval),
-		segmentation.AccuracyOf(compiledEval)-segmentation.AccuracyOf(baselineEval),
+		summary.Seeds,
+		summary.PromotableCount,
+		summary.AccuracyDeltaMean,
+		decision.Promoted,
 		*artifactsDir,
 	)
 }

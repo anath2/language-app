@@ -5,9 +5,11 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 	"unicode"
@@ -27,6 +29,9 @@ const (
 	DefaultReportPath        = DefaultArtifactsDir + "/gepa_segmentation_results_2026-02-14.md"
 	DefaultInstructionPath   = DefaultArtifactsDir + "/compiled_instruction.txt"
 	DefaultMetadataPath      = DefaultArtifactsDir + "/compile_metadata.json"
+	DefaultDecisionPath      = DefaultArtifactsDir + "/promotion_decision.json"
+	DefaultRunsPath          = DefaultArtifactsDir + "/multi_seed_runs.json"
+	DefaultSummaryPath       = DefaultArtifactsDir + "/multi_seed_summary.json"
 	HardenedInstruction      = "Segment the Chinese input into an ordered JSON array of contiguous chunks that exactly reconstruct the original text when concatenated. Preserve every character in order, including Chinese/ASCII punctuation, symbols, and line breaks. Do not drop, normalize, paraphrase, or insert characters. Keep common multi-character words together when appropriate (for example, 人工智能, 图书馆, 看书, 为时未晚). Return only the segments array."
 	minCSVRowFieldCount      = 3
 	csvHeaderID              = "id"
@@ -54,6 +59,41 @@ type CompileResult struct {
 	OptimizedProgram core.Program
 	State            *optimizers.GEPAState
 	DatasetUnits     int
+}
+
+type SeedRunResult struct {
+	Seed            int           `json:"seed"`
+	TrainSize       int           `json:"train_size"`
+	EvalSize        int           `json:"eval_size"`
+	BaseInstruction string        `json:"base_instruction"`
+	CompiledResult  CompileResult `json:"-"`
+	BaselineEval    EvalSummary   `json:"baseline_eval"`
+	CompiledEval    EvalSummary   `json:"compiled_eval"`
+	AccuracyDelta   float64       `json:"accuracy_delta"`
+	ReconDelta      int           `json:"reconstruction_delta"`
+	ErrorsDelta     int           `json:"errors_delta"`
+	LatencyDeltaMS  int64         `json:"latency_delta_ms"`
+	Promotable      bool          `json:"promotable"`
+	RejectReasons   []string      `json:"reject_reasons,omitempty"`
+}
+
+type CampaignSummary struct {
+	Seeds              int     `json:"seeds"`
+	PromotableCount    int     `json:"promotable_count"`
+	AccuracyDeltaMean  float64 `json:"accuracy_delta_mean"`
+	AccuracyDeltaStd   float64 `json:"accuracy_delta_std"`
+	BestAccuracyDelta  float64 `json:"best_accuracy_delta"`
+	WorstAccuracyDelta float64 `json:"worst_accuracy_delta"`
+}
+
+type PromotionDecision struct {
+	Promoted        bool    `json:"promoted"`
+	SelectedSeed    *int    `json:"selected_seed,omitempty"`
+	Reason          string  `json:"reason"`
+	CandidateCount  int     `json:"candidate_count"`
+	PromotableSeeds []int   `json:"promotable_seeds,omitempty"`
+	SelectedDelta   float64 `json:"selected_accuracy_delta,omitempty"`
+	GeneratedAtUTC  string  `json:"generated_at_utc"`
 }
 
 type CompileMetadata struct {
@@ -85,7 +125,8 @@ func (s *stickyPredict) Clone() core.Module {
 func LoadDefaultCases() ([]Case, error) {
 	candidates := []string{
 		DefaultCSVPath,
-		filepath.Join("scripts", "segmentation", DefaultCSVPath),
+		filepath.Join("..", "..", DefaultCSVPath),
+		filepath.Join("server", DefaultCSVPath),
 	}
 	var lastErr error
 	for _, p := range candidates {
@@ -180,6 +221,92 @@ func QuickBudgetGEPAConfig() *optimizers.GEPAConfig {
 	cfg.StagnationLimit = 2
 	cfg.ConvergenceThreshold = 0.005
 	return cfg
+}
+
+func ModerateFastGEPAConfig() *optimizers.GEPAConfig {
+	cfg := optimizers.DefaultGEPAConfig()
+	cfg.PopulationSize = 8
+	cfg.MaxGenerations = 4
+	cfg.EvaluationBatchSize = 3
+	cfg.ConcurrencyLevel = 1
+	cfg.ReflectionFreq = 2
+	cfg.StagnationLimit = 3
+	cfg.ConvergenceThreshold = 0.003
+	return cfg
+}
+
+func BuildConstrainedInstruction(segmentationPreference string) string {
+	preference := strings.TrimSpace(segmentationPreference)
+	if preference == "" {
+		preference = "Prefer common lexicalized multi-character words while preserving exact text reconstruction."
+	}
+	return strings.Join([]string{
+		"You are an expert Chinese segmenter.",
+		"Non-negotiable constraints:",
+		"1) Concatenated output segments must exactly reconstruct original input text.",
+		"2) Preserve all punctuation, symbols, ASCII, and whitespace in order.",
+		"3) Never insert, delete, normalize, paraphrase, or translate characters.",
+		"Segmentation preference:",
+		preference,
+		"Return only the segments array.",
+	}, " ")
+}
+
+func SplitCasesDeterministic(cases []Case, trainRatio float64, seed int, maxUnits int) ([]Case, []Case) {
+	if trainRatio <= 0 || trainRatio >= 1 {
+		trainRatio = 0.7
+	}
+	normalized := make([]Case, 0, len(cases))
+	for _, c := range cases {
+		if strings.TrimSpace(c.Text) != "" && len(c.Expected) > 0 {
+			normalized = append(normalized, c)
+		}
+	}
+	if len(normalized) == 0 {
+		return nil, nil
+	}
+
+	idx := make([]int, len(normalized))
+	for i := range idx {
+		idx[i] = i
+	}
+	r := seedMix(seed)
+	for i := len(idx) - 1; i > 0; i-- {
+		j := int(r % uint64(i+1))
+		idx[i], idx[j] = idx[j], idx[i]
+		r = r*6364136223846793005 + 1
+	}
+
+	ordered := make([]Case, 0, len(normalized))
+	for _, i := range idx {
+		ordered = append(ordered, normalized[i])
+	}
+	if maxUnits > 0 && maxUnits < len(ordered) {
+		ordered = ordered[:maxUnits]
+	}
+	if len(ordered) < 2 {
+		return ordered, nil
+	}
+
+	trainSize := int(math.Round(float64(len(ordered)) * trainRatio))
+	if trainSize < 1 {
+		trainSize = 1
+	}
+	if trainSize >= len(ordered) {
+		trainSize = len(ordered) - 1
+	}
+	train := append([]Case(nil), ordered[:trainSize]...)
+	eval := append([]Case(nil), ordered[trainSize:]...)
+	return train, eval
+}
+
+func seedMix(seed int) uint64 {
+	s := uint64(seed)
+	if s == 0 {
+		s = 1
+	}
+	// FNV-inspired simple mixer for deterministic shuffling without rand package.
+	return (s * 1099511628211) ^ 1469598103934665603
 }
 
 func NewSegmentationLLM(cfg config.Config, modelID string) (core.LLM, error) {
@@ -349,6 +476,161 @@ func EvaluateSentenceLevelProgram(ctx context.Context, program core.Program, cor
 	return summary
 }
 
+func RunMultiSeedOptimization(
+	ctx context.Context,
+	llm core.LLM,
+	modelID string,
+	allCases []Case,
+	datasetPath string,
+	seeds int,
+	baseSeed int,
+	trainRatio float64,
+	maxUnits int,
+	cfg *optimizers.GEPAConfig,
+) ([]SeedRunResult, CampaignSummary, PromotionDecision, error) {
+	if seeds <= 0 {
+		seeds = 3
+	}
+	if cfg == nil {
+		cfg = ModerateFastGEPAConfig()
+	}
+
+	preferences := []string{
+		"Prefer lexicalized multi-character words and stable named entities when boundaries are ambiguous.",
+		"Prefer semantically coherent compounds while preserving exact punctuation attachment.",
+		"Prefer natural spoken-word grouping for particles and function words without breaking reconstruction.",
+	}
+
+	runs := make([]SeedRunResult, 0, seeds)
+	for i := 0; i < seeds; i++ {
+		seed := baseSeed + i
+		train, eval := SplitCasesDeterministic(allCases, trainRatio, seed, maxUnits)
+		if len(train) == 0 || len(eval) == 0 {
+			return nil, CampaignSummary{}, PromotionDecision{}, fmt.Errorf("seed %d produced empty train/eval split", seed)
+		}
+
+		baseInstruction := BuildConstrainedInstruction(preferences[i%len(preferences)])
+		comp, err := CompileGEPASentenceLevel(ctx, llm, train, baseInstruction, cfg, len(train))
+		if err != nil {
+			return nil, CampaignSummary{}, PromotionDecision{}, fmt.Errorf("seed %d compile failed: %w", seed, err)
+		}
+
+		baselineProgram := NewGEPASegmentationProgram(llm, HardenedInstruction)
+		compiledProgram := NewGEPASegmentationProgram(llm, comp.BestInstruction)
+		baselineEval := EvaluateSentenceLevelProgram(ctx, baselineProgram, eval)
+		compiledEval := EvaluateSentenceLevelProgram(ctx, compiledProgram, eval)
+
+		promotable, reasons := EvaluatePromotionGate(baselineEval, compiledEval)
+		run := SeedRunResult{
+			Seed:            seed,
+			TrainSize:       len(train),
+			EvalSize:        len(eval),
+			BaseInstruction: baseInstruction,
+			CompiledResult:  comp,
+			BaselineEval:    baselineEval,
+			CompiledEval:    compiledEval,
+			AccuracyDelta:   AccuracyOf(compiledEval) - AccuracyOf(baselineEval),
+			ReconDelta:      compiledEval.ReconstructionFail - baselineEval.ReconstructionFail,
+			ErrorsDelta:     compiledEval.Errors - baselineEval.Errors,
+			LatencyDeltaMS:  (AvgLatencyOf(compiledEval) - AvgLatencyOf(baselineEval)).Milliseconds(),
+			Promotable:      promotable,
+			RejectReasons:   reasons,
+		}
+		runs = append(runs, run)
+	}
+
+	summary := SummarizeRuns(runs)
+	decision := SelectPromotionDecision(runs)
+	decision.GeneratedAtUTC = time.Now().UTC().Format(time.RFC3339)
+	return runs, summary, decision, nil
+}
+
+func EvaluatePromotionGate(baseline EvalSummary, compiled EvalSummary) (bool, []string) {
+	reasons := make([]string, 0, 3)
+	if AccuracyOf(compiled)-AccuracyOf(baseline) <= 0 {
+		reasons = append(reasons, "accuracy_delta_not_positive")
+	}
+	if compiled.ReconstructionFail > baseline.ReconstructionFail {
+		reasons = append(reasons, "reconstruction_failures_increased")
+	}
+	if compiled.Errors > baseline.Errors {
+		reasons = append(reasons, "errors_increased")
+	}
+	return len(reasons) == 0, reasons
+}
+
+func SummarizeRuns(runs []SeedRunResult) CampaignSummary {
+	if len(runs) == 0 {
+		return CampaignSummary{}
+	}
+	deltas := make([]float64, 0, len(runs))
+	promoted := 0
+	best := runs[0].AccuracyDelta
+	worst := runs[0].AccuracyDelta
+	for _, run := range runs {
+		deltas = append(deltas, run.AccuracyDelta)
+		if run.Promotable {
+			promoted++
+		}
+		if run.AccuracyDelta > best {
+			best = run.AccuracyDelta
+		}
+		if run.AccuracyDelta < worst {
+			worst = run.AccuracyDelta
+		}
+	}
+	return CampaignSummary{
+		Seeds:              len(runs),
+		PromotableCount:    promoted,
+		AccuracyDeltaMean:  meanFloat(deltas),
+		AccuracyDeltaStd:   stddevFloat(deltas),
+		BestAccuracyDelta:  best,
+		WorstAccuracyDelta: worst,
+	}
+}
+
+func SelectPromotionDecision(runs []SeedRunResult) PromotionDecision {
+	promotable := make([]SeedRunResult, 0, len(runs))
+	for _, run := range runs {
+		if run.Promotable {
+			promotable = append(promotable, run)
+		}
+	}
+	decision := PromotionDecision{
+		CandidateCount: len(runs),
+	}
+	for _, run := range promotable {
+		decision.PromotableSeeds = append(decision.PromotableSeeds, run.Seed)
+	}
+	if len(promotable) == 0 {
+		decision.Promoted = false
+		decision.Reason = "no_candidate_passed_promotion_gate"
+		return decision
+	}
+
+	sort.Slice(promotable, func(i, j int) bool {
+		a := promotable[i]
+		b := promotable[j]
+		if a.AccuracyDelta != b.AccuracyDelta {
+			return a.AccuracyDelta > b.AccuracyDelta
+		}
+		if a.ReconDelta != b.ReconDelta {
+			return a.ReconDelta < b.ReconDelta
+		}
+		if a.ErrorsDelta != b.ErrorsDelta {
+			return a.ErrorsDelta < b.ErrorsDelta
+		}
+		return a.LatencyDeltaMS < b.LatencyDeltaMS
+	})
+
+	seed := promotable[0].Seed
+	decision.Promoted = true
+	decision.SelectedSeed = &seed
+	decision.SelectedDelta = promotable[0].AccuracyDelta
+	decision.Reason = "selected_best_promotable_candidate"
+	return decision
+}
+
 func WriteGEPAArtifacts(
 	artifactDir string,
 	modelID string,
@@ -411,6 +693,69 @@ func WriteGEPAArtifacts(
 		result,
 		baseline,
 		compiled,
+	)
+}
+
+func WriteOptimizationCampaignArtifacts(
+	artifactDir string,
+	modelID string,
+	datasetPath string,
+	cfg *optimizers.GEPAConfig,
+	runs []SeedRunResult,
+	summary CampaignSummary,
+	decision PromotionDecision,
+) error {
+	if artifactDir == "" {
+		artifactDir = DefaultArtifactsDir
+	}
+	if err := os.MkdirAll(artifactDir, 0o755); err != nil {
+		return err
+	}
+
+	runsJSON, err := json.MarshalIndent(runs, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal runs json: %w", err)
+	}
+	summaryJSON, err := json.MarshalIndent(summary, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal summary json: %w", err)
+	}
+	decisionJSON, err := json.MarshalIndent(decision, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal decision json: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(artifactDir, filepath.Base(DefaultRunsPath)), runsJSON, 0o644); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(artifactDir, filepath.Base(DefaultSummaryPath)), summaryJSON, 0o644); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(artifactDir, filepath.Base(DefaultDecisionPath)), decisionJSON, 0o644); err != nil {
+		return err
+	}
+
+	if !decision.Promoted || decision.SelectedSeed == nil {
+		return nil
+	}
+	var selected *SeedRunResult
+	for i := range runs {
+		if runs[i].Seed == *decision.SelectedSeed {
+			selected = &runs[i]
+			break
+		}
+	}
+	if selected == nil {
+		return fmt.Errorf("selected seed %d not found in run set", *decision.SelectedSeed)
+	}
+
+	return WriteGEPAArtifacts(
+		artifactDir,
+		modelID,
+		datasetPath,
+		cfg,
+		selected.CompiledResult,
+		selected.BaselineEval,
+		selected.CompiledEval,
 	)
 }
 
@@ -795,6 +1140,30 @@ func minFloat(a, b float64) float64 {
 		return a
 	}
 	return b
+}
+
+func meanFloat(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	sum := 0.0
+	for _, v := range values {
+		sum += v
+	}
+	return sum / float64(len(values))
+}
+
+func stddevFloat(values []float64) float64 {
+	if len(values) <= 1 {
+		return 0
+	}
+	mean := meanFloat(values)
+	var sq float64
+	for _, v := range values {
+		d := v - mean
+		sq += d * d
+	}
+	return math.Sqrt(sq / float64(len(values)))
 }
 
 func max(a, b int) int {
