@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -965,6 +966,13 @@ func extractInstructionFromProgram(program core.Program, moduleName string) stri
 	return strings.TrimSpace(mod.GetSignature().Instruction)
 }
 
+var segmentsKeyPrefix = regexp.MustCompile(`(?i)^\s*segments\s*:\s*`)
+
+func isMetadataSegment(s string) bool {
+	trimmed := strings.TrimSpace(strings.ToLower(s))
+	return trimmed == "segments" || trimmed == "segments:" || trimmed == "segments: "
+}
+
 func parseSegments(v any) []string {
 	if v == nil {
 		return nil
@@ -974,7 +982,7 @@ func parseSegments(v any) []string {
 		out := make([]string, 0, len(items))
 		for _, it := range items {
 			s := strings.TrimSpace(toString(it))
-			if s != "" {
+			if s != "" && !isMetadataSegment(s) {
 				out = append(out, s)
 			}
 		}
@@ -983,13 +991,17 @@ func parseSegments(v any) []string {
 		out := make([]string, 0, len(items))
 		for _, it := range items {
 			s := strings.TrimSpace(it)
-			if s != "" {
+			if s != "" && !isMetadataSegment(s) {
 				out = append(out, s)
 			}
 		}
 		return out
 	default:
-		return parseSegmentsString(strings.TrimSpace(toString(v)))
+		s := strings.TrimSpace(toString(v))
+		if s == "" {
+			return nil
+		}
+		return parseSegmentsString(s)
 	}
 }
 
@@ -1009,6 +1021,9 @@ func parseSegmentsFromResponse(v any) []string {
 	if segments := parseSegmentsString(raw); len(segments) > 0 {
 		return segments
 	}
+	if segments := parseNewlineSegments(raw); len(segments) > 0 {
+		return segments
+	}
 	var payload map[string]any
 	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
 		return nil
@@ -1016,35 +1031,73 @@ func parseSegmentsFromResponse(v any) []string {
 	return parseSegments(payload["segments"])
 }
 
+func extractJSONArray(s string) []any {
+	start := strings.Index(s, "[")
+	if start < 0 {
+		return nil
+	}
+	depth := 0
+	for i := start; i < len(s); i++ {
+		switch s[i] {
+		case '[':
+			depth++
+		case ']':
+			depth--
+			if depth == 0 {
+				var out []any
+				if err := json.Unmarshal([]byte(s[start:i+1]), &out); err == nil {
+					return out
+				}
+				return nil
+			}
+		}
+	}
+	return nil
+}
+
 func parseSegmentsString(raw string) []string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return nil
 	}
-	lower := strings.ToLower(raw)
-	if strings.HasPrefix(lower, "segments:") {
-		raw = strings.TrimSpace(raw[len("segments:"):])
-	}
+	raw = strings.TrimSpace(segmentsKeyPrefix.ReplaceAllString(raw, ""))
 	if raw == "" {
 		return nil
 	}
 
 	var listPayload []any
 	if err := json.Unmarshal([]byte(raw), &listPayload); err == nil {
-		out := make([]string, 0, len(listPayload))
-		for _, it := range listPayload {
-			s := strings.TrimSpace(toString(it))
-			if s != "" {
-				out = append(out, s)
-			}
-		}
-		return out
+		return parseSegments(listPayload)
 	}
 	var mapPayload map[string]any
 	if err := json.Unmarshal([]byte(raw), &mapPayload); err == nil {
-		return parseSegments(mapPayload["segments"])
+		if segs := parseSegments(mapPayload["segments"]); len(segs) > 0 {
+			return segs
+		}
+	}
+	if arr := extractJSONArray(raw); len(arr) > 0 {
+		return parseSegments(arr)
 	}
 	return nil
+}
+
+func parseNewlineSegments(raw string) []string {
+	raw = strings.TrimSpace(segmentsKeyPrefix.ReplaceAllString(raw, ""))
+	if raw == "" {
+		return nil
+	}
+	lines := strings.Split(raw, "\n")
+	out := make([]string, 0, len(lines))
+	for _, line := range lines {
+		s := strings.TrimSpace(line)
+		if s != "" && !isMetadataSegment(s) {
+			out = append(out, s)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func normalizeJSONLikePayload(raw string) string {
