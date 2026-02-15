@@ -3,19 +3,21 @@ package queue
 import (
 	"context"
 	"log"
+	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/anath2/language-app/internal/intelligence"
 	"github.com/anath2/language-app/internal/translation"
 )
 
 type SegmentProgress struct {
-	Segment        string `json:"segment"`
-	Pinyin         string `json:"pinyin"`
-	English        string `json:"english"`
-	Index          int    `json:"index"`
-	ParagraphIndex int    `json:"paragraph_index"`
+	Segment       string `json:"segment"`
+	Pinyin        string `json:"pinyin"`
+	English       string `json:"english"`
+	Index         int    `json:"index"`
+	SentenceIndex int    `json:"sentence_index"`
 }
 
 type Progress struct {
@@ -27,15 +29,32 @@ type Progress struct {
 }
 
 type Manager struct {
-	store    *translation.Store
+	store    translationStore
 	provider intelligence.Provider
 	mu       sync.RWMutex
 	running  map[string]struct{}
 }
 
+type translationStore interface {
+	ListRestartableTranslationIDs() ([]string, error)
+	Get(id string) (translation.Translation, bool)
+	ClaimTranslationJob(translationID string, leaseDuration time.Duration) (bool, error)
+	Fail(id string, message string) error
+	SetProcessing(id string, total int, sentenceCount int) error
+	Complete(id string) error
+	GetProgressSnapshot(id string) (translation.ProgressSnapshot, bool)
+	AddProgressSegment(id string, result translation.SegmentResult, sentenceIndex int) (int, int, error)
+}
+
+type queuedSegment struct {
+	SentenceIndex int
+	SentenceText  string
+	Segment       string
+}
+
 const jobLeaseDuration = 30 * time.Second
 
-func NewManager(store *translation.Store, provider intelligence.Provider) *Manager {
+func NewManager(store translationStore, provider intelligence.Provider) *Manager {
 	return &Manager{
 		store:    store,
 		provider: provider,
@@ -82,38 +101,46 @@ func (m *Manager) StartProcessing(translationID string) {
 		return
 	}
 
-	ctx := context.Background()
-	segments, err := m.provider.Segment(ctx, item.InputText)
-	if err != nil {
-		_ = m.store.Fail(translationID, "Failed to segment translation input")
-		m.removeRunning(translationID)
-		return
-	}
-	total := len(segments)
-	if total == 0 {
-		_ = m.store.Fail(translationID, "No translatable segments found")
-		m.removeRunning(translationID)
-		return
-	}
-
-	startIndex := item.Progress
-	if item.Status == "pending" {
-		startIndex = 0
-		if err := m.store.SetProcessing(translationID, total); err != nil {
+	go func(item translation.Translation) {
+		ctx := context.Background()
+		sentences := splitInputSentences(item.InputText)
+		if len(sentences) == 0 {
+			_ = m.store.Fail(translationID, "No sentences found for segmentation")
 			m.removeRunning(translationID)
 			return
 		}
-	}
-
-	if startIndex >= len(segments) {
-		if err := m.store.Complete(translationID); err != nil {
-			_ = m.store.Fail(translationID, "Failed to complete translation")
+		queued, err := m.segmentInputBySentence(ctx, sentences)
+		if err != nil {
+			_ = m.store.Fail(translationID, "Failed to segment translation input")
+			m.removeRunning(translationID)
+			return
 		}
-		m.removeRunning(translationID)
-		return
-	}
+		total := len(queued)
+		if total == 0 {
+			_ = m.store.Fail(translationID, "No translatable segments found")
+			m.removeRunning(translationID)
+			return
+		}
 
-	go m.runJob(ctx, translationID, item.InputText, segments, startIndex)
+		startIndex := item.Progress
+		if item.Status == "pending" {
+			startIndex = 0
+			if err := m.store.SetProcessing(translationID, total, len(sentences)); err != nil {
+				m.removeRunning(translationID)
+				return
+			}
+		}
+
+		if startIndex >= len(queued) {
+			if err := m.store.Complete(translationID); err != nil {
+				_ = m.store.Fail(translationID, "Failed to complete translation")
+			}
+			m.removeRunning(translationID)
+			return
+		}
+
+		m.runJob(ctx, translationID, queued, startIndex)
+	}(item)
 }
 
 func (m *Manager) GetProgress(translationID string) (Progress, bool) {
@@ -130,11 +157,11 @@ func (m *Manager) GetProgress(translationID string) (Progress, bool) {
 	}
 	for _, result := range snapshot.Results {
 		progress.Results = append(progress.Results, SegmentProgress{
-			Segment:        result.Segment,
-			Pinyin:         result.Pinyin,
-			English:        result.English,
-			Index:          result.Index,
-			ParagraphIndex: result.ParagraphIndex,
+			Segment:       result.Segment,
+			Pinyin:        result.Pinyin,
+			English:       result.English,
+			Index:         result.Index,
+			SentenceIndex: result.SentenceIndex,
 		})
 	}
 	return progress, true
@@ -145,18 +172,18 @@ func (m *Manager) CleanupProgress(translationID string) {
 	_ = translationID
 }
 
-func (m *Manager) runJob(ctx context.Context, translationID string, sentenceContext string, segments []string, startIndex int) {
+func (m *Manager) runJob(ctx context.Context, translationID string, segments []queuedSegment, startIndex int) {
 	defer m.removeRunning(translationID)
 
 	for idx := startIndex; idx < len(segments); idx++ {
-		segment := segments[idx]
-		translated, err := m.provider.TranslateSegments(ctx, []string{segment}, sentenceContext)
+		work := segments[idx]
+		translated, err := m.provider.TranslateSegments(ctx, []string{work.Segment}, work.SentenceText)
 		if err != nil || len(translated) == 0 {
 			_ = m.store.Fail(translationID, "Failed to translate segments")
 			return
 		}
 		segmentResult := translated[0]
-		if _, _, err := m.store.AddProgressSegment(translationID, segmentResult); err != nil {
+		if _, _, err := m.store.AddProgressSegment(translationID, segmentResult, work.SentenceIndex); err != nil {
 			_ = m.store.Fail(translationID, "Failed to update translation progress")
 			return
 		}
@@ -167,6 +194,68 @@ func (m *Manager) runJob(ctx context.Context, translationID string, sentenceCont
 	if err := m.store.Complete(translationID); err != nil {
 		_ = m.store.Fail(translationID, "Failed to complete translation")
 		return
+	}
+}
+
+func (m *Manager) segmentInputBySentence(ctx context.Context, sentences []string) ([]queuedSegment, error) {
+	queued := make([]queuedSegment, 0, len(sentences)*4)
+	for sentenceIdx, sentence := range sentences {
+		segments, err := m.provider.Segment(ctx, sentence)
+		if err != nil {
+			return nil, err
+		}
+		for _, seg := range segments {
+			seg = strings.TrimSpace(seg)
+			if seg == "" {
+				continue
+			}
+			queued = append(queued, queuedSegment{
+				SentenceIndex: sentenceIdx,
+				SentenceText:  sentence,
+				Segment:       seg,
+			})
+		}
+	}
+	return queued, nil
+}
+
+func splitInputSentences(text string) []string {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return nil
+	}
+	var out []string
+	var b strings.Builder
+	for len(text) > 0 {
+		r, size := utf8.DecodeRuneInString(text)
+		text = text[size:]
+		if r == '\n' || r == '\r' {
+			if s := strings.TrimSpace(b.String()); s != "" {
+				out = append(out, s)
+			}
+			b.Reset()
+			continue
+		}
+		b.WriteRune(r)
+		if isSentenceDelimiter(r) {
+			if s := strings.TrimSpace(b.String()); s != "" {
+				out = append(out, s)
+			}
+			b.Reset()
+		}
+	}
+	if s := strings.TrimSpace(b.String()); s != "" {
+		out = append(out, s)
+	}
+	return out
+}
+
+func isSentenceDelimiter(r rune) bool {
+	switch r {
+	case '。', '！', '？', '!', '?', ';', '；':
+		return true
+	default:
+		return false
 	}
 }
 

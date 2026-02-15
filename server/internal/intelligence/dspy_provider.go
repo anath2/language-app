@@ -1,3 +1,4 @@
+// TODO: prompt hardeining for structured outputs
 package intelligence
 
 import (
@@ -9,6 +10,9 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -20,6 +24,7 @@ import (
 )
 
 const llmTimeout = 10 * time.Minute
+const defaultSegmentationInstruction = "Split the Chinese text into meaningful segments of words and return segments as an ordered JSON array."
 
 type DSPyProvider struct {
 	segmenter  *modules.Predict
@@ -55,6 +60,7 @@ func NewDSPyProvider(cfg config.Config) (*DSPyProvider, error) {
 		log.Printf("openai-compatible debug enabled: base_url=%s path=%s model=%s", baseURL, path, modelID)
 	}
 
+	segmentInstruction := loadCompiledSegmentationInstruction(cfg)
 	segmentSig := core.NewSignature(
 		[]core.InputField{
 			{Field: core.NewField("text", core.WithDescription("Chinese sentence to segment"))},
@@ -62,7 +68,7 @@ func NewDSPyProvider(cfg config.Config) (*DSPyProvider, error) {
 		[]core.OutputField{
 			{Field: core.NewField("segments", core.WithDescription("Array of segmented words in order"))},
 		},
-	).WithInstruction("Split the Chinese text into meaningful segments of words and return segments as an ordered JSON array.")
+	).WithInstruction(segmentInstruction)
 
 	translateSig := core.NewSignature(
 		[]core.InputField{
@@ -92,6 +98,38 @@ func NewDSPyProvider(cfg config.Config) (*DSPyProvider, error) {
 		translator: translator,
 		cedict:     cedict,
 	}, nil
+}
+
+func loadCompiledSegmentationInstruction(cfg config.Config) string {
+	paths := candidateCompiledInstructionPaths(cfg)
+	for _, path := range paths {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		instruction := strings.TrimSpace(string(data))
+		if instruction == "" {
+			log.Printf("segmentation instruction file empty, falling back: path=%s", path)
+			continue
+		}
+		log.Printf("loaded compiled segmentation instruction: path=%s", path)
+		return instruction
+	}
+	log.Printf("compiled segmentation instruction not found, using default instruction")
+	return defaultSegmentationInstruction
+}
+
+func candidateCompiledInstructionPaths(cfg config.Config) []string {
+	out := make([]string, 0, 3)
+	if cedictPath := strings.TrimSpace(cfg.CedictPath); cedictPath != "" {
+		// Typical layout: server/data/cedict_ts.u8 -> server/data/jepa/compiled_instruction.txt.
+		out = append(out, filepath.Join(filepath.Dir(cedictPath), "jepa", "compiled_instruction.txt"))
+	}
+	out = append(out,
+		filepath.Join("server", "data", "jepa", "compiled_instruction.txt"),
+		filepath.Join("data", "jepa", "compiled_instruction.txt"),
+	)
+	return out
 }
 
 func (p *DSPyProvider) Segment(ctx context.Context, text string) ([]string, error) {
@@ -173,6 +211,15 @@ func (p *DSPyProvider) TranslateSegments(ctx context.Context, segments []string,
 	return out, nil
 }
 
+// segmentsKeyPrefix matches "segments:" or "Segments: " etc. (field-name prefix from structured output)
+var segmentsKeyPrefix = regexp.MustCompile(`(?i)^\s*segments\s*:\s*`)
+
+func isMetadataSegment(s string) bool {
+	trimmed := strings.TrimSpace(strings.ToLower(s))
+	// Filter only pure metadata (field-name leakage), not content that contains "segments"
+	return trimmed == "segments" || trimmed == "segments:" || trimmed == "segments: "
+}
+
 func parseSegments(v any) []string {
 	if v == nil {
 		return nil
@@ -182,7 +229,7 @@ func parseSegments(v any) []string {
 		out := make([]string, 0, len(items))
 		for _, it := range items {
 			s := strings.TrimSpace(toString(it))
-			if s != "" {
+			if s != "" && !isMetadataSegment(s) {
 				out = append(out, s)
 			}
 		}
@@ -191,7 +238,7 @@ func parseSegments(v any) []string {
 		out := make([]string, 0, len(items))
 		for _, it := range items {
 			s := strings.TrimSpace(it)
-			if s != "" {
+			if s != "" && !isMetadataSegment(s) {
 				out = append(out, s)
 			}
 		}
@@ -229,34 +276,59 @@ func parseSegmentsFromResponse(v any) []string {
 	return parseSegments(payload["segments"])
 }
 
+// extractJSONArray finds the first [...] in s and unmarshals it. Handles freeform text like "segments: [...]".
+func extractJSONArray(s string) []any {
+	start := strings.Index(s, "[")
+	if start < 0 {
+		return nil
+	}
+	depth := 0
+	for i := start; i < len(s); i++ {
+		switch s[i] {
+		case '[':
+			depth++
+		case ']':
+			depth--
+			if depth == 0 {
+				var out []any
+				if err := json.Unmarshal([]byte(s[start:i+1]), &out); err == nil {
+					return out
+				}
+				return nil
+			}
+		}
+	}
+	return nil
+}
+
 func parseSegmentsString(raw string) []string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return nil
 	}
-	lower := strings.ToLower(raw)
-	if strings.HasPrefix(lower, "segments:") {
-		raw = strings.TrimSpace(raw[len("segments:"):])
-	}
+	// Strip "segments:" or "Segments : " prefix (from structured output field name)
+	raw = strings.TrimSpace(segmentsKeyPrefix.ReplaceAllString(raw, ""))
 	if raw == "" {
 		return nil
 	}
 
+	// Try direct JSON parse
 	var listPayload []any
 	if err := json.Unmarshal([]byte(raw), &listPayload); err == nil {
-		out := make([]string, 0, len(listPayload))
-		for _, it := range listPayload {
-			s := strings.TrimSpace(toString(it))
-			if s != "" {
-				out = append(out, s)
-			}
-		}
-		return out
+		return parseSegments(listPayload)
 	}
 
+	// Try JSON object with "segments" key
 	var mapPayload map[string]any
 	if err := json.Unmarshal([]byte(raw), &mapPayload); err == nil {
-		return parseSegments(mapPayload["segments"])
+		if segs := parseSegments(mapPayload["segments"]); len(segs) > 0 {
+			return segs
+		}
+	}
+
+	// Extract JSON array from freeform text (e.g. "Here are the segments: [...]")
+	if arr := extractJSONArray(raw); len(arr) > 0 {
+		return parseSegments(arr)
 	}
 	return nil
 }

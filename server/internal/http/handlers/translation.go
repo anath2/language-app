@@ -67,7 +67,7 @@ func CreateTranslation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	item, err := sharedStore.Create(req.InputText, req.SourceType)
+	item, err := sharedTranslations.Create(req.InputText, req.SourceType)
 	if err != nil {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": err.Error()})
 		return
@@ -93,7 +93,7 @@ func ListTranslations(w http.ResponseWriter, r *http.Request) {
 	offset := parseIntDefault(query.Get("offset"), 0)
 	status := strings.TrimSpace(query.Get("status"))
 
-	items, total, err := sharedStore.List(limit, offset, status)
+	items, total, err := sharedTranslations.List(limit, offset, status)
 	if err != nil {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": err.Error()})
 		return
@@ -126,7 +126,7 @@ func GetTranslation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	translationID := pathParam(r, "translation_id")
-	item, ok := sharedStore.Get(translationID)
+	item, ok := sharedTranslations.Get(translationID)
 	if !ok {
 		WriteJSON(w, http.StatusNotFound, map[string]string{"detail": "Translation not found"})
 		return
@@ -151,7 +151,7 @@ func GetTranslationStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	translationID := pathParam(r, "translation_id")
-	item, ok := sharedStore.Get(translationID)
+	item, ok := sharedTranslations.Get(translationID)
 	if !ok {
 		WriteJSON(w, http.StatusNotFound, map[string]string{"detail": "Translation not found"})
 		return
@@ -172,7 +172,7 @@ func DeleteTranslation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	translationID := pathParam(r, "translation_id")
-	if !sharedStore.Delete(translationID) {
+	if !sharedTranslations.Delete(translationID) {
 		WriteJSON(w, http.StatusNotFound, map[string]string{"detail": "Translation not found"})
 		return
 	}
@@ -199,7 +199,7 @@ func TranslationStream(w http.ResponseWriter, r *http.Request) {
 	}
 
 	translationID := pathParam(r, "translation_id")
-	item, exists := sharedStore.Get(translationID)
+	item, exists := sharedTranslations.Get(translationID)
 	if !exists {
 		emitSSE(w, map[string]any{"type": "error", "message": "Translation not found"})
 		flusher.Flush()
@@ -234,7 +234,7 @@ func streamLiveProgress(ctx context.Context, w http.ResponseWriter, flusher http
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			item, exists := sharedStore.Get(translationID)
+			item, exists := sharedTranslations.Get(translationID)
 			if !exists {
 				emitSSE(w, map[string]any{"type": "error", "message": "Translation not found"})
 				flusher.Flush()
@@ -258,7 +258,7 @@ func streamLiveProgress(ctx context.Context, w http.ResponseWriter, flusher http
 					"type":           "start",
 					"translation_id": translationID,
 					"total":          progress.Total,
-					"paragraphs":     paragraphInfo(item.Paragraphs),
+					"sentences":      sentenceInfo(item.Paragraphs),
 				})
 				flusher.Flush()
 				startSent = true
@@ -271,11 +271,11 @@ func streamLiveProgress(ctx context.Context, w http.ResponseWriter, flusher http
 					"current": i + 1,
 					"total":   progress.Total,
 					"result": map[string]any{
-						"segment":         result.Segment,
-						"pinyin":          result.Pinyin,
-						"english":         result.English,
-						"index":           result.Index,
-						"paragraph_index": result.ParagraphIndex,
+						"segment":        result.Segment,
+						"pinyin":         result.Pinyin,
+						"english":        result.English,
+						"index":          result.Index,
+						"sentence_index": result.SentenceIndex,
 					},
 				})
 				flusher.Flush()
@@ -283,10 +283,10 @@ func streamLiveProgress(ctx context.Context, w http.ResponseWriter, flusher http
 			lastProgress = len(progress.Results)
 
 			if progress.Status == "completed" || item.Status == "completed" {
-				fresh, _ := sharedStore.Get(translationID)
+				fresh, _ := sharedTranslations.Get(translationID)
 				emitSSE(w, map[string]any{
 					"type":            "complete",
-					"paragraphs":      fresh.Paragraphs,
+					"sentences":       fresh.Paragraphs,
 					"fullTranslation": fresh.FullTranslation,
 				})
 				flusher.Flush()
@@ -302,25 +302,25 @@ func replayCompletedStream(w http.ResponseWriter, flusher http.Flusher, item tra
 		"type":            "start",
 		"translation_id":  item.ID,
 		"total":           item.Total,
-		"paragraphs":      paragraphInfo(item.Paragraphs),
+		"sentences":       sentenceInfo(item.Paragraphs),
 		"fullTranslation": item.FullTranslation,
 	})
 	flusher.Flush()
 
 	current := 0
 	for paraIdx, para := range item.Paragraphs {
-		for segIdx, seg := range para.Translations {
+		for _, seg := range para.Translations {
 			current++
 			emitSSE(w, map[string]any{
 				"type":    "progress",
 				"current": current,
 				"total":   item.Total,
 				"result": map[string]any{
-					"segment":         seg.Segment,
-					"pinyin":          seg.Pinyin,
-					"english":         seg.English,
-					"index":           segIdx,
-					"paragraph_index": paraIdx,
+					"segment":        seg.Segment,
+					"pinyin":         seg.Pinyin,
+					"english":        seg.English,
+					"index":          current - 1,
+					"sentence_index": paraIdx,
 				},
 			})
 			flusher.Flush()
@@ -329,7 +329,7 @@ func replayCompletedStream(w http.ResponseWriter, flusher http.Flusher, item tra
 
 	emitSSE(w, map[string]any{
 		"type":            "complete",
-		"paragraphs":      item.Paragraphs,
+		"sentences":       item.Paragraphs,
 		"fullTranslation": item.FullTranslation,
 	})
 	flusher.Flush()
@@ -344,13 +344,13 @@ func emitSSE(w http.ResponseWriter, payload any) {
 	_, _ = fmt.Fprintf(w, "data: %s\n\n", data)
 }
 
-func paragraphInfo(paragraphs []translation.ParagraphResult) []map[string]any {
-	out := make([]map[string]any, 0, len(paragraphs))
-	for _, para := range paragraphs {
+func sentenceInfo(sentences []translation.ParagraphResult) []map[string]any {
+	out := make([]map[string]any, 0, len(sentences))
+	for _, sentence := range sentences {
 		out = append(out, map[string]any{
-			"segment_count": len(para.Translations),
-			"indent":        para.Indent,
-			"separator":     para.Separator,
+			"segment_count": len(sentence.Translations),
+			"indent":        sentence.Indent,
+			"separator":     sentence.Separator,
 		})
 	}
 	return out

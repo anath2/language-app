@@ -13,6 +13,16 @@ import (
 
 type mockProvider struct{}
 
+func newTranslationStoreForTest(t *testing.T, dbPath string) *translation.TranslationStore {
+	t.Helper()
+
+	db, err := translation.NewDB(dbPath)
+	if err != nil {
+		t.Fatalf("new translation db: %v", err)
+	}
+	return translation.NewTranslationStore(db)
+}
+
 func (m mockProvider) Segment(_ context.Context, text string) ([]string, error) {
 	text = strings.TrimSpace(text)
 	if text == "" {
@@ -46,10 +56,7 @@ func TestQueueProgressLifecycle(t *testing.T) {
 	if err := migrations.RunUp(dbPath, filepath.Join("..", "..", "migrations")); err != nil {
 		t.Fatalf("run migrations: %v", err)
 	}
-	store, err := translation.NewStore(dbPath)
-	if err != nil {
-		t.Fatalf("new translation store: %v", err)
-	}
+	store := newTranslationStoreForTest(t, dbPath)
 	manager := NewManager(store, mockProvider{})
 
 	item, err := store.Create("你好世界", "text")
@@ -105,10 +112,7 @@ func TestQueueProgressSurvivesManagerRestart(t *testing.T) {
 	if err := migrations.RunUp(dbPath, filepath.Join("..", "..", "migrations")); err != nil {
 		t.Fatalf("run migrations: %v", err)
 	}
-	store, err := translation.NewStore(dbPath)
-	if err != nil {
-		t.Fatalf("new translation store: %v", err)
-	}
+	store := newTranslationStoreForTest(t, dbPath)
 	manager := NewManager(store, mockProvider{})
 
 	item, err := store.Create("你好", "text")
@@ -150,10 +154,7 @@ func TestResumeRestartableJobsCompletesPendingTranslation(t *testing.T) {
 	if err := migrations.RunUp(dbPath, filepath.Join("..", "..", "migrations")); err != nil {
 		t.Fatalf("run migrations: %v", err)
 	}
-	store, err := translation.NewStore(dbPath)
-	if err != nil {
-		t.Fatalf("new translation store: %v", err)
-	}
+	store := newTranslationStoreForTest(t, dbPath)
 
 	item, err := store.Create("你好世界", "text")
 	if err != nil {

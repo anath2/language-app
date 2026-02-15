@@ -28,11 +28,10 @@ web/.vite/
 .ruff_cache
 
 # data
-data
 tmp
-.db
-.db-shm
-.db-wal
+*.db
+*.db-shm
+*.db-wal
 
 # Misc
 .DS_Store
