@@ -538,7 +538,7 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
-  /api/review/queue:
+  /api/review/words/queue:
     get:
       tags: [review]
       summary: Get SRS review queue
@@ -610,7 +610,7 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
-  /api/review/count:
+  /api/review/words/count:
     get:
       tags: [review]
       summary: Get count of word reviews due

@@ -107,9 +107,9 @@ func TestRouteContractWithAuthenticatedSession(t *testing.T) {
 		{name: "update vocab status", method: http.MethodPost, path: "/api/vocab/status", status: http.StatusBadRequest},
 		{name: "lookup vocab", method: http.MethodPost, path: "/api/vocab/lookup", status: http.StatusBadRequest},
 		{name: "vocab srs info", method: http.MethodGet, path: "/api/vocab/srs-info", status: http.StatusOK},
-		{name: "review queue", method: http.MethodGet, path: "/api/review/queue", status: http.StatusOK},
+		{name: "review queue", method: http.MethodGet, path: "/api/review/words/queue", status: http.StatusOK},
 		{name: "review answer", method: http.MethodPost, path: "/api/review/answer", status: http.StatusBadRequest},
-		{name: "review count", method: http.MethodGet, path: "/api/review/count", status: http.StatusOK},
+		{name: "review count", method: http.MethodGet, path: "/api/review/words/count", status: http.StatusOK},
 		{name: "translate batch", method: http.MethodPost, path: "/api/segments/translate-batch", status: http.StatusBadRequest},
 		{name: "export progress", method: http.MethodGet, path: "/api/admin/progress/export", status: http.StatusOK},
 		{name: "import progress", method: http.MethodPost, path: "/api/admin/progress/import", status: http.StatusBadRequest},
@@ -379,7 +379,7 @@ func TestCoreAPIPersistenceFlow(t *testing.T) {
 		t.Fatalf("expected lookup status 200, got %d", lookupRes.Code)
 	}
 
-	reviewQueueReq := httptest.NewRequest(http.MethodGet, "/api/review/queue", nil)
+	reviewQueueReq := httptest.NewRequest(http.MethodGet, "/api/review/words/queue", nil)
 	reviewQueueReq.Header.Set("Cookie", sessionCookie)
 	reviewQueueRes := httptest.NewRecorder()
 	router.ServeHTTP(reviewQueueRes, reviewQueueReq)

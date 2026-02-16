@@ -95,12 +95,12 @@ func TestCoreJSONPersistenceFlow(t *testing.T) {
 		t.Fatalf("expected vocab srs-info 200, got %d", srsInfo.Code)
 	}
 
-	reviewQueue := doJSONRequest(t, router, http.MethodGet, "/api/review/queue", nil, sessionCookie)
+	reviewQueue := doJSONRequest(t, router, http.MethodGet, "/api/review/words/queue", nil, sessionCookie)
 	if reviewQueue.Code != http.StatusOK {
 		t.Fatalf("expected review queue 200, got %d", reviewQueue.Code)
 	}
 
-	reviewCount := doJSONRequest(t, router, http.MethodGet, "/api/review/count", nil, sessionCookie)
+	reviewCount := doJSONRequest(t, router, http.MethodGet, "/api/review/words/count", nil, sessionCookie)
 	if reviewCount.Code != http.StatusOK {
 		t.Fatalf("expected review count 200, got %d", reviewCount.Code)
 	}
