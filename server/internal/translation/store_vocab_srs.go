@@ -273,7 +273,7 @@ func (s *SRSStore) RecordReviewAnswer(vocabItemID string, grade int) (ReviewAnsw
 		}
 		newReps++
 	}
-	nextDue := now.Add(time.Duration(newInterval*24) * time.Hour).Format(time.RFC3339Nano)
+	nextDue := now.Add(time.Duration(newInterval * 24 * float64(time.Hour))).Format(time.RFC3339Nano)
 	_, _ = s.db.Exec(`UPDATE srs_state SET due_at = ?, interval_days = ?, ease = ?, reps = ?, lapses = ?, last_reviewed_at = ? WHERE vocab_item_id = ?`,
 		nextDue, newInterval, newEase, newReps, newLapses, nowStr, vocabItemID)
 	nextDuePtr := nextDue
