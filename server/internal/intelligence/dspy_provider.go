@@ -4,7 +4,6 @@ package intelligence
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -12,7 +11,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
@@ -27,9 +25,11 @@ const llmTimeout = 10 * time.Minute
 const defaultSegmentationInstruction = "Split the Chinese text into meaningful segments of words and return segments as an ordered JSON array."
 
 type DSPyProvider struct {
-	segmenter  *modules.Predict
-	translator *modules.Predict
-	cedict     *cedictDictionary
+	segmenter         *modules.Predict
+	pinyinTranslator  *modules.Predict
+	meaningTranslator *modules.Predict
+	fullTranslator    *modules.Predict
+	cedict            *cedictDictionary
 }
 
 func NewDSPyProvider(cfg config.Config) (*DSPyProvider, error) {
@@ -70,23 +70,46 @@ func NewDSPyProvider(cfg config.Config) (*DSPyProvider, error) {
 		},
 	).WithInstruction(segmentInstruction)
 
-	translateSig := core.NewSignature(
+	pinyinSig := core.NewSignature(
 		[]core.InputField{
 			{Field: core.NewField("segment", core.WithDescription("Single Chinese segment"))},
-			{Field: core.NewField("sentence_context", core.WithDescription("Original sentence context that may help disambiguation"))},
-			{Field: core.NewField("dictionary_entry", core.WithDescription("CC-CEDICT dictionary definition for the segment, if available"))},
+			{Field: core.NewField("sentence_context", core.WithDescription("Original sentence context for disambiguation"))},
 		},
 		[]core.OutputField{
 			{Field: core.NewField("pinyin", core.WithDescription("Pinyin transliteration for the segment"))},
+		},
+	).WithInstruction("Return the pinyin transliteration for the Chinese segment given the sentence context. Keep output JSON structured.")
+
+	meaningSig := core.NewSignature(
+		[]core.InputField{
+			{Field: core.NewField("segment", core.WithDescription("Single Chinese segment"))},
+			{Field: core.NewField("sentence_context", core.WithDescription("Original sentence context for disambiguation"))},
+		},
+		[]core.OutputField{
 			{Field: core.NewField("english", core.WithDescription("Short natural English translation for the segment"))},
 		},
-	).WithInstruction("Return concise translation data for the segment. Keep output JSON structured.")
+	).WithInstruction("Return a concise English translation for the Chinese segment given the sentence context. Keep output JSON structured.")
+
+	fullTranslateSig := core.NewSignature(
+		[]core.InputField{
+			{Field: core.NewField("text", core.WithDescription("Full Chinese text to translate"))},
+		},
+		[]core.OutputField{
+			{Field: core.NewField("translation", core.WithDescription("English translation of the input text"))},
+		},
+	).WithInstruction("Return concise translation data for the full text. Keep output JSON structured.")
 
 	segmenter := modules.NewPredict(segmentSig).WithStructuredOutput()
 	segmenter.SetLLM(openAILLM)
 
-	translator := modules.NewPredict(translateSig).WithStructuredOutput()
-	translator.SetLLM(openAILLM)
+	pinyinTranslator := modules.NewPredict(pinyinSig).WithStructuredOutput()
+	pinyinTranslator.SetLLM(openAILLM)
+
+	meaningTranslator := modules.NewPredict(meaningSig).WithStructuredOutput()
+	meaningTranslator.SetLLM(openAILLM)
+
+	fullTranslator := modules.NewPredict(fullTranslateSig).WithStructuredOutput()
+	fullTranslator.SetLLM(openAILLM)
 
 	cedict, err := loadCedictDictionary(cfg.CedictPath)
 	if err != nil {
@@ -94,9 +117,11 @@ func NewDSPyProvider(cfg config.Config) (*DSPyProvider, error) {
 	}
 
 	return &DSPyProvider{
-		segmenter:  segmenter,
-		translator: translator,
-		cedict:     cedict,
+		segmenter:         segmenter,
+		pinyinTranslator:  pinyinTranslator,
+		meaningTranslator: meaningTranslator,
+		fullTranslator:    fullTranslator,
+		cedict:            cedict,
 	}, nil
 }
 
@@ -148,6 +173,12 @@ func (p *DSPyProvider) Segment(ctx context.Context, text string) ([]string, erro
 		segments = parseSegmentsFromResponse(res["response"])
 	}
 	if len(segments) == 0 {
+		segments = parseLooseSegments(toString(res["segments"]))
+	}
+	if len(segments) == 0 {
+		segments = parseLooseSegments(toString(res["response"]))
+	}
+	if len(segments) == 0 {
 		log.Printf("dspy segment failed: empty segments text_preview=%q raw_response=%v", preview(text, 40), res)
 		return nil, fmt.Errorf("segment text with dspy: empty or invalid segments response")
 	}
@@ -170,37 +201,8 @@ func (p *DSPyProvider) TranslateSegments(ctx context.Context, segments []string,
 			continue
 		}
 
-		dictPinyin, dictEntry := p.lookupCedict(segment)
-		res, err := p.translator.Process(ctx, map[string]any{
-			"segment":          segment,
-			"sentence_context": sentenceContext,
-			"dictionary_entry": dictEntry,
-		})
-		if err != nil {
-			log.Printf("dspy translate fallback activated: err=%v segment=%q context_preview=%q", err, segment, preview(sentenceContext, 60))
-			out = append(out, fallbackTranslationWithPinyin(segment, dictPinyin))
-			continue
-		}
-
-		pinyin := strings.TrimSpace(dictPinyin)
-		if pinyin == "" {
-			pinyin = strings.TrimSpace(toString(res["pinyin"]))
-		}
-		english := strings.TrimSpace(toString(res["english"]))
-		if english == "" {
-			respPinyin, respEnglish := parseTranslationFromResponse(res["response"])
-			if pinyin == "" && respPinyin != "" {
-				pinyin = respPinyin
-			}
-			if respEnglish != "" {
-				english = respEnglish
-			}
-		}
-		if english == "" {
-			log.Printf("dspy translate fallback activated: empty english segment=%q raw_response=%v", segment, res)
-			out = append(out, fallbackTranslationWithPinyin(segment, dictPinyin))
-			continue
-		}
+		pinyin := p.resolvePinyin(ctx, segment, sentenceContext)
+		english := p.resolveMeaning(ctx, segment, sentenceContext)
 
 		out = append(out, translation.SegmentResult{
 			Segment: segment,
@@ -211,233 +213,114 @@ func (p *DSPyProvider) TranslateSegments(ctx context.Context, segments []string,
 	return out, nil
 }
 
-// segmentsKeyPrefix matches "segments:" or "Segments: " etc. (field-name prefix from structured output)
-var segmentsKeyPrefix = regexp.MustCompile(`(?i)^\s*segments\s*:\s*`)
-
-func isMetadataSegment(s string) bool {
-	trimmed := strings.TrimSpace(strings.ToLower(s))
-	// Filter only pure metadata (field-name leakage), not content that contains "segments"
-	return trimmed == "segments" || trimmed == "segments:" || trimmed == "segments: "
-}
-
-func parseSegments(v any) []string {
-	if v == nil {
-		return nil
-	}
-	switch items := v.(type) {
-	case []any:
-		out := make([]string, 0, len(items))
-		for _, it := range items {
-			s := strings.TrimSpace(toString(it))
-			if s != "" && !isMetadataSegment(s) {
-				out = append(out, s)
-			}
-		}
-		return out
-	case []string:
-		out := make([]string, 0, len(items))
-		for _, it := range items {
-			s := strings.TrimSpace(it)
-			if s != "" && !isMetadataSegment(s) {
-				out = append(out, s)
-			}
-		}
-		return out
-	default:
-		s := strings.TrimSpace(toString(v))
-		if s == "" {
-			return nil
-		}
-		return parseSegmentsString(s)
-	}
-}
-
-func parseSegmentsFromResponse(v any) []string {
-	if v == nil {
-		return nil
-	}
-	if m, ok := v.(map[string]any); ok {
-		segments := parseSegments(m["segments"])
-		if len(segments) > 0 {
-			return segments
-		}
-	}
-	raw := normalizeJSONLikePayload(strings.TrimSpace(toString(v)))
-	if raw == "" {
-		return nil
-	}
-	if segments := parseSegmentsString(raw); len(segments) > 0 {
-		return segments
-	}
-	var payload map[string]any
-	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
-		return nil
-	}
-	return parseSegments(payload["segments"])
-}
-
-// extractJSONArray finds the first [...] in s and unmarshals it. Handles freeform text like "segments: [...]".
-func extractJSONArray(s string) []any {
-	start := strings.Index(s, "[")
-	if start < 0 {
-		return nil
-	}
-	depth := 0
-	for i := start; i < len(s); i++ {
-		switch s[i] {
-		case '[':
-			depth++
-		case ']':
-			depth--
-			if depth == 0 {
-				var out []any
-				if err := json.Unmarshal([]byte(s[start:i+1]), &out); err == nil {
-					return out
-				}
-				return nil
-			}
-		}
-	}
-	return nil
-}
-
-func parseSegmentsString(raw string) []string {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return nil
-	}
-	// Strip "segments:" or "Segments : " prefix (from structured output field name)
-	raw = strings.TrimSpace(segmentsKeyPrefix.ReplaceAllString(raw, ""))
-	if raw == "" {
-		return nil
-	}
-
-	// Try direct JSON parse
-	var listPayload []any
-	if err := json.Unmarshal([]byte(raw), &listPayload); err == nil {
-		return parseSegments(listPayload)
-	}
-
-	// Try JSON object with "segments" key
-	var mapPayload map[string]any
-	if err := json.Unmarshal([]byte(raw), &mapPayload); err == nil {
-		if segs := parseSegments(mapPayload["segments"]); len(segs) > 0 {
-			return segs
+// resolvePinyin returns pinyin for a segment, using CEDICT when possible and
+// falling back to the LLM only when CEDICT can't resolve it.
+func (p *DSPyProvider) resolvePinyin(ctx context.Context, segment, sentenceContext string) string {
+	if p.cedict != nil {
+		if pinyin, ok := p.cedict.ComposeSegmentPinyin(segment); ok {
+			return pinyin
 		}
 	}
 
-	// Extract JSON array from freeform text (e.g. "Here are the segments: [...]")
-	if arr := extractJSONArray(raw); len(arr) > 0 {
-		return parseSegments(arr)
+	// CEDICT couldn't resolve — call LLM.
+	res, err := p.pinyinTranslator.Process(ctx, map[string]any{
+		"segment":          segment,
+		"sentence_context": sentenceContext,
+	})
+	if err != nil {
+		log.Printf("dspy pinyin failed: err=%v segment=%q", err, segment)
+		return p.fallbackCedictPinyin(segment)
 	}
-	return nil
+
+	if pinyin := strings.TrimSpace(toString(res["pinyin"])); pinyin != "" {
+		return normalizeModelField(pinyin)
+	}
+	respPinyin, _ := parseTranslationFromResponse(res["response"])
+	if respPinyin != "" {
+		return respPinyin
+	}
+	return p.fallbackCedictPinyin(segment)
 }
 
-func parseTranslationFromResponse(v any) (string, string) {
-	if v == nil {
-		return "", ""
-	}
-	if m, ok := v.(map[string]any); ok {
-		return normalizeModelField(toString(m["pinyin"])), normalizeModelField(toString(m["english"]))
-	}
-	raw := normalizeJSONLikePayload(strings.TrimSpace(toString(v)))
-	if raw == "" {
-		return "", ""
-	}
-	var payload map[string]any
-	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
-		return "", ""
-	}
-	return normalizeModelField(toString(payload["pinyin"])), normalizeModelField(toString(payload["english"]))
-}
-
-func normalizeJSONLikePayload(raw string) string {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
+// fallbackCedictPinyin returns the first CEDICT entry's pinyin even if ambiguous,
+// as a last resort when LLM also failed.
+func (p *DSPyProvider) fallbackCedictPinyin(segment string) string {
+	if p.cedict == nil {
 		return ""
 	}
-
-	// Handle markdown fenced payloads like:
-	// ```json
-	// {"pinyin":"...","english":"..."}
-	// ```
-	if strings.HasPrefix(raw, "```") {
-		parts := strings.Split(raw, "\n")
-		if len(parts) >= 2 {
-			parts = parts[1:]
-		}
-		if len(parts) > 0 {
-			last := strings.TrimSpace(parts[len(parts)-1])
-			if strings.HasPrefix(last, "```") {
-				parts = parts[:len(parts)-1]
-			}
-		}
-		raw = strings.TrimSpace(strings.Join(parts, "\n"))
-	}
-
-	// Some providers prepend "json" without fences.
-	raw = strings.TrimSpace(strings.TrimPrefix(raw, "json"))
-	return raw
-}
-
-func normalizeModelField(value string) string {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return ""
-	}
-	lower := strings.ToLower(value)
-	if strings.HasPrefix(lower, "pinyin:") {
-		value = strings.TrimSpace(value[len("pinyin:"):])
-	}
-	lower = strings.ToLower(value)
-	if strings.HasPrefix(lower, "english:") {
-		value = strings.TrimSpace(value[len("english:"):])
-	}
-	if strings.HasPrefix(value, "(") && strings.HasSuffix(value, ")") && len(value) > 2 {
-		value = strings.TrimSpace(value[1 : len(value)-1])
-	}
-	return value
-}
-
-func fallbackTranslation(segment string) translation.SegmentResult {
-	return fallbackTranslationWithPinyin(segment, "")
-}
-
-func fallbackTranslationWithPinyin(segment string, pinyin string) translation.SegmentResult {
-	return translation.SegmentResult{
-		Segment: segment,
-		Pinyin:  strings.TrimSpace(pinyin),
-		English: "translation_of_" + segment,
-	}
-}
-
-func (p *DSPyProvider) lookupCedict(segment string) (string, string) {
-	if p == nil || p.cedict == nil {
-		return "", "Not in dictionary"
-	}
-	entry, ok := p.cedict.Lookup(segment)
+	entry, ok := p.cedict.LookupFirst(segment)
 	if !ok {
-		return "", "Not in dictionary"
-	}
-	definition := strings.TrimSpace(entry.Definition)
-	if definition == "" {
-		definition = "Not in dictionary"
-	}
-	return strings.TrimSpace(entry.Pinyin), definition
-}
-
-func toString(v any) string {
-	if v == nil {
 		return ""
 	}
-	switch t := v.(type) {
-	case string:
-		return t
-	case fmt.Stringer:
-		return t.String()
-	default:
-		return fmt.Sprintf("%v", t)
+	return entry.Pinyin
+}
+
+// resolveMeaning returns an English translation for a segment, using CEDICT
+// when available and falling back to the LLM otherwise.
+func (p *DSPyProvider) resolveMeaning(ctx context.Context, segment, sentenceContext string) string {
+	if p.cedict != nil {
+		entries, ok := p.cedict.Lookup(segment)
+		if ok && len(entries) > 0 {
+			return entries[0].Definition
+		}
 	}
+
+	// Not in CEDICT — call LLM.
+	res, err := p.meaningTranslator.Process(ctx, map[string]any{
+		"segment":          segment,
+		"sentence_context": sentenceContext,
+	})
+	if err != nil {
+		log.Printf("dspy meaning failed: err=%v segment=%q", err, segment)
+		return "Not in dictionary"
+	}
+
+	if english := strings.TrimSpace(toString(res["english"])); english != "" {
+		return normalizeModelField(english)
+	}
+	_, respEnglish := parseTranslationFromResponse(res["response"])
+	if respEnglish != "" {
+		return respEnglish
+	}
+	return "Not in dictionary"
+}
+
+func (p *DSPyProvider) LookupCharacter(char string) (string, string, bool) {
+	if p.cedict == nil {
+		return "", "", false
+	}
+	runes := []rune(char)
+	if len(runes) != 1 {
+		return "", "", false
+	}
+	pinyin, hasPinyin := p.cedict.PreferredCharPinyin(runes[0])
+	entry, hasEntry := p.cedict.LookupFirst(char)
+	if !hasPinyin && !hasEntry {
+		return "", "", false
+	}
+	english := ""
+	if hasEntry {
+		english = entry.Definition
+	}
+	return pinyin, english, true
+}
+
+func (p *DSPyProvider) TranslateFull(ctx context.Context, text string) (string, error) {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return "", nil
+	}
+	res, err := p.fullTranslator.Process(ctx, map[string]any{"text": text})
+	if err != nil {
+		return "", fmt.Errorf("translate full text with dspy: %w", err)
+	}
+	if t := strings.TrimSpace(toString(res["translation"])); t != "" {
+		return t, nil
+	}
+	if t := parseFullTranslationFromResponse(res["response"]); t != "" {
+		return t, nil
+	}
+	return "", fmt.Errorf("translate full text with dspy: empty translation response")
 }
 
 func preview(s string, max int) string {

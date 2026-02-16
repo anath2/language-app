@@ -4,11 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Language App - A web application that segments Chinese text into words, provides pinyin transliteration, and English translations. Uses dspy-go with OpenAI-compatible endpoints for LLM-powered processing. Includes OCR text extraction, SRS vocabulary review, and segment editing.
+Language App — a Go REST API that segments Chinese text into words, provides pinyin transliteration, and English translations. Uses dspy-go with OpenAI-compatible endpoints for LLM-powered processing. Includes OCR text extraction, SRS vocabulary review, and segment editing.
 
-The project is migrating from Python (FastAPI) to Go. The Go backend in `server/` is the active implementation. The legacy Python backend lives in `server_old/` for reference.
-
-This is a sparse worktree (`feature/go-migration` branch) containing only `server/` and `server_old/`. The frontend (`web/`) lives in a separate worktree.
+The Go backend in `server/` is the active implementation. The legacy Python backend in `server_old/` is reference only. The frontend (`web/`) lives in a separate worktree.
 
 ## Commands
 
@@ -31,43 +29,48 @@ cd server && go test ./tests/integration -v
 # Upstream-gated integration tests (.env.test, only when explicitly requested)
 cd server && go test ./tests/integration -v -args -upstream
 
+# GEPA prompt optimization (segmentation quality)
+cd server && go run cmd/gepa-segmentation/main.go --dataset data/jepa/sentences_20.csv
+
+# Lint OpenAPI spec
+npx @redocly/cli lint server/docs/openapi.yaml
+
 # Legacy Python server (reference only)
 cd server_old && uv run uvicorn app.server:app --reload
 cd server_old && uv run pytest
 cd server_old && uv run ruff check .
-cd server_old && uv run ruff format .
 ```
 
 ## Architecture
 
 ### Go Backend (`server/`)
 
-**Entry point**: `cmd/server/main.go` — loads config from env, starts HTTP server.
+**Entry point**: `cmd/server/main.go` — loads config from env, starts HTTP server on `:8080` (override with `APP_ADDR` or `PORT`).
+
+**Additional CLI tools** (`cmd/`):
+- `migrate/` — Standalone migration runner (migrations also auto-run on server startup).
+- `gepa-segmentation/` — GEPA prompt optimization for segmentation quality. Writes compiled instruction to `data/jepa/compiled_instruction.txt`, which `DSPyProvider` loads at runtime (falls back to a default instruction).
 
 **Package structure** (`internal/`):
 - `config/` — Environment variable loading with legacy key fallbacks (`OPENAI_*` preferred, `OPENROUTER_*` supported). Validates config at startup.
-- `http/` — Chi router setup, middleware (auth, timeout, CORS), route registration, and handlers. `server.go` is the initialization point that wires together all dependencies.
-- `http/handlers/` — Request handlers organized by domain. `deps.go` holds the shared dependency configuration (`ConfigureDependencies`).
+- `http/` — Chi router setup, middleware, route registration, and handlers. `server.go` wires all dependencies via `handlers.ConfigureDependencies()`.
+- `http/handlers/` — Request handlers organized by domain. `deps.go` defines four store interfaces (`translationStore`, `textEventStore`, `srsStore`, `profileStore`) plus the queue manager and intelligence provider as package-level vars.
 - `http/routes/` — Route group registration: `auth.go`, `translation.go`, `api.go`, `admin.go`.
 - `http/middleware/` — Auth (session cookie-based) and timeout middleware. Timeout is skipped for SSE streaming endpoints.
-- `intelligence/` — LLM integration via `dspy-go`. `Provider` interface with `DSPyProvider` implementation. CC-CEDICT dictionary for context-aware translation. `guards.go` has segment skip/punctuation logic.
-- `queue/` — In-memory job manager for background translation processing. Tracks running jobs with mutex. Resumes restartable jobs on startup. Progress persisted to DB.
-- `translation/` — SQLite persistence layer (`Store`). Translation CRUD, progress tracking, segment results, vocab, SRS state.
-- `migrations/` — Goose migration runner. SQL files in `server/migrations/` (auto-run on server startup).
+- `intelligence/` — LLM integration via dspy-go `modules.Predict` with structured output. `Provider` interface (`Segment`, `TranslateSegments`). `DSPyProvider` implementation loads CC-CEDICT dictionary for preferred pinyin and compiled GEPA instruction for segmentation. `guards.go` has CJK detection and segment skip logic. Response parsing handles multiple LLM output formats (JSON arrays, objects with "segments" key, markdown-fenced blocks, newline-separated, freeform text).
+- `queue/` — In-memory job manager with lease-based processing (30s lease). Tracks running jobs with mutex. Resumes restartable jobs on startup. Segments input by sentence boundaries, processes one-by-one.
+- `translation/` — SQLite persistence layer split into four store files: `store_translation.go` (CRUD, progress), `store_vocab_srs.go` (SM-2 SRS scheduling, review queue, export/import), `store_text_events.go` (text records, events), `store_profile.go` (user profile). Common types in `store.go`.
+- `migrations/` — Goose migration runner. SQL files in `server/migrations/` (6 migrations, latest `00006_go_compat.sql`).
 
 **Key patterns**:
-- Dependency injection via `handlers.ConfigureDependencies(store, manager, provider)` — package-level vars, not a DI container.
+- Dependency injection via `handlers.ConfigureDependencies(translationStore, textEventStore, srsStore, profileStore, manager, provider)` — package-level vars, not a DI container.
 - `intelligence.Provider` interface allows swapping LLM backends for testing.
 - Translation jobs flow: `POST /api/translations` → `store.Create()` → `manager.StartProcessing()` → background goroutine segments + translates one-by-one → progress saved to DB → SSE stream reads from DB.
-- Migrations run automatically in `NewRouter()` before serving requests.
-- Go server default port is `:8080` (override with `APP_ADDR` or `PORT`).
+- Pure REST API — JSON-only auth (`POST /api/auth/login` with `{"password":"..."}`) returns `{"ok":true}` + Set-Cookie. All admin routes under `/api/admin/*`. OCR at `/api/extract-text`.
+- OpenAPI 3.2.0 spec at `server/docs/openapi.yaml`.
 
-### Route Contract
-
-Full route inventory is frozen in `server/docs/route_contract.md`. Key patterns:
-- Session cookie auth with three unauthenticated response modes (HTMX → 401 + HX-Redirect, HTML → 303 redirect, JSON → 401)
-- SPA fallback: non-API paths serve `index.html`
-- SSE streaming at `/api/translations/{id}/stream`
+**Scripts** (`scripts/segmentation/`):
+- `gepa_harness.go` — Full GEPA optimization pipeline used by `cmd/gepa-segmentation/`. Supports multi-seed optimization campaigns. Outputs artifacts to `data/jepa/`.
 
 ## Environment Variables
 
@@ -85,20 +88,20 @@ Requires `.env` file in `server/` (or repo root):
 
 ## Testing Patterns
 
-**Go**: Standard `testing` package. `dspy_provider_endpoint_test.go` tests base URL normalization. `guards_cedict_test.go` tests segment filtering and dictionary logic. `config_test.go` and `server_test.go` test configuration and router setup. `queue/manager_test.go` tests the job manager. `tests/integration` contains JSON REST integration coverage; upstream LLM tests are opt-in via `-upstream`.
+**Go**: Standard `testing` package. `tests/integration/` contains JSON REST integration coverage (mock provider, temp DB); upstream LLM tests are opt-in via `-args -upstream` (requires `.env.test`).
 
-When touching code under `server/internal/intelligence/`, run the upstream integration tests in `server/tests/integration/upstream_llm_test.go`:
+When touching code under `server/internal/intelligence/`, run the upstream integration tests:
 
 ```bash
 cd server && go test ./tests/integration -v -run '^TestUpstream' -args -upstream
 ```
 
-**Python (legacy)**: Tests mock DSPy's `ChainOfThought` and `Predict` at the module level to avoid API calls. Environment variables are set before importing `app.server`.
+Key unit test files: `dspy_provider_endpoint_test.go` (URL normalization), `dspy_provider_parse_test.go` (response parsing), `guards_cedict_test.go` (segment filtering + dictionary), `queue/manager_test.go` (job lifecycle).
 
 ## Key Conventions
 
-- Environment variable keys prefer `OPENAI_*` prefix; `OPENROUTER_*` still supported as fallback
+- **Always run `cd server && gofmt -w .` after finishing a piece of work** (before committing)
 - CC-CEDICT pinyin is preferred over LLM-generated pinyin when available
 - SRS opacity: 1.0 = new/struggling word (full highlight), 0 = known word (no highlight)
 - Segment editing (split/join) re-translates via `POST /api/segments/translate-batch`
-- SSE streaming delivers segment-by-segment translation progress
+- SSE streaming delivers segment-by-segment translation progress at `/api/translations/{id}/stream`

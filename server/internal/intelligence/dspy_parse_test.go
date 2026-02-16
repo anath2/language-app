@@ -66,6 +66,21 @@ func TestParseSegments(t *testing.T) {
 	}
 }
 
+func TestParseSegmentsFromResponse_NewlineFormat(t *testing.T) {
+	// Model returns newline-separated segments instead of JSON (e.g. gemini with "Return only the segments array").
+	input := "segments:\n如何\n评价\n《\n互联网\n已\n死\n，\nAgent\n永生\n》\n一\n文\n？"
+	got := parseSegmentsFromResponse(input)
+	expect := []string{"如何", "评价", "《", "互联网", "已", "死", "，", "Agent", "永生", "》", "一", "文", "？"}
+	if len(got) != len(expect) {
+		t.Fatalf("got %d segments %q, want %d %q", len(got), got, len(expect), expect)
+	}
+	for i := range got {
+		if got[i] != expect[i] {
+			t.Fatalf("got[%d]=%q want %q", i, got[i], expect[i])
+		}
+	}
+}
+
 func TestIsMetadataSegment(t *testing.T) {
 	t.Parallel()
 

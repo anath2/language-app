@@ -179,7 +179,7 @@ func (s *SRSStore) GetReviewQueue(limit int) ([]ReviewCard, error) {
 		`SELECT vi.id, vi.headword, vi.pinyin, vi.english
 		 FROM vocab_items vi
 		 JOIN srs_state ss ON vi.id = ss.vocab_item_id
-		 WHERE vi.status = 'learning' AND (ss.due_at IS NULL OR ss.due_at <= ?)
+		 WHERE vi.type = 'word' AND vi.status = 'learning' AND (ss.due_at IS NULL OR ss.due_at <= ?)
 		 ORDER BY ss.due_at ASC
 		 LIMIT ?`,
 		now,
@@ -215,7 +215,7 @@ func (s *SRSStore) GetDueCount() int {
 	_ = s.db.QueryRow(
 		`SELECT COUNT(*) FROM vocab_items vi
 		 JOIN srs_state ss ON vi.id = ss.vocab_item_id
-		 WHERE vi.status = 'learning' AND (ss.due_at IS NULL OR ss.due_at <= ?)`,
+		 WHERE vi.type = 'word' AND vi.status = 'learning' AND (ss.due_at IS NULL OR ss.due_at <= ?)`,
 		now,
 	).Scan(&cnt)
 	return cnt
@@ -225,9 +225,9 @@ func (s *SRSStore) RecordReviewAnswer(vocabItemID string, grade int) (ReviewAnsw
 	if grade < 0 || grade > 2 {
 		return ReviewAnswerResult{}, false, errors.New("Grade must be 0, 1, or 2")
 	}
-	var exists int
-	_ = s.db.QueryRow(`SELECT COUNT(*) FROM vocab_items WHERE id = ?`, vocabItemID).Scan(&exists)
-	if exists == 0 {
+	var itemType string
+	err := s.db.QueryRow(`SELECT type FROM vocab_items WHERE id = ?`, vocabItemID).Scan(&itemType)
+	if err != nil {
 		return ReviewAnswerResult{}, false, nil
 	}
 	now := time.Now().UTC()
@@ -235,7 +235,7 @@ func (s *SRSStore) RecordReviewAnswer(vocabItemID string, grade int) (ReviewAnsw
 	var dueAt sql.NullString
 	var interval, ease float64
 	var reps, lapses int
-	err := s.db.QueryRow(`SELECT due_at, interval_days, ease, reps, lapses FROM srs_state WHERE vocab_item_id = ?`, vocabItemID).
+	err = s.db.QueryRow(`SELECT due_at, interval_days, ease, reps, lapses FROM srs_state WHERE vocab_item_id = ?`, vocabItemID).
 		Scan(&dueAt, &interval, &ease, &reps, &lapses)
 	if err != nil {
 		_, _ = s.db.Exec(`INSERT OR IGNORE INTO srs_state (vocab_item_id, due_at, interval_days, ease, reps, lapses, last_reviewed_at) VALUES (?, ?, 0, 2.5, 0, 0, ?)`, vocabItemID, nowStr, nowStr)
@@ -273,27 +273,31 @@ func (s *SRSStore) RecordReviewAnswer(vocabItemID string, grade int) (ReviewAnsw
 		}
 		newReps++
 	}
-	nextDue := now.Add(time.Duration(newInterval*24) * time.Hour).Format(time.RFC3339Nano)
+	nextDue := now.Add(time.Duration(newInterval * 24 * float64(time.Hour))).Format(time.RFC3339Nano)
 	_, _ = s.db.Exec(`UPDATE srs_state SET due_at = ?, interval_days = ?, ease = ?, reps = ?, lapses = ?, last_reviewed_at = ? WHERE vocab_item_id = ?`,
 		nextDue, newInterval, newEase, newReps, newLapses, nowStr, vocabItemID)
 	nextDuePtr := nextDue
+	remainingDue := s.GetDueCount()
+	if itemType == "character" {
+		remainingDue = s.GetCharacterDueCount()
+	}
 	return ReviewAnswerResult{
 		VocabItemID:  vocabItemID,
 		NextDueAt:    &nextDuePtr,
 		IntervalDays: newInterval,
-		RemainingDue: s.GetDueCount(),
+		RemainingDue: remainingDue,
 	}, true, nil
 }
 
 func (s *SRSStore) CountVocabByStatus(status string) int {
 	var cnt int
-	_ = s.db.QueryRow(`SELECT COUNT(*) FROM vocab_items WHERE status = ?`, status).Scan(&cnt)
+	_ = s.db.QueryRow(`SELECT COUNT(*) FROM vocab_items WHERE type = 'word' AND status = ?`, status).Scan(&cnt)
 	return cnt
 }
 
 func (s *SRSStore) CountTotalVocab() int {
 	var cnt int
-	_ = s.db.QueryRow(`SELECT COUNT(*) FROM vocab_items`).Scan(&cnt)
+	_ = s.db.QueryRow(`SELECT COUNT(*) FROM vocab_items WHERE type = 'word'`).Scan(&cnt)
 	return cnt
 }
 
@@ -307,9 +311,10 @@ func (s *SRSStore) ExportProgressJSON() (string, error) {
 		key   string
 	}
 	dumps := []tableDump{
-		{query: "SELECT id, headword, pinyin, english, status, created_at, updated_at FROM vocab_items ORDER BY created_at", key: "vocab_items"},
+		{query: "SELECT id, headword, pinyin, english, type, status, created_at, updated_at FROM vocab_items ORDER BY created_at", key: "vocab_items"},
 		{query: "SELECT vocab_item_id, due_at, interval_days, ease, reps, lapses, last_reviewed_at FROM srs_state", key: "srs_state"},
 		{query: "SELECT id, vocab_item_id, looked_up_at FROM vocab_lookups ORDER BY looked_up_at", key: "vocab_lookups"},
+		{query: "SELECT id, character_item_id, word_item_id, created_at FROM character_word_links ORDER BY created_at", key: "character_word_links"},
 	}
 	for _, d := range dumps {
 		rows, err := s.db.Query(d.query)
@@ -354,6 +359,24 @@ func (s *SRSStore) ImportProgressJSON(input string) (map[string]int, error) {
 		}
 		return out, nil
 	}
+	getArrOptional := func(key string) []map[string]any {
+		raw, ok := data[key]
+		if !ok {
+			return nil
+		}
+		list, ok := raw.([]any)
+		if !ok {
+			return nil
+		}
+		out := make([]map[string]any, 0, len(list))
+		for _, it := range list {
+			obj, ok := it.(map[string]any)
+			if ok {
+				out = append(out, obj)
+			}
+		}
+		return out
+	}
 	vocabItems, err := getArr("vocab_items")
 	if err != nil {
 		return nil, err
@@ -366,6 +389,7 @@ func (s *SRSStore) ImportProgressJSON(input string) (map[string]int, error) {
 	if err != nil {
 		return nil, err
 	}
+	charWordLinks := getArrOptional("character_word_links")
 
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -373,6 +397,7 @@ func (s *SRSStore) ImportProgressJSON(input string) (map[string]int, error) {
 	}
 	defer tx.Rollback()
 	for _, stmt := range []string{
+		"DELETE FROM character_word_links",
 		"DELETE FROM vocab_lookups",
 		"DELETE FROM srs_state",
 		"DELETE FROM vocab_occurrences",
@@ -383,8 +408,12 @@ func (s *SRSStore) ImportProgressJSON(input string) (map[string]int, error) {
 		}
 	}
 	for _, item := range vocabItems {
-		_, err := tx.Exec(`INSERT INTO vocab_items (id, headword, pinyin, english, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			toString(item["id"]), toString(item["headword"]), toString(item["pinyin"]), toString(item["english"]), toString(item["status"]), toString(item["created_at"]), toString(item["updated_at"]))
+		itemType := toString(item["type"])
+		if itemType == "" {
+			itemType = "word"
+		}
+		_, err := tx.Exec(`INSERT INTO vocab_items (id, headword, pinyin, english, type, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			toString(item["id"]), toString(item["headword"]), toString(item["pinyin"]), toString(item["english"]), itemType, toString(item["status"]), toString(item["created_at"]), toString(item["updated_at"]))
 		if err != nil {
 			return nil, err
 		}
@@ -403,14 +432,154 @@ func (s *SRSStore) ImportProgressJSON(input string) (map[string]int, error) {
 			return nil, err
 		}
 	}
+	for _, item := range charWordLinks {
+		_, err := tx.Exec(`INSERT INTO character_word_links (id, character_item_id, word_item_id, created_at) VALUES (?, ?, ?, ?)`,
+			toString(item["id"]), toString(item["character_item_id"]), toString(item["word_item_id"]), toString(item["created_at"]))
+		if err != nil {
+			return nil, err
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
-	return map[string]int{
+	counts := map[string]int{
 		"vocab_items":   len(vocabItems),
 		"srs_state":     len(srsState),
 		"vocab_lookups": len(lookups),
-	}, nil
+	}
+	if len(charWordLinks) > 0 {
+		counts["character_word_links"] = len(charWordLinks)
+	}
+	return counts, nil
+}
+
+func isCJKIdeograph(r rune) bool {
+	return (r >= 0x4E00 && r <= 0x9FFF) ||
+		(r >= 0x3400 && r <= 0x4DBF) ||
+		(r >= 0x20000 && r <= 0x2A6DF) ||
+		(r >= 0x2A700 && r <= 0x2CEAF) ||
+		(r >= 0x2CEB0 && r <= 0x2EBEF) ||
+		(r >= 0x30000 && r <= 0x323AF)
+}
+
+func (s *SRSStore) ExtractAndLinkCharacters(vocabItemID string, headword string, cedictLookup func(string) (string, string, bool)) error {
+	runes := []rune(headword)
+	// Skip single-character words — the word IS the character.
+	cjkCount := 0
+	for _, r := range runes {
+		if isCJKIdeograph(r) {
+			cjkCount++
+		}
+	}
+	if cjkCount <= 1 {
+		return nil
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	seen := make(map[rune]bool)
+	for _, r := range runes {
+		if !isCJKIdeograph(r) || seen[r] {
+			continue
+		}
+		seen[r] = true
+		char := string(r)
+
+		pinyin, english := "", ""
+		if cedictLookup != nil {
+			p, e, found := cedictLookup(char)
+			if found {
+				pinyin = p
+				english = e
+			}
+		}
+
+		charID, _ := newID()
+		_, _ = s.db.Exec(
+			`INSERT OR IGNORE INTO vocab_items (id, headword, pinyin, english, type, status, created_at, updated_at)
+			 VALUES (?, ?, ?, ?, 'character', 'learning', ?, ?)`,
+			charID, char, pinyin, english, now, now,
+		)
+
+		var resolvedCharID string
+		if err := s.db.QueryRow(
+			`SELECT id FROM vocab_items WHERE headword = ? AND type = 'character'`, char,
+		).Scan(&resolvedCharID); err != nil {
+			continue
+		}
+
+		_, _ = s.db.Exec(
+			`INSERT OR IGNORE INTO srs_state (vocab_item_id, due_at, interval_days, ease, reps, lapses, last_reviewed_at)
+			 VALUES (?, ?, 0, 2.5, 0, 0, ?)`,
+			resolvedCharID, now, now,
+		)
+
+		linkID, _ := newID()
+		_, _ = s.db.Exec(
+			`INSERT OR IGNORE INTO character_word_links (id, character_item_id, word_item_id, created_at)
+			 VALUES (?, ?, ?, ?)`,
+			linkID, resolvedCharID, vocabItemID, now,
+		)
+	}
+	return nil
+}
+
+func (s *SRSStore) GetCharacterReviewQueue(limit int) ([]CharacterReviewCard, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	rows, err := s.db.Query(
+		`SELECT vi.id, vi.headword, vi.pinyin, vi.english
+		 FROM vocab_items vi
+		 JOIN srs_state ss ON vi.id = ss.vocab_item_id
+		 WHERE vi.type = 'character' AND vi.status = 'learning' AND (ss.due_at IS NULL OR ss.due_at <= ?)
+		 ORDER BY ss.due_at ASC
+		 LIMIT ?`,
+		now,
+		limit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query character review queue: %w", err)
+	}
+	defer rows.Close()
+	out := make([]CharacterReviewCard, 0)
+	for rows.Next() {
+		var card CharacterReviewCard
+		if err := rows.Scan(&card.VocabItemID, &card.Character, &card.Pinyin, &card.English); err != nil {
+			return nil, fmt.Errorf("scan character review card: %w", err)
+		}
+		exRows, err := s.db.Query(
+			`SELECT wv.id, wv.headword, wv.pinyin, wv.english
+			 FROM character_word_links cwl
+			 JOIN vocab_items wv ON cwl.word_item_id = wv.id
+			 WHERE cwl.character_item_id = ?
+			 ORDER BY wv.created_at DESC
+			 LIMIT 5`,
+			card.VocabItemID,
+		)
+		if err == nil {
+			for exRows.Next() {
+				var ex CharacterExampleWord
+				_ = exRows.Scan(&ex.VocabItemID, &ex.Headword, &ex.Pinyin, &ex.English)
+				card.ExampleWords = append(card.ExampleWords, ex)
+			}
+			_ = exRows.Close()
+		}
+		out = append(out, card)
+	}
+	return out, nil
+}
+
+func (s *SRSStore) GetCharacterDueCount() int {
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	var cnt int
+	_ = s.db.QueryRow(
+		`SELECT COUNT(*) FROM vocab_items vi
+		 JOIN srs_state ss ON vi.id = ss.vocab_item_id
+		 WHERE vi.type = 'character' AND vi.status = 'learning' AND (ss.due_at IS NULL OR ss.due_at <= ?)`,
+		now,
+	).Scan(&cnt)
+	return cnt
 }
 
 func maxFloat(a float64, b float64) float64 {

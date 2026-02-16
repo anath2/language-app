@@ -8,9 +8,9 @@ import (
 	"github.com/anath2/language-app/internal/migrations"
 )
 
-func TestNewStoreRequiresMigratedSchema(t *testing.T) {
+func TestNewDBRequiresMigratedSchema(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "translations.db")
-	_, err := NewStore(dbPath)
+	_, err := NewDB(dbPath)
 	if err == nil {
 		t.Fatal("expected schema verification error for unmigrated database")
 	}
@@ -30,10 +30,11 @@ func TestRunUpIsIdempotentAndCreatesUsableSchema(t *testing.T) {
 		t.Fatalf("second run migrations: %v", err)
 	}
 
-	store, err := NewStore(dbPath)
+	db, err := NewDB(dbPath)
 	if err != nil {
-		t.Fatalf("new migrated store: %v", err)
+		t.Fatalf("new migrated db: %v", err)
 	}
+	store := NewTranslationStore(db)
 
 	tr, err := store.Create("你好", "text")
 	if err != nil {

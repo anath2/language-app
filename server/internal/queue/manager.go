@@ -40,6 +40,7 @@ type translationStore interface {
 	Get(id string) (translation.Translation, bool)
 	ClaimTranslationJob(translationID string, leaseDuration time.Duration) (bool, error)
 	Fail(id string, message string) error
+	SetFullTranslation(id string, fullTranslation string) error
 	SetProcessing(id string, total int, sentenceCount int) error
 	Complete(id string) error
 	GetProgressSnapshot(id string) (translation.ProgressSnapshot, bool)
@@ -109,9 +110,23 @@ func (m *Manager) StartProcessing(translationID string) {
 			m.removeRunning(translationID)
 			return
 		}
+
+		// Generate full translation before segmentation (non-fatal).
+		if fullTranslation, err := m.provider.TranslateFull(ctx, item.InputText); err != nil {
+			log.Printf("full translation failed (non-fatal): id=%s err=%v", translationID, err)
+		} else if fullTranslation != "" {
+			if err := m.store.SetFullTranslation(translationID, fullTranslation); err != nil {
+				log.Printf("set full translation failed (non-fatal): id=%s err=%v", translationID, err)
+			}
+		}
+
 		queued, err := m.segmentInputBySentence(ctx, sentences)
 		if err != nil {
-			_ = m.store.Fail(translationID, "Failed to segment translation input")
+			msg := err.Error()
+			if len(msg) > 200 {
+				msg = msg[:200] + "..."
+			}
+			_ = m.store.Fail(translationID, "Failed to segment: "+msg)
 			m.removeRunning(translationID)
 			return
 		}

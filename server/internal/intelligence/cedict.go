@@ -12,12 +12,13 @@ import (
 var cedictEntryPattern = regexp.MustCompile(`^(\S+)\s+(\S+)\s+\[([^\]]+)\]\s+/(.+)/$`)
 
 type cedictEntry struct {
-	Pinyin     string
-	Definition string
+	Pinyin         string
+	PinyinNumbered string
+	Definition     string
 }
 
 type cedictDictionary struct {
-	entries map[string]cedictEntry
+	entries map[string][]cedictEntry
 }
 
 func loadCedictDictionary(path string) (*cedictDictionary, error) {
@@ -27,7 +28,7 @@ func loadCedictDictionary(path string) (*cedictDictionary, error) {
 	}
 	defer file.Close()
 
-	dict := &cedictDictionary{entries: make(map[string]cedictEntry)}
+	dict := &cedictDictionary{entries: make(map[string][]cedictEntry)}
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
@@ -47,14 +48,11 @@ func loadCedictDictionary(path string) (*cedictDictionary, error) {
 			continue
 		}
 
-		// Preserve the first entry for stability, mirroring deterministic lookup behavior.
-		if _, exists := dict.entries[simplified]; exists {
-			continue
-		}
-		dict.entries[simplified] = cedictEntry{
-			Pinyin:     numberedPinyinToToneMarks(pinyinNumbered),
-			Definition: definition,
-		}
+		dict.entries[simplified] = append(dict.entries[simplified], cedictEntry{
+			Pinyin:         numberedPinyinToToneMarks(pinyinNumbered),
+			PinyinNumbered: pinyinNumbered,
+			Definition:     definition,
+		})
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("scan cedict: %w", err)
@@ -62,12 +60,137 @@ func loadCedictDictionary(path string) (*cedictDictionary, error) {
 	return dict, nil
 }
 
-func (c *cedictDictionary) Lookup(word string) (cedictEntry, bool) {
+// Lookup returns all entries for a word.
+func (c *cedictDictionary) Lookup(word string) ([]cedictEntry, bool) {
 	if c == nil {
+		return nil, false
+	}
+	entries, ok := c.entries[word]
+	return entries, ok
+}
+
+// LookupFirst returns the first entry for a word (backward compat convenience).
+func (c *cedictDictionary) LookupFirst(word string) (cedictEntry, bool) {
+	entries, ok := c.Lookup(word)
+	if !ok || len(entries) == 0 {
 		return cedictEntry{}, false
 	}
-	entry, ok := c.entries[word]
-	return entry, ok
+	return entries[0], true
+}
+
+// IsCharAmbiguous returns true if a single character has multiple entries with
+// genuinely different pinyin bases. Characters with a tone-5 (neutral/particle)
+// reading (like 吗, 呢) are treated as unambiguous.
+func (c *cedictDictionary) IsCharAmbiguous(char rune) bool {
+	entries, ok := c.Lookup(string(char))
+	if !ok || len(entries) <= 1 {
+		return false
+	}
+	return hasDistinctPinyin(entries)
+}
+
+// PreferredCharPinyin returns the preferred pinyin for a single character.
+// For particles (entries with a tone-5 reading), the tone-5 reading is preferred.
+// Otherwise returns the first entry's pinyin.
+func (c *cedictDictionary) PreferredCharPinyin(char rune) (string, bool) {
+	entries, ok := c.Lookup(string(char))
+	if !ok || len(entries) == 0 {
+		return "", false
+	}
+	// Prefer tone-5 (neutral) reading for particles.
+	for _, e := range entries {
+		if isTone5Entry(e) {
+			return e.Pinyin, true
+		}
+	}
+	return entries[0].Pinyin, true
+}
+
+// ComposeSegmentPinyin tries to resolve pinyin for a segment without LLM.
+// Returns (pinyin, true) if fully resolved, ("", false) if LLM is needed.
+func (c *cedictDictionary) ComposeSegmentPinyin(segment string) (string, bool) {
+	if c == nil {
+		return "", false
+	}
+
+	// Try word-level lookup first.
+	entries, ok := c.Lookup(segment)
+	if ok && len(entries) > 0 {
+		if !hasDistinctPinyin(entries) {
+			return entries[0].Pinyin, true
+		}
+		// Multiple distinct pinyin readings at word level — need LLM.
+		return "", false
+	}
+
+	// Fall through to character-level composition.
+	var parts []string
+	for _, r := range segment {
+		if !isCJKIdeograph(r) {
+			continue
+		}
+		if c.IsCharAmbiguous(r) {
+			return "", false
+		}
+		py, found := c.PreferredCharPinyin(r)
+		if !found {
+			return "", false
+		}
+		parts = append(parts, py)
+	}
+	if len(parts) == 0 {
+		return "", false
+	}
+	return strings.Join(parts, " "), true
+}
+
+// hasDistinctPinyin returns true if entries have more than one distinct pinyin
+// base syllable (ignoring tone numbers). Tone-5 (neutral) entries are excluded
+// from the comparison so particles don't trigger false ambiguity.
+func hasDistinctPinyin(entries []cedictEntry) bool {
+	seen := make(map[string]struct{})
+	for _, e := range entries {
+		if isTone5Entry(e) {
+			continue
+		}
+		base := normalizePinyinBase(e.PinyinNumbered)
+		seen[base] = struct{}{}
+	}
+	return len(seen) > 1
+}
+
+// isTone5Entry returns true if all syllables in the entry's numbered pinyin
+// end with tone 5 (neutral tone) or have no tone number.
+func isTone5Entry(e cedictEntry) bool {
+	fields := strings.Fields(e.PinyinNumbered)
+	if len(fields) == 0 {
+		return false
+	}
+	for _, f := range fields {
+		last, _ := utf8.DecodeLastRuneInString(f)
+		if last == '5' || (last < '0' || last > '9') {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+// normalizePinyinBase strips tone numbers from numbered pinyin and lowercases.
+func normalizePinyinBase(numbered string) string {
+	fields := strings.Fields(strings.ToLower(numbered))
+	out := make([]string, 0, len(fields))
+	for _, f := range fields {
+		last, size := utf8.DecodeLastRuneInString(f)
+		if last >= '0' && last <= '9' {
+			f = f[:len(f)-size]
+		}
+		// Normalize ü variants.
+		f = strings.ReplaceAll(f, "u:", "v")
+		f = strings.ReplaceAll(f, "ü", "v")
+		out = append(out, f)
+	}
+	return strings.Join(out, " ")
 }
 
 func splitDefinitions(raw string) []string {

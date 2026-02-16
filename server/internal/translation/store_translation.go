@@ -228,6 +228,22 @@ func (s *TranslationStore) AddProgressSegment(id string, result SegmentResult, s
 	return progress, total, nil
 }
 
+func (s *TranslationStore) SetFullTranslation(id string, fullTranslation string) error {
+	res, err := s.db.Exec(
+		`UPDATE translations SET full_translation = ? WHERE id = ?`,
+		fullTranslation,
+		id,
+	)
+	if err != nil {
+		return fmt.Errorf("set full translation: %w", err)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil || affected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (s *TranslationStore) Complete(id string) error {
 	rows, err := s.db.Query(
 		`SELECT english FROM translation_segments
@@ -262,7 +278,12 @@ func (s *TranslationStore) Complete(id string) error {
 	defer tx.Rollback()
 
 	res, err := tx.Exec(
-		`UPDATE translations SET status = 'completed', progress = total, full_translation = ?, error_message = NULL WHERE id = ?`,
+		`UPDATE translations
+		 SET status = 'completed',
+		     progress = total,
+		     full_translation = CASE WHEN full_translation IS NULL OR full_translation = '' THEN ? ELSE full_translation END,
+		     error_message = NULL
+		 WHERE id = ?`,
 		full,
 		id,
 	)

@@ -115,6 +115,26 @@ type dueCountResponse struct {
 	DueCount int `json:"due_count"`
 }
 
+type characterExampleWordResponse struct {
+	VocabItemID string `json:"vocab_item_id"`
+	Headword    string `json:"headword"`
+	Pinyin      string `json:"pinyin"`
+	English     string `json:"english"`
+}
+
+type characterReviewCardResponse struct {
+	VocabItemID  string                         `json:"vocab_item_id"`
+	Character    string                         `json:"character"`
+	Pinyin       string                         `json:"pinyin"`
+	English      string                         `json:"english"`
+	ExampleWords []characterExampleWordResponse `json:"example_words"`
+}
+
+type characterReviewQueueResponse struct {
+	Cards    []characterReviewCardResponse `json:"cards"`
+	DueCount int                           `json:"due_count"`
+}
+
 type translateBatchRequest struct {
 	Segments      []string `json:"segments"`
 	Context       *string  `json:"context"`
@@ -204,6 +224,7 @@ func SaveVocab(w http.ResponseWriter, r *http.Request) {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": err.Error()})
 		return
 	}
+	_ = sharedSRS.ExtractAndLinkCharacters(id, req.Headword, sharedProvider.LookupCharacter)
 	WriteJSON(w, http.StatusOK, saveVocabResponse{VocabItemID: id})
 }
 
@@ -342,6 +363,50 @@ func GetReviewCount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	WriteJSON(w, http.StatusOK, dueCountResponse{DueCount: sharedSRS.GetDueCount()})
+}
+
+func GetCharacterReviewQueue(w http.ResponseWriter, r *http.Request) {
+	if err := validateDependencies(); err != nil {
+		WriteJSON(w, http.StatusInternalServerError, map[string]string{"detail": err.Error()})
+		return
+	}
+	limit := parseIntDefault(r.URL.Query().Get("limit"), 10)
+	cards, err := sharedSRS.GetCharacterReviewQueue(limit)
+	if err != nil {
+		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": err.Error()})
+		return
+	}
+	respCards := make([]characterReviewCardResponse, 0, len(cards))
+	for _, c := range cards {
+		examples := make([]characterExampleWordResponse, 0, len(c.ExampleWords))
+		for _, ex := range c.ExampleWords {
+			examples = append(examples, characterExampleWordResponse{
+				VocabItemID: ex.VocabItemID,
+				Headword:    ex.Headword,
+				Pinyin:      ex.Pinyin,
+				English:     ex.English,
+			})
+		}
+		respCards = append(respCards, characterReviewCardResponse{
+			VocabItemID:  c.VocabItemID,
+			Character:    c.Character,
+			Pinyin:       c.Pinyin,
+			English:      c.English,
+			ExampleWords: examples,
+		})
+	}
+	WriteJSON(w, http.StatusOK, characterReviewQueueResponse{
+		Cards:    respCards,
+		DueCount: sharedSRS.GetCharacterDueCount(),
+	})
+}
+
+func GetCharacterReviewCount(w http.ResponseWriter, r *http.Request) {
+	if err := validateDependencies(); err != nil {
+		WriteJSON(w, http.StatusInternalServerError, map[string]string{"detail": err.Error()})
+		return
+	}
+	WriteJSON(w, http.StatusOK, dueCountResponse{DueCount: sharedSRS.GetCharacterDueCount()})
 }
 
 func TranslateBatch(w http.ResponseWriter, r *http.Request) {

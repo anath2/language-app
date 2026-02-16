@@ -34,6 +34,9 @@ type srsStore interface {
 	CountTotalVocab() int
 	ExportProgressJSON() (string, error)
 	ImportProgressJSON(input string) (map[string]int, error)
+	ExtractAndLinkCharacters(vocabItemID string, headword string, cedictLookup func(string) (string, string, bool)) error
+	GetCharacterReviewQueue(limit int) ([]translation.CharacterReviewCard, error)
+	GetCharacterDueCount() int
 }
 
 type profileStore interface {
