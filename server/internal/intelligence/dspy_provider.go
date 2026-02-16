@@ -25,9 +25,10 @@ const llmTimeout = 10 * time.Minute
 const defaultSegmentationInstruction = "Split the Chinese text into meaningful segments of words and return segments as an ordered JSON array."
 
 type DSPyProvider struct {
-	segmenter  *modules.Predict
-	translator *modules.Predict
-	cedict     *cedictDictionary
+	segmenter         *modules.Predict
+	segmentTranslator *modules.Predict
+	fullTranslator    *modules.Predict
+	cedict            *cedictDictionary
 }
 
 func NewDSPyProvider(cfg config.Config) (*DSPyProvider, error) {
@@ -68,7 +69,7 @@ func NewDSPyProvider(cfg config.Config) (*DSPyProvider, error) {
 		},
 	).WithInstruction(segmentInstruction)
 
-	translateSig := core.NewSignature(
+	segmentTranslateSig := core.NewSignature(
 		[]core.InputField{
 			{Field: core.NewField("segment", core.WithDescription("Single Chinese segment"))},
 			{Field: core.NewField("sentence_context", core.WithDescription("Original sentence context that may help disambiguation"))},
@@ -80,11 +81,23 @@ func NewDSPyProvider(cfg config.Config) (*DSPyProvider, error) {
 		},
 	).WithInstruction("Return concise translation data for the segment. Keep output JSON structured.")
 
+	fullTranslateSig := core.NewSignature(
+		[]core.InputField{
+			{Field: core.NewField("text", core.WithDescription("Full Chinese text to translate"))},
+		},
+		[]core.OutputField{
+			{Field: core.NewField("translation", core.WithDescription("English translation of the input text"))},
+		},
+	).WithInstruction("Return concise translation data for the full text. Keep output JSON structured.")
+
 	segmenter := modules.NewPredict(segmentSig).WithStructuredOutput()
 	segmenter.SetLLM(openAILLM)
 
-	translator := modules.NewPredict(translateSig).WithStructuredOutput()
-	translator.SetLLM(openAILLM)
+	segmentTranslator := modules.NewPredict(segmentTranslateSig).WithStructuredOutput()
+	segmentTranslator.SetLLM(openAILLM)
+
+	fullTranslator := modules.NewPredict(fullTranslateSig).WithStructuredOutput()
+	fullTranslator.SetLLM(openAILLM)
 
 	cedict, err := loadCedictDictionary(cfg.CedictPath)
 	if err != nil {
@@ -92,9 +105,10 @@ func NewDSPyProvider(cfg config.Config) (*DSPyProvider, error) {
 	}
 
 	return &DSPyProvider{
-		segmenter:  segmenter,
-		translator: translator,
-		cedict:     cedict,
+		segmenter:         segmenter,
+		segmentTranslator: segmentTranslator,
+		fullTranslator:    fullTranslator,
+		cedict:            cedict,
 	}, nil
 }
 
@@ -175,7 +189,7 @@ func (p *DSPyProvider) TranslateSegments(ctx context.Context, segments []string,
 		}
 
 		dictPinyin, dictEntry := p.lookupCedict(segment)
-		res, err := p.translator.Process(ctx, map[string]any{
+		res, err := p.segmentTranslator.Process(ctx, map[string]any{
 			"segment":          segment,
 			"sentence_context": sentenceContext,
 			"dictionary_entry": dictEntry,
@@ -213,6 +227,24 @@ func (p *DSPyProvider) TranslateSegments(ctx context.Context, segments []string,
 		})
 	}
 	return out, nil
+}
+
+func (p *DSPyProvider) TranslateFull(ctx context.Context, text string) (string, error) {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return "", nil
+	}
+	res, err := p.fullTranslator.Process(ctx, map[string]any{"text": text})
+	if err != nil {
+		return "", fmt.Errorf("translate full text with dspy: %w", err)
+	}
+	if t := strings.TrimSpace(toString(res["translation"])); t != "" {
+		return t, nil
+	}
+	if t := parseFullTranslationFromResponse(res["response"]); t != "" {
+		return t, nil
+	}
+	return "", fmt.Errorf("translate full text with dspy: empty translation response")
 }
 
 func fallbackTranslation(segment string) translation.SegmentResult {

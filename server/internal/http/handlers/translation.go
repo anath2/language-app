@@ -259,6 +259,7 @@ func streamLiveProgress(ctx context.Context, w http.ResponseWriter, flusher http
 					"translation_id": translationID,
 					"total":          progress.Total,
 					"sentences":      sentenceInfo(item.Paragraphs),
+					"fullTranslation": item.FullTranslation,
 				})
 				flusher.Flush()
 				startSent = true

@@ -188,6 +188,29 @@ func parseTranslationFromResponse(v any) (string, string) {
 	return normalizeModelField(toString(payload["pinyin"])), normalizeModelField(toString(payload["english"]))
 }
 
+func parseFullTranslationFromResponse(v any) string {
+	if v == nil {
+		return ""
+	}
+	if m, ok := v.(map[string]any); ok {
+		if t := strings.TrimSpace(toString(m["translation"])); t != "" {
+			return t
+		}
+	}
+	raw := normalizeJSONLikePayload(strings.TrimSpace(toString(v)))
+	if raw == "" {
+		return ""
+	}
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(raw), &payload); err == nil {
+		if t := strings.TrimSpace(toString(payload["translation"])); t != "" {
+			return t
+		}
+	}
+	// If the response is not JSON, treat the raw string as the translation itself.
+	return strings.TrimSpace(raw)
+}
+
 func normalizeJSONLikePayload(raw string) string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {

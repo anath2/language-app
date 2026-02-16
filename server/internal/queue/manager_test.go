@@ -23,6 +23,10 @@ func newTranslationStoreForTest(t *testing.T, dbPath string) *translation.Transl
 	return translation.NewTranslationStore(db)
 }
 
+func (m mockProvider) TranslateFull(_ context.Context, text string) (string, error) {
+	return "mock translation of: " + text, nil
+}
+
 func (m mockProvider) Segment(_ context.Context, text string) ([]string, error) {
 	text = strings.TrimSpace(text)
 	if text == "" {
