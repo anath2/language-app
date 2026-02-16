@@ -26,7 +26,8 @@ const defaultSegmentationInstruction = "Split the Chinese text into meaningful s
 
 type DSPyProvider struct {
 	segmenter         *modules.Predict
-	segmentTranslator *modules.Predict
+	pinyinTranslator  *modules.Predict
+	meaningTranslator *modules.Predict
 	fullTranslator    *modules.Predict
 	cedict            *cedictDictionary
 }
@@ -69,17 +70,25 @@ func NewDSPyProvider(cfg config.Config) (*DSPyProvider, error) {
 		},
 	).WithInstruction(segmentInstruction)
 
-	segmentTranslateSig := core.NewSignature(
+	pinyinSig := core.NewSignature(
 		[]core.InputField{
 			{Field: core.NewField("segment", core.WithDescription("Single Chinese segment"))},
-			{Field: core.NewField("sentence_context", core.WithDescription("Original sentence context that may help disambiguation"))},
-			{Field: core.NewField("dictionary_entry", core.WithDescription("CC-CEDICT dictionary definition for the segment, if available"))},
+			{Field: core.NewField("sentence_context", core.WithDescription("Original sentence context for disambiguation"))},
 		},
 		[]core.OutputField{
 			{Field: core.NewField("pinyin", core.WithDescription("Pinyin transliteration for the segment"))},
+		},
+	).WithInstruction("Return the pinyin transliteration for the Chinese segment given the sentence context. Keep output JSON structured.")
+
+	meaningSig := core.NewSignature(
+		[]core.InputField{
+			{Field: core.NewField("segment", core.WithDescription("Single Chinese segment"))},
+			{Field: core.NewField("sentence_context", core.WithDescription("Original sentence context for disambiguation"))},
+		},
+		[]core.OutputField{
 			{Field: core.NewField("english", core.WithDescription("Short natural English translation for the segment"))},
 		},
-	).WithInstruction("Return concise translation data for the segment. Keep output JSON structured.")
+	).WithInstruction("Return a concise English translation for the Chinese segment given the sentence context. Keep output JSON structured.")
 
 	fullTranslateSig := core.NewSignature(
 		[]core.InputField{
@@ -93,8 +102,11 @@ func NewDSPyProvider(cfg config.Config) (*DSPyProvider, error) {
 	segmenter := modules.NewPredict(segmentSig).WithStructuredOutput()
 	segmenter.SetLLM(openAILLM)
 
-	segmentTranslator := modules.NewPredict(segmentTranslateSig).WithStructuredOutput()
-	segmentTranslator.SetLLM(openAILLM)
+	pinyinTranslator := modules.NewPredict(pinyinSig).WithStructuredOutput()
+	pinyinTranslator.SetLLM(openAILLM)
+
+	meaningTranslator := modules.NewPredict(meaningSig).WithStructuredOutput()
+	meaningTranslator.SetLLM(openAILLM)
 
 	fullTranslator := modules.NewPredict(fullTranslateSig).WithStructuredOutput()
 	fullTranslator.SetLLM(openAILLM)
@@ -106,7 +118,8 @@ func NewDSPyProvider(cfg config.Config) (*DSPyProvider, error) {
 
 	return &DSPyProvider{
 		segmenter:         segmenter,
-		segmentTranslator: segmentTranslator,
+		pinyinTranslator:  pinyinTranslator,
+		meaningTranslator: meaningTranslator,
 		fullTranslator:    fullTranslator,
 		cedict:            cedict,
 	}, nil
@@ -188,37 +201,8 @@ func (p *DSPyProvider) TranslateSegments(ctx context.Context, segments []string,
 			continue
 		}
 
-		dictPinyin, dictEntry := p.lookupCedict(segment)
-		res, err := p.segmentTranslator.Process(ctx, map[string]any{
-			"segment":          segment,
-			"sentence_context": sentenceContext,
-			"dictionary_entry": dictEntry,
-		})
-		if err != nil {
-			log.Printf("dspy translate fallback activated: err=%v segment=%q context_preview=%q", err, segment, preview(sentenceContext, 60))
-			out = append(out, fallbackTranslationWithPinyin(segment, dictPinyin))
-			continue
-		}
-
-		pinyin := strings.TrimSpace(dictPinyin)
-		if pinyin == "" {
-			pinyin = strings.TrimSpace(toString(res["pinyin"]))
-		}
-		english := strings.TrimSpace(toString(res["english"]))
-		if english == "" {
-			respPinyin, respEnglish := parseTranslationFromResponse(res["response"])
-			if pinyin == "" && respPinyin != "" {
-				pinyin = respPinyin
-			}
-			if respEnglish != "" {
-				english = respEnglish
-			}
-		}
-		if english == "" {
-			log.Printf("dspy translate fallback activated: empty english segment=%q raw_response=%v", segment, res)
-			out = append(out, fallbackTranslationWithPinyin(segment, dictPinyin))
-			continue
-		}
+		pinyin := p.resolvePinyin(ctx, segment, sentenceContext)
+		english := p.resolveMeaning(ctx, segment, sentenceContext)
 
 		out = append(out, translation.SegmentResult{
 			Segment: segment,
@@ -227,6 +211,78 @@ func (p *DSPyProvider) TranslateSegments(ctx context.Context, segments []string,
 		})
 	}
 	return out, nil
+}
+
+// resolvePinyin returns pinyin for a segment, using CEDICT when possible and
+// falling back to the LLM only when CEDICT can't resolve it.
+func (p *DSPyProvider) resolvePinyin(ctx context.Context, segment, sentenceContext string) string {
+	if p.cedict != nil {
+		if pinyin, ok := p.cedict.ComposeSegmentPinyin(segment); ok {
+			return pinyin
+		}
+	}
+
+	// CEDICT couldn't resolve — call LLM.
+	res, err := p.pinyinTranslator.Process(ctx, map[string]any{
+		"segment":          segment,
+		"sentence_context": sentenceContext,
+	})
+	if err != nil {
+		log.Printf("dspy pinyin failed: err=%v segment=%q", err, segment)
+		return p.fallbackCedictPinyin(segment)
+	}
+
+	if pinyin := strings.TrimSpace(toString(res["pinyin"])); pinyin != "" {
+		return normalizeModelField(pinyin)
+	}
+	respPinyin, _ := parseTranslationFromResponse(res["response"])
+	if respPinyin != "" {
+		return respPinyin
+	}
+	return p.fallbackCedictPinyin(segment)
+}
+
+// fallbackCedictPinyin returns the first CEDICT entry's pinyin even if ambiguous,
+// as a last resort when LLM also failed.
+func (p *DSPyProvider) fallbackCedictPinyin(segment string) string {
+	if p.cedict == nil {
+		return ""
+	}
+	entry, ok := p.cedict.LookupFirst(segment)
+	if !ok {
+		return ""
+	}
+	return entry.Pinyin
+}
+
+// resolveMeaning returns an English translation for a segment, using CEDICT
+// when available and falling back to the LLM otherwise.
+func (p *DSPyProvider) resolveMeaning(ctx context.Context, segment, sentenceContext string) string {
+	if p.cedict != nil {
+		entries, ok := p.cedict.Lookup(segment)
+		if ok && len(entries) > 0 {
+			return entries[0].Definition
+		}
+	}
+
+	// Not in CEDICT — call LLM.
+	res, err := p.meaningTranslator.Process(ctx, map[string]any{
+		"segment":          segment,
+		"sentence_context": sentenceContext,
+	})
+	if err != nil {
+		log.Printf("dspy meaning failed: err=%v segment=%q", err, segment)
+		return "Not in dictionary"
+	}
+
+	if english := strings.TrimSpace(toString(res["english"])); english != "" {
+		return normalizeModelField(english)
+	}
+	_, respEnglish := parseTranslationFromResponse(res["response"])
+	if respEnglish != "" {
+		return respEnglish
+	}
+	return "Not in dictionary"
 }
 
 func (p *DSPyProvider) TranslateFull(ctx context.Context, text string) (string, error) {
@@ -245,33 +301,6 @@ func (p *DSPyProvider) TranslateFull(ctx context.Context, text string) (string, 
 		return t, nil
 	}
 	return "", fmt.Errorf("translate full text with dspy: empty translation response")
-}
-
-func fallbackTranslation(segment string) translation.SegmentResult {
-	return fallbackTranslationWithPinyin(segment, "")
-}
-
-func fallbackTranslationWithPinyin(segment string, pinyin string) translation.SegmentResult {
-	return translation.SegmentResult{
-		Segment: segment,
-		Pinyin:  strings.TrimSpace(pinyin),
-		English: "translation_of_" + segment,
-	}
-}
-
-func (p *DSPyProvider) lookupCedict(segment string) (string, string) {
-	if p == nil || p.cedict == nil {
-		return "", "Not in dictionary"
-	}
-	entry, ok := p.cedict.Lookup(segment)
-	if !ok {
-		return "", "Not in dictionary"
-	}
-	definition := strings.TrimSpace(entry.Definition)
-	if definition == "" {
-		definition = "Not in dictionary"
-	}
-	return strings.TrimSpace(entry.Pinyin), definition
 }
 
 func preview(s string, max int) string {

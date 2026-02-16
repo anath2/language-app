@@ -255,10 +255,10 @@ func streamLiveProgress(ctx context.Context, w http.ResponseWriter, flusher http
 
 			if !startSent && progress.Total > 0 {
 				emitSSE(w, map[string]any{
-					"type":           "start",
-					"translation_id": translationID,
-					"total":          progress.Total,
-					"sentences":      sentenceInfo(item.Paragraphs),
+					"type":            "start",
+					"translation_id":  translationID,
+					"total":           progress.Total,
+					"sentences":       sentenceInfo(item.Paragraphs),
 					"fullTranslation": item.FullTranslation,
 				})
 				flusher.Flush()
