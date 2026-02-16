@@ -613,11 +613,59 @@ paths:
   /api/review/count:
     get:
       tags: [review]
-      summary: Get count of reviews due
+      summary: Get count of word reviews due
       operationId: getReviewCount
       responses:
         "200":
-          description: Count of due reviews
+          description: Count of due word reviews
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [due_count]
+                properties:
+                  due_count:
+                    type: integer
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/review/characters/queue:
+    get:
+      tags: [review]
+      summary: Get character SRS review queue
+      operationId: getCharacterReviewQueue
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        "200":
+          description: Character review cards due
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [cards, due_count]
+                properties:
+                  cards:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/CharacterReviewCard"
+                  due_count:
+                    type: integer
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/review/characters/count:
+    get:
+      tags: [review]
+      summary: Get count of character reviews due
+      operationId: getCharacterReviewCount
+      responses:
+        "200":
+          description: Count of due character reviews
           content:
             application/json:
               schema:
@@ -993,3 +1041,33 @@ components:
           type: integer
         total:
           type: integer
+
+    CharacterReviewCard:
+      type: object
+      required: [vocab_item_id, character, pinyin, english, example_words]
+      properties:
+        vocab_item_id:
+          type: string
+        character:
+          type: string
+        pinyin:
+          type: string
+        english:
+          type: string
+        example_words:
+          type: array
+          items:
+            $ref: "#/components/schemas/CharacterExampleWord"
+
+    CharacterExampleWord:
+      type: object
+      required: [vocab_item_id, headword, pinyin, english]
+      properties:
+        vocab_item_id:
+          type: string
+        headword:
+          type: string
+        pinyin:
+          type: string
+        english:
+          type: string

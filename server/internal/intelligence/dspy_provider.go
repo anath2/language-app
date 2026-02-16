@@ -285,6 +285,26 @@ func (p *DSPyProvider) resolveMeaning(ctx context.Context, segment, sentenceCont
 	return "Not in dictionary"
 }
 
+func (p *DSPyProvider) LookupCharacter(char string) (string, string, bool) {
+	if p.cedict == nil {
+		return "", "", false
+	}
+	runes := []rune(char)
+	if len(runes) != 1 {
+		return "", "", false
+	}
+	pinyin, hasPinyin := p.cedict.PreferredCharPinyin(runes[0])
+	entry, hasEntry := p.cedict.LookupFirst(char)
+	if !hasPinyin && !hasEntry {
+		return "", "", false
+	}
+	english := ""
+	if hasEntry {
+		english = entry.Definition
+	}
+	return pinyin, english, true
+}
+
 func (p *DSPyProvider) TranslateFull(ctx context.Context, text string) (string, error) {
 	text = strings.TrimSpace(text)
 	if text == "" {

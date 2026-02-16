@@ -90,6 +90,21 @@ type ReviewAnswerResult struct {
 	RemainingDue int
 }
 
+type CharacterReviewCard struct {
+	VocabItemID  string
+	Character    string
+	Pinyin       string
+	English      string
+	ExampleWords []CharacterExampleWord
+}
+
+type CharacterExampleWord struct {
+	VocabItemID string
+	Headword    string
+	Pinyin      string
+	English     string
+}
+
 type UserProfile struct {
 	Name      string
 	Email     string

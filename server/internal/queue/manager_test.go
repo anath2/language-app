@@ -42,6 +42,10 @@ func (m mockProvider) Segment(_ context.Context, text string) ([]string, error) 
 	return out, nil
 }
 
+func (m mockProvider) LookupCharacter(_ string) (string, string, bool) {
+	return "", "", false
+}
+
 func (m mockProvider) TranslateSegments(_ context.Context, segments []string, _ string) ([]translation.SegmentResult, error) {
 	out := make([]translation.SegmentResult, 0, len(segments))
 	for _, seg := range segments {
