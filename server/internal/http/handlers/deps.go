@@ -3,6 +3,7 @@ package handlers
 import (
 	"errors"
 
+	"github.com/anath2/language-app/internal/discovery"
 	"github.com/anath2/language-app/internal/intelligence"
 	"github.com/anath2/language-app/internal/queue"
 	"github.com/anath2/language-app/internal/translation"
@@ -56,6 +57,8 @@ var sharedProfile profileStore
 var sharedQueue *queue.Manager
 var translationProvider intelligence.TranslationProvider
 var chatProvider intelligence.ChatProvider
+var sharedDiscovery *discovery.Store
+var sharedDiscoveryPipeline *discovery.Pipeline
 
 func ConfigureDependencies(
 	ts translationStore,
@@ -65,6 +68,8 @@ func ConfigureDependencies(
 	manager *queue.Manager,
 	tp intelligence.TranslationProvider,
 	cp intelligence.ChatProvider,
+	discoveryStore *discovery.Store,
+	discoveryPipeline *discovery.Pipeline,
 ) {
 	sharedTranslations = ts
 	sharedTextEvents = te
@@ -73,6 +78,8 @@ func ConfigureDependencies(
 	sharedQueue = manager
 	translationProvider = tp
 	chatProvider = cp
+	sharedDiscovery = discoveryStore
+	sharedDiscoveryPipeline = discoveryPipeline
 }
 
 func validateDependencies() error {
