@@ -188,6 +188,26 @@ export interface TranslateBatchResponse {
   translations: TranslationResult[];
 }
 
+export interface CharacterExampleWord {
+  vocab_item_id: string;
+  headword: string;
+  pinyin: string;
+  english: string;
+}
+
+export interface CharacterReviewCard {
+  vocab_item_id: string;
+  character: string;
+  pinyin: string;
+  english?: string;
+  example_words: CharacterExampleWord[];
+}
+
+export interface CharacterReviewQueueResponse {
+  cards: CharacterReviewCard[];
+  due_count: number;
+}
+
 export interface VocabStatsResponse {
   vocabStats: {
     known: number;

@@ -12,6 +12,7 @@ import { getJson, postJson } from '@/lib/api';
 class VocabStore {
   savedVocabMap = $state<Map<string, SavedVocabInfo>>(new Map());
   dueCount = $state(0);
+  characterDueCount = $state(0);
 
   async fetchSrsInfo(headwords: string[]): Promise<void> {
     if (headwords.length === 0) return;
@@ -149,10 +150,19 @@ class VocabStore {
    */
   async loadDueCount(): Promise<void> {
     try {
-      const data = await getJson<DueCountResponse>('/api/review/count');
+      const data = await getJson<DueCountResponse>('/api/review/words/count');
       this.dueCount = data.due_count;
     } catch {
       this.dueCount = 0;
+    }
+  }
+
+  async loadCharacterDueCount(): Promise<void> {
+    try {
+      const data = await getJson<DueCountResponse>('/api/review/characters/count');
+      this.characterDueCount = data.due_count;
+    } catch {
+      this.characterDueCount = 0;
     }
   }
 }
