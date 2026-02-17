@@ -9,6 +9,7 @@ import { getJson } from '@/lib/api';
 import { router } from '@/lib/router.svelte';
 import Button from '@/ui/Button.svelte';
 import Card from '@/ui/Card.svelte';
+import Selector from '@/ui/Selector.svelte';
 
 let vocabStats = $state({ known: 0, learning: 0, total: 0 });
 let loading = $state(true);
@@ -126,22 +127,14 @@ function openSnippetTranslation() {
 
       {#if !isReviewMode}
         <div class="review-type-toggle">
-          <div class="type-toggle">
-            <button
-              class="toggle-btn"
-              class:active={reviewType === 'words'}
-              onclick={() => (reviewType = 'words')}
-            >
-              Words ({vocabStore.dueCount})
-            </button>
-            <button
-              class="toggle-btn"
-              class:active={reviewType === 'characters'}
-              onclick={() => (reviewType = 'characters')}
-            >
-              Characters ({vocabStore.characterDueCount})
-            </button>
-          </div>
+          <Selector
+            options={[
+              { label: `Words (${vocabStore.dueCount})`, value: 'words' },
+              { label: `Characters (${vocabStore.characterDueCount})`, value: 'characters' },
+            ]}
+            value={reviewType}
+            onchange={(v) => (reviewType = v as 'words' | 'characters')}
+          />
         </div>
         <div class="review-action">
           <Button
@@ -292,36 +285,7 @@ function openSnippetTranslation() {
     display: flex;
     justify-content: center;
     align-items: center;
-    margin-bottom: var(--space-3);
-  }
-
-  .type-toggle {
-    display: flex;
-    gap: var(--space-1);
-    background: var(--surface-2);
-    border-radius: var(--radius-full);
-    min-height: 40px;
     margin: var(--space-3) 0;
-    min-width: 400px;
-  }
-
-  .toggle-btn {
-    flex: 1;
-    background: none;
-    border: none;
-    border-radius: var(--radius-full);
-    color: var(--text-secondary);
-    cursor: pointer;
-    font-size: var(--text-sm);
-    font-weight: 500;
-    padding: var(--space-1) var(--space-3);
-    transition: all 0.15s ease;
-  }
-
-  .toggle-btn.active {
-    background: var(--surface);
-    box-shadow: 0 1px 3px var(--shadow);
-    color: var(--text-primary);
   }
 
   .loading-text {

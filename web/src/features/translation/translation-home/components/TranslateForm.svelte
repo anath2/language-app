@@ -154,10 +154,6 @@ async function extractTextFromImage() {
     font-weight: 400;
   }
 
-  .font-chinese {
-    font-family: var(--font-chinese);
-  }
-
   .unified-input {
     display: flex;
     flex-direction: column;
