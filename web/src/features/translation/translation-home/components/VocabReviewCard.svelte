@@ -1,5 +1,6 @@
 <script lang="ts">
 import { Check } from '@lucide/svelte';
+import { characterReviewStore } from '@/features/translation/stores/characterReviewStore.svelte';
 import { reviewStore } from '@/features/translation/stores/reviewStore.svelte';
 import { translationStore } from '@/features/translation/stores/translationStore.svelte';
 import { vocabStore } from '@/features/translation/stores/vocabStore.svelte';
@@ -12,18 +13,34 @@ import Card from '@/ui/Card.svelte';
 let vocabStats = $state({ known: 0, learning: 0, total: 0 });
 let loading = $state(true);
 let isReviewMode = $state(false);
+let reviewType = $state<'words' | 'characters'>('words');
 
-const currentCard = $derived(reviewStore.currentCard);
-const progress = $derived(reviewStore.progress);
+const activeStore = $derived(reviewType === 'words' ? reviewStore : characterReviewStore);
+const activeDueCount = $derived(
+  reviewType === 'words' ? vocabStore.dueCount : vocabStore.characterDueCount
+);
+
+const currentCard = $derived(activeStore.currentCard);
+const progress = $derived(activeStore.progress);
 const progressCurrent = $derived(
   progress.total === 0 ? 0 : Math.min(progress.current, progress.total)
 );
-const currentSnippet = $derived(currentCard?.snippets?.[0] ?? '');
+
+// Word-specific derived state
+const currentSnippet = $derived(
+  reviewType === 'words' && currentCard && 'snippets' in currentCard
+    ? (currentCard.snippets?.[0] ?? '')
+    : ''
+);
 const snippetPreview = $derived(truncateSnippet(currentSnippet));
 const snippetTranslationId = $derived(findTranslationIdForSnippet(currentSnippet));
 
 $effect(() => {
-  void Promise.all([loadStats(), vocabStore.loadDueCount()]);
+  void Promise.all([
+    loadStats(),
+    vocabStore.loadDueCount(),
+    vocabStore.loadCharacterDueCount(),
+  ]);
 });
 
 async function loadStats() {
@@ -39,12 +56,16 @@ async function loadStats() {
 
 async function enterReview() {
   isReviewMode = true;
-  await reviewStore.loadQueue();
+  await activeStore.loadQueue();
 }
 
 function exitReview() {
   isReviewMode = false;
-  void Promise.all([loadStats(), vocabStore.loadDueCount()]);
+  void Promise.all([
+    loadStats(),
+    vocabStore.loadDueCount(),
+    vocabStore.loadCharacterDueCount(),
+  ]);
 }
 
 function truncateSnippet(snippet: string, maxWords: number = 18, maxChars: number = 90): string {
@@ -112,20 +133,35 @@ function openSnippetTranslation() {
       </div>
 
       {#if !isReviewMode}
-        <p class="review-summary">
-          {vocabStore.dueCount} card{vocabStore.dueCount === 1 ? '' : 's'} due
-        </p>
+        <div class="review-type-toggle">
+          <div class="type-toggle">
+            <button
+              class="toggle-btn"
+              class:active={reviewType === 'words'}
+              onclick={() => (reviewType = 'words')}
+            >
+              Words ({vocabStore.dueCount})
+            </button>
+            <button
+              class="toggle-btn"
+              class:active={reviewType === 'characters'}
+              onclick={() => (reviewType = 'characters')}
+            >
+              Characters ({vocabStore.characterDueCount})
+            </button>
+          </div>
+        </div>
         <div class="review-action">
           <Button
             variant="primary"
             size="md"
             onclick={enterReview}
-            disabled={vocabStore.dueCount === 0}
+            disabled={activeDueCount === 0}
           >
             Start Review
           </Button>
         </div>
-      {:else if reviewStore.isLoading}
+      {:else if activeStore.isLoading}
         <p class="loading-text">Loading cards...</p>
       {:else if !currentCard}
         <div class="empty-state">
@@ -138,10 +174,14 @@ function openSnippetTranslation() {
         </div>
       {:else}
         <div class="flashcard">
-          <div class="headword">{currentCard.headword}</div>
+          {#if reviewType === 'words' && 'headword' in currentCard}
+            <div class="headword">{currentCard.headword}</div>
+          {:else if reviewType === 'characters' && 'character' in currentCard}
+            <div class="headword character-display">{currentCard.character}</div>
+          {/if}
 
-          {#if !reviewStore.isAnswerRevealed}
-            <Button variant="primary" size="lg" onclick={() => reviewStore.revealAnswer()}>
+          {#if !activeStore.isAnswerRevealed}
+            <Button variant="primary" size="lg" onclick={() => activeStore.revealAnswer()}>
               Show Answer
             </Button>
           {:else}
@@ -149,17 +189,29 @@ function openSnippetTranslation() {
               <div class="pinyin">{currentCard.pinyin}</div>
               <div class="english">{currentCard.english}</div>
 
-              {#if currentSnippet}
+              {#if reviewType === 'words' && currentSnippet}
                 <div class="snippet">"{snippetPreview}"</div>
               {/if}
 
+              {#if reviewType === 'characters' && 'example_words' in currentCard && currentCard.example_words.length > 0}
+                <div class="example-words">
+                  {#each currentCard.example_words as word}
+                    <div class="example-word">
+                      <span class="example-headword">{word.headword}</span>
+                      <span class="example-pinyin">{word.pinyin}</span>
+                      <span class="example-english">{word.english}</span>
+                    </div>
+                  {/each}
+                </div>
+              {/if}
+
               <div class="grade-buttons">
-                <button class="grade-btn again" onclick={() => reviewStore.gradeCard(0)}>Again</button>
-                <button class="grade-btn hard" onclick={() => reviewStore.gradeCard(1)}>Hard</button>
-                <button class="grade-btn good" onclick={() => reviewStore.gradeCard(2)}>Good</button>
+                <button class="grade-btn again" onclick={() => activeStore.gradeCard(0)}>Again</button>
+                <button class="grade-btn hard" onclick={() => activeStore.gradeCard(1)}>Hard</button>
+                <button class="grade-btn good" onclick={() => activeStore.gradeCard(2)}>Good</button>
               </div>
 
-              {#if currentSnippet}
+              {#if reviewType === 'words' && currentSnippet}
                 <div class="review-action">
                   <Button
                     variant="secondary"
@@ -200,13 +252,6 @@ function openSnippetTranslation() {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: var(--space-3);
-  }
-
-  .vocab-review-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-xl);
-    padding: var(--space-6);
   }
 
   .stat-item {
@@ -251,17 +296,46 @@ function openSnippetTranslation() {
     font-size: var(--text-sm);
     margin-left: auto;
   }
+  .review-type-toggle {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: var(--space-3);
+  }
+
+  .type-toggle {
+    display: flex;
+    gap: var(--space-1);
+    background: var(--surface-2);
+    border-radius: var(--radius-full);
+    min-height: 40px;
+    margin: var(--space-3) 0;
+    min-width: 400px;
+  }
+
+  .toggle-btn {
+    flex: 1;
+    background: none;
+    border: none;
+    border-radius: var(--radius-full);
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: var(--text-sm);
+    font-weight: 500;
+    padding: var(--space-1) var(--space-3);
+    transition: all 0.15s ease;
+  }
+
+  .toggle-btn.active {
+    background: var(--surface);
+    box-shadow: 0 1px 3px var(--shadow);
+    color: var(--text-primary);
+  }
 
   .loading-text {
     color: var(--text-secondary);
     font-size: var(--text-sm);
     margin: var(--space-3) 0 0;
-  }
-
-  .review-summary {
-    color: var(--text-secondary);
-    font-size: var(--text-sm);
-    margin: var(--space-3) 0;
   }
 
   .review-action {
@@ -280,6 +354,10 @@ function openSnippetTranslation() {
     font-family: var(--font-chinese);
     font-size: var(--text-4xl);
     margin-bottom: var(--space-6);
+  }
+
+  .character-display {
+    font-size: 4rem;
   }
 
   .answer-section {
@@ -306,6 +384,37 @@ function openSnippetTranslation() {
     font-size: var(--text-sm);
     margin-bottom: var(--space-6);
     padding: var(--space-3);
+  }
+
+  .example-words {
+    background: var(--background-alt);
+    border-radius: var(--radius-lg);
+    margin-bottom: var(--space-4);
+    padding: var(--space-3);
+  }
+
+  .example-word {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+    justify-content: center;
+    padding: var(--space-1) 0;
+  }
+
+  .example-headword {
+    font-family: var(--font-chinese);
+    font-size: var(--text-base);
+    color: var(--text-primary);
+  }
+
+  .example-pinyin {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+  }
+
+  .example-english {
+    font-size: var(--text-sm);
+    color: var(--text-muted);
   }
 
   .grade-buttons {

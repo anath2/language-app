@@ -1,19 +1,19 @@
-// Review store - manages review queue state
+// Character review store - manages character-level SRS review queue
 
 import { getJson, postJson } from '@/lib/api';
 import type {
+  CharacterReviewCard,
+  CharacterReviewQueueResponse,
   ReviewAnswerResponse,
-  ReviewCard,
-  ReviewQueueResponse,
 } from '@/features/translation/types';
 
-class ReviewStore {
-  queue = $state<ReviewCard[]>([]);
+class CharacterReviewStore {
+  queue = $state<CharacterReviewCard[]>([]);
   currentIndex = $state(0);
   isAnswerRevealed = $state(false);
   isLoading = $state(false);
 
-  get currentCard(): ReviewCard | null {
+  get currentCard(): CharacterReviewCard | null {
     return this.queue[this.currentIndex] || null;
   }
 
@@ -25,34 +25,27 @@ class ReviewStore {
     return this.queue.length > 0 && this.currentIndex >= this.queue.length;
   }
 
-  /**
-   * Load the review queue from the server
-   */
   async loadQueue(limit: number = 20): Promise<void> {
     this.isLoading = true;
     try {
-      const data = await getJson<ReviewQueueResponse>(`/api/review/words/queue?limit=${limit}`);
+      const data = await getJson<CharacterReviewQueueResponse>(
+        `/api/review/characters/queue?limit=${limit}`
+      );
       this.queue = data.cards || [];
       this.currentIndex = 0;
       this.isAnswerRevealed = false;
     } catch (error) {
-      console.error('Failed to load review queue:', error);
+      console.error('Failed to load character review queue:', error);
       this.queue = [];
     } finally {
       this.isLoading = false;
     }
   }
 
-  /**
-   * Reveal the answer for the current card
-   */
   revealAnswer(): void {
     this.isAnswerRevealed = true;
   }
 
-  /**
-   * Grade the current card and move to the next
-   */
   async gradeCard(grade: number): Promise<void> {
     if (!this.queue[this.currentIndex]) return;
 
@@ -70,4 +63,4 @@ class ReviewStore {
   }
 }
 
-export const reviewStore = new ReviewStore();
+export const characterReviewStore = new CharacterReviewStore();

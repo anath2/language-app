@@ -10,7 +10,7 @@ class AuthStore {
    */
   async checkAuthStatus(): Promise<void> {
     try {
-      const response = await fetch('/api/review/count', {
+      const response = await fetch('/api/review/words/count', {
         method: 'GET',
         credentials: 'include',
       });
