@@ -1,6 +1,5 @@
 
 <script lang="ts">
-
 // TODO
 // Clean up and migration styles/components
 // fix svelte issues in translation-result
