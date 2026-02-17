@@ -215,3 +215,54 @@ export interface VocabStatsResponse {
     total: number;
   };
 }
+
+// Translation chat API types
+export interface ChatCreateRequest {
+  message: string;
+  selected_segment_ids?: string[];
+}
+
+export interface ChatMessage {
+  id: string;
+  chat_id: string;
+  translation_id: string;
+  message_idx: number;
+  role: 'user' | 'ai';
+  content: string;
+  selected_segment_ids: string[];
+  created_at: string;
+}
+
+export interface ChatListResponse {
+  chat_id: string;
+  messages: ChatMessage[];
+}
+
+export type ChatStreamStartEvent = {
+  type: 'start';
+  translation_id?: string;
+  chat_id?: string;
+  user_message_id?: string;
+};
+
+export type ChatStreamChunkEvent = {
+  type: 'chunk';
+  delta?: string;
+};
+
+export type ChatStreamCompleteEvent = {
+  type: 'complete';
+  message_id?: string;
+  content?: string;
+};
+
+export type ChatStreamErrorEvent = {
+  type: 'error';
+  message?: string;
+};
+
+export type ChatStreamEvent =
+  | ChatStreamStartEvent
+  | ChatStreamChunkEvent
+  | ChatStreamCompleteEvent
+  | ChatStreamErrorEvent;

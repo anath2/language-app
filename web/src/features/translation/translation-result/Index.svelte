@@ -1,10 +1,11 @@
 <script lang="ts">
-import { ChevronLeft } from '@lucide/svelte';
+import { ChevronLeft, MessageCircle } from '@lucide/svelte';
 import { getJson, postJson } from '@/lib/api';
 import Button from '@/ui/Button.svelte';
 import Card from '@/ui/Card.svelte';
 import { translationStore } from '@/features/translation/stores/translationStore.svelte';
 import TranslationResult from './components/TranslationResult.svelte';
+import TranslationChat from './components/TranslationChat.svelte';
 import type {
   CreateTextResponse,
   RecordLookupResponse,
@@ -17,6 +18,7 @@ import type {
 
 const { translationId, onBack }: { translationId: string | null; onBack: () => void } = $props();
 
+let chatPaneOpen = $state(false);
 let currentTranslationStatus = $state<string | null>(null);
 let currentFullTranslation = $state<string | null>(null);
 let detailLoading = $state(false);
@@ -191,10 +193,18 @@ async function onRecordLookup(headword: string, vocabItemId: string) {
 </script>
 
 <div class="page-container">
-  <Button variant="ghost" size="sm" onclick={onBack}>
-    <ChevronLeft size={16} />
-    <span>Back to translations</span>
-  </Button>
+  <div class="page-header">
+    <Button variant="ghost" size="sm" onclick={onBack}>
+      <ChevronLeft size={16} />
+      <span>Back to translations</span>
+    </Button>
+    {#if translationId}
+      <Button variant="ghost" size="sm" onclick={() => (chatPaneOpen = true)} ariaLabel="Open chat">
+        <MessageCircle size={16} />
+        <span>Chat</span>
+      </Button>
+    {/if}
+  </div>
 
   <div class="translation-layout">
     <div class="translation-left">
@@ -232,9 +242,23 @@ async function onRecordLookup(headword: string, vocabItemId: string) {
       {/if}
     </div>
   </div>
+
+  <TranslationChat
+    translationId={translationId}
+    open={chatPaneOpen}
+    onClose={() => (chatPaneOpen = false)}
+  />
 </div>
 
 <style>
+  .page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+  }
+
   .page-container {
     max-width: 1200px;
     margin: 0 auto;
