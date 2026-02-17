@@ -40,12 +40,35 @@ type SegmentProgressEntry struct {
 	SentenceIndex int
 }
 
+const (
+	ChatRoleUser = "user"
+	ChatRoleAI   = "ai"
+)
+
 type ProgressSnapshot struct {
 	Status  string
 	Current int
 	Total   int
 	Results []SegmentProgressEntry
 	Error   string
+}
+
+type ChatThread struct {
+	ID            string
+	TranslationID string
+	CreatedAt     string
+	UpdatedAt     string
+}
+
+type ChatMessage struct {
+	ID                 string   `json:"id"`
+	ChatID             string   `json:"chat_id"`
+	TranslationID      string   `json:"translation_id"`
+	MessageIdx         int      `json:"message_idx"`
+	Role               string   `json:"role"`
+	Content            string   `json:"content"`
+	SelectedSegmentIDs []string `json:"selected_segment_ids"`
+	CreatedAt          string   `json:"created_at"`
 }
 
 type TextRecord struct {

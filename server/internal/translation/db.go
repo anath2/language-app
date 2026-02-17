@@ -45,6 +45,8 @@ func verifySchema(db *sql.DB) error {
 		"translation_paragraphs",
 		"translation_segments",
 		"translation_jobs",
+		"translation_chats",
+		"translation_chat_messages",
 		"texts",
 		"segments",
 		"events",

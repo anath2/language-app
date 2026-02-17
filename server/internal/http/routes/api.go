@@ -22,5 +22,8 @@ func RegisterAPIRoutes(r chi.Router) {
 		api.Method(http.MethodGet, "/review/characters/queue", http.HandlerFunc(handlers.GetCharacterReviewQueue))
 		api.Method(http.MethodGet, "/review/characters/count", http.HandlerFunc(handlers.GetCharacterReviewCount))
 		api.Method(http.MethodPost, "/segments/translate-batch", http.HandlerFunc(handlers.TranslateBatch))
+		api.Method(http.MethodPost, "/translations/{translation_id}/chat/new", http.HandlerFunc(handlers.CreateChatMessage))
+		api.Method(http.MethodGet, "/translations/{translation_id}/chat/list", http.HandlerFunc(handlers.ListChatMessages))
+		api.Method(http.MethodPost, "/translations/{translation_id}/chat/clear", http.HandlerFunc(handlers.ClearChatMessages))
 	})
 }

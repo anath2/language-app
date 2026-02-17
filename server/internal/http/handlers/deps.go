@@ -14,6 +14,11 @@ type translationStore interface {
 	Get(id string) (translation.Translation, bool)
 	Delete(id string) bool
 	UpdateTranslationSegments(translationID string, paragraphIdx int, segments []translation.SegmentResult) error
+	EnsureChatForTranslation(translationID string) (translation.ChatThread, error)
+	AppendChatMessage(translationID string, role string, content string, selectedSegmentIDs []string) (translation.ChatMessage, error)
+	ListChatMessages(translationID string) ([]translation.ChatMessage, error)
+	ClearChatMessages(translationID string) error
+	LoadSelectedSegmentsByIDs(translationID string, segmentIDs []string) ([]translation.SegmentResult, error)
 }
 
 type textEventStore interface {
