@@ -3,13 +3,8 @@
 @import './tokens/typography.css';
 @import './tokens/spacing.css';
 
+/* Base (resets + shared form styles) */
+@import './base.css';
+
 /* Utilities */
 @import './utilities/index.css';
-
-/* Components */
-@import './components/base.css';
-@import './components/feedback.css';
-/* segments.css and segment-editing.css migrated to Svelte component <style> blocks */
-@import './components/jobs.css';
-@import './components/login.css';
-@import './components/utilities.css';

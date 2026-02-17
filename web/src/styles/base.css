@@ -1,0 +1,10 @@
+/* Global resets */
+* { box-sizing: border-box; }
+
+body {
+  font-family: var(--font-body);
+  background: var(--background);
+  line-height: var(--leading-normal);
+  margin: 0;
+}
+

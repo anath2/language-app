@@ -4,6 +4,7 @@ import { getJson, postJson, postJsonForm } from '@/lib/api';
 import type { AdminProfileResponse, ImportProgressResponse, UserProfile } from '@/lib/types';
 import Button from '@/ui/Button.svelte';
 import Card from '@/ui/Card.svelte';
+import Input from '@/ui/Input.svelte';
 interface Props {
   onImportSuccess?: () => void;
 }
@@ -150,10 +151,8 @@ onMount(() => {
         <div class="grid grid-cols-1 md-grid-cols-3 gap-4">
           <div>
             <label for="name" class="block mb-1" style="color: var(--text-secondary);">Name</label>
-            <input
+            <Input
               id="name"
-              type="text"
-              class="input-field"
               bind:value={name}
               required
               disabled={saving}
@@ -161,10 +160,9 @@ onMount(() => {
           </div>
           <div>
             <label for="email" class="block mb-1" style="color: var(--text-secondary);">Email</label>
-            <input
+            <Input
               id="email"
               type="email"
-              class="input-field"
               bind:value={email}
               required
               disabled={saving}
@@ -172,10 +170,8 @@ onMount(() => {
           </div>
           <div>
             <label for="language" class="block mb-1" style="color: var(--text-secondary);">Language</label>
-            <input
+            <Input
               id="language"
-              type="text"
-              class="input-field"
               bind:value={language}
               required
               disabled={saving}
@@ -252,27 +248,6 @@ onMount(() => {
 </div>
 
 <style>
-  .input-field {
-    width: 100%;
-    padding: 8px 12px;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--background-alt);
-    color: var(--text-primary);
-    transition: all 0.2s ease;
-  }
-
-  .input-field:focus {
-    outline: none;
-    border-color: var(--border-focus);
-    box-shadow: 0 0 0 3px rgba(108, 190, 237, 0.15);
-  }
-
-  .input-field:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-
   .message {
     padding: 12px 16px;
     border-radius: 6px;
