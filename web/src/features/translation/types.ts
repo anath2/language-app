@@ -199,7 +199,7 @@ export interface CharacterReviewCard {
   vocab_item_id: string;
   character: string;
   pinyin: string;
-  english: string;
+  english?: string;
   example_words: CharacterExampleWord[];
 }
 

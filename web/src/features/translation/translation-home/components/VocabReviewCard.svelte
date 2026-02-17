@@ -36,11 +36,7 @@ const snippetPreview = $derived(truncateSnippet(currentSnippet));
 const snippetTranslationId = $derived(findTranslationIdForSnippet(currentSnippet));
 
 $effect(() => {
-  void Promise.all([
-    loadStats(),
-    vocabStore.loadDueCount(),
-    vocabStore.loadCharacterDueCount(),
-  ]);
+  void Promise.all([loadStats(), vocabStore.loadDueCount(), vocabStore.loadCharacterDueCount()]);
 });
 
 async function loadStats() {
@@ -61,11 +57,7 @@ async function enterReview() {
 
 function exitReview() {
   isReviewMode = false;
-  void Promise.all([
-    loadStats(),
-    vocabStore.loadDueCount(),
-    vocabStore.loadCharacterDueCount(),
-  ]);
+  void Promise.all([loadStats(), vocabStore.loadDueCount(), vocabStore.loadCharacterDueCount()]);
 }
 
 function truncateSnippet(snippet: string, maxWords: number = 18, maxChars: number = 90): string {
@@ -187,12 +179,12 @@ function openSnippetTranslation() {
           {:else}
             <div class="answer-section">
               <div class="pinyin">{currentCard.pinyin}</div>
-              <div class="english">{currentCard.english}</div>
-
+              {#if reviewType !== 'characters'}
+                <div class="english">{currentCard.english}</div>
+              {/if}
               {#if reviewType === 'words' && currentSnippet}
                 <div class="snippet">"{snippetPreview}"</div>
               {/if}
-
               {#if reviewType === 'characters' && 'example_words' in currentCard && currentCard.example_words.length > 0}
                 <div class="example-words">
                   {#each currentCard.example_words as word}
