@@ -12,4 +12,5 @@ type Provider interface {
 	TranslateSegments(ctx context.Context, segments []string, sentenceContext string) ([]translation.SegmentResult, error)
 	TranslateFull(ctx context.Context, text string) (string, error)
 	LookupCharacter(char string) (pinyin string, english string, found bool)
+	SuggestArticleURLs(ctx context.Context, topics []string, existingURLs []string) ([]string, error)
 }

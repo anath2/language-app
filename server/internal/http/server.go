@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/anath2/language-app/internal/config"
+	"github.com/anath2/language-app/internal/discovery"
 	"github.com/anath2/language-app/internal/http/handlers"
 	"github.com/anath2/language-app/internal/http/middleware"
 	"github.com/anath2/language-app/internal/http/routes"
@@ -50,8 +51,15 @@ func NewRouter(cfg config.Config) stdhttp.Handler {
 		})
 	}
 	manager := queue.NewManager(translationStore, provider)
-	handlers.ConfigureDependencies(translationStore, textEventStore, srsStore, profileStore, manager, provider)
+	discoveryStore := discovery.NewStore(db.Conn)
+	discoveryPipeline := discovery.NewPipeline(discoveryStore, provider)
+	handlers.ConfigureDependencies(translationStore, textEventStore, srsStore, profileStore, manager, provider, discoveryStore, discoveryPipeline)
 	manager.ResumeRestartableJobs()
+
+	if cfg.DiscoveryIntervalHours > 0 {
+		scheduler := discovery.NewScheduler(discoveryPipeline, cfg.DiscoveryIntervalHours)
+		scheduler.Start()
+	}
 
 	r := chi.NewRouter()
 
@@ -77,6 +85,7 @@ func NewRouter(cfg config.Config) stdhttp.Handler {
 	routes.RegisterTranslationRoutes(r)
 	routes.RegisterAPIRoutes(r)
 	routes.RegisterAdminRoutes(r)
+	routes.RegisterDiscoveryRoutes(r)
 
 	return r
 }

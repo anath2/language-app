@@ -37,6 +37,8 @@ tags:
     description: Admin operations (profile, progress import/export)
   - name: ocr
     description: OCR text extraction
+  - name: discovery
+    description: Article discovery pipeline
 
 paths:
   /health:
@@ -864,6 +866,221 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  /api/discovery/preferences:
+    get:
+      tags: [discovery]
+      summary: List topic preferences
+      operationId: listDiscoveryPreferences
+      responses:
+        "200":
+          description: List of topic preferences
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DiscoveryPreference"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [discovery]
+      summary: Add or update a topic preference
+      operationId: saveDiscoveryPreference
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [topic]
+              properties:
+                topic:
+                  type: string
+                weight:
+                  type: number
+                  format: float
+                  default: 1.0
+      responses:
+        "200":
+          description: Preference saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DiscoveryPreference"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/discovery/preferences/{id}:
+    delete:
+      tags: [discovery]
+      summary: Delete a topic preference
+      operationId: deleteDiscoveryPreference
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Preference deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: string
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/discovery/articles:
+    get:
+      tags: [discovery]
+      summary: List discovered articles
+      operationId: listDiscoveryArticles
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [new, dismissed, imported]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: Paginated list of articles
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [articles, total]
+                properties:
+                  articles:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/DiscoveryArticle"
+                  total:
+                    type: integer
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/discovery/articles/{id}:
+    get:
+      tags: [discovery]
+      summary: Get article detail
+      operationId: getDiscoveryArticle
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Article detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DiscoveryArticle"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/discovery/articles/{id}/dismiss:
+    post:
+      tags: [discovery]
+      summary: Dismiss an article
+      operationId: dismissDiscoveryArticle
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Article dismissed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: string
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/discovery/articles/{id}/import:
+    post:
+      tags: [discovery]
+      summary: Import article into translation pipeline
+      operationId: importDiscoveryArticle
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Article imported, translation job created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [translation_id, article_id]
+                properties:
+                  translation_id:
+                    type: string
+                  article_id:
+                    type: string
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "502":
+          description: Failed to fetch article content
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/discovery/run:
+    post:
+      tags: [discovery]
+      summary: Trigger a manual discovery run
+      operationId: triggerDiscoveryRun
+      responses:
+        "202":
+          description: Discovery run started in background
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    example: started
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
 components:
   securitySchemes:
     sessionCookie:
@@ -1071,3 +1288,62 @@ components:
           type: string
         english:
           type: string
+
+    DiscoveryPreference:
+      type: object
+      required: [id, topic, weight, created_at, updated_at]
+      properties:
+        id:
+          type: string
+        topic:
+          type: string
+        weight:
+          type: number
+          format: float
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    DiscoveryArticle:
+      type: object
+      required: [id, run_id, url, title, difficulty_score, total_words, unknown_words, learning_words, known_words, status, created_at, updated_at]
+      properties:
+        id:
+          type: string
+        run_id:
+          type: string
+        url:
+          type: string
+          format: uri
+        title:
+          type: string
+        source_name:
+          type: string
+        summary:
+          type: string
+        difficulty_score:
+          type: number
+          format: float
+          description: "0.0-1.0 scale. Challenge sweet spot: 0.3-0.7"
+        total_words:
+          type: integer
+        unknown_words:
+          type: integer
+        learning_words:
+          type: integer
+        known_words:
+          type: integer
+        status:
+          type: string
+          enum: [new, dismissed, imported]
+        translation_id:
+          type: ["string", "null"]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time

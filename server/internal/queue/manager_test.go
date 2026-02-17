@@ -42,6 +42,10 @@ func (m mockProvider) Segment(_ context.Context, text string) ([]string, error) 
 	return out, nil
 }
 
+func (m mockProvider) SuggestArticleURLs(_ context.Context, _ []string, _ []string) ([]string, error) {
+	return nil, nil
+}
+
 func (m mockProvider) LookupCharacter(_ string) (string, string, bool) {
 	return "", "", false
 }

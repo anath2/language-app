@@ -12,18 +12,19 @@ import (
 const defaultSessionMaxAgeHours = 168
 
 type Config struct {
-	Addr                 string
-	AppPassword          string
-	AppSecretKey         string
-	SessionMaxAgeSeconds int
-	SecureCookies        bool
-	MigrationsDir        string
-	TranslationDBPath    string
-	CedictPath           string
-	OpenAIAPIKey         string
-	OpenAIModel          string
-	OpenAIBaseURL        string
-	OpenAIDebugLog       bool
+	Addr                   string
+	AppPassword            string
+	AppSecretKey           string
+	SessionMaxAgeSeconds   int
+	SecureCookies          bool
+	MigrationsDir          string
+	TranslationDBPath      string
+	CedictPath             string
+	OpenAIAPIKey           string
+	OpenAIModel            string
+	OpenAIBaseURL          string
+	OpenAIDebugLog         bool
+	DiscoveryIntervalHours int
 }
 
 func Load() (Config, error) {
@@ -75,19 +76,29 @@ func Load() (Config, error) {
 		secureCookies = true
 	}
 
+	discoveryHours := 24
+	if raw := os.Getenv("DISCOVERY_INTERVAL_HOURS"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil {
+			return Config{}, fmt.Errorf("invalid DISCOVERY_INTERVAL_HOURS: %w", err)
+		}
+		discoveryHours = parsed
+	}
+
 	return Config{
-		Addr:                 addr,
-		AppPassword:          appPassword,
-		AppSecretKey:         appSecretKey,
-		SessionMaxAgeSeconds: sessionHours * 3600,
-		SecureCookies:        secureCookies,
-		MigrationsDir:        envOrDefault("LANGUAGE_APP_MIGRATIONS_DIR", filepath.Join(repoRoot, "server", "migrations")),
-		TranslationDBPath:    envOrDefault("LANGUAGE_APP_DB_PATH", filepath.Join(repoRoot, "server", "data", "language_app.db")),
-		CedictPath:           envFirstOrDefault([]string{"CEDICT_PATH", "CEDIT_PATH", "CCEDICT_PATH"}, filepath.Join(repoRoot, "server", "data", "cedict_ts.u8")),
-		OpenAIAPIKey:         openAIAPIKey,
-		OpenAIModel:          openAIModel,
-		OpenAIBaseURL:        openAIBaseURL,
-		OpenAIDebugLog:       strings.EqualFold(envFirstOrDefault([]string{"OPENAI_DEBUG_LOG", "OPENROUTER_DEBUG_LOG"}, ""), "true"),
+		Addr:                   addr,
+		AppPassword:            appPassword,
+		AppSecretKey:           appSecretKey,
+		SessionMaxAgeSeconds:   sessionHours * 3600,
+		SecureCookies:          secureCookies,
+		MigrationsDir:          envOrDefault("LANGUAGE_APP_MIGRATIONS_DIR", filepath.Join(repoRoot, "server", "migrations")),
+		TranslationDBPath:      envOrDefault("LANGUAGE_APP_DB_PATH", filepath.Join(repoRoot, "server", "data", "language_app.db")),
+		CedictPath:             envFirstOrDefault([]string{"CEDICT_PATH", "CEDIT_PATH", "CCEDICT_PATH"}, filepath.Join(repoRoot, "server", "data", "cedict_ts.u8")),
+		OpenAIAPIKey:           openAIAPIKey,
+		OpenAIModel:            openAIModel,
+		OpenAIBaseURL:          openAIBaseURL,
+		OpenAIDebugLog:         strings.EqualFold(envFirstOrDefault([]string{"OPENAI_DEBUG_LOG", "OPENROUTER_DEBUG_LOG"}, ""), "true"),
+		DiscoveryIntervalHours: discoveryHours,
 	}, nil
 }
 
