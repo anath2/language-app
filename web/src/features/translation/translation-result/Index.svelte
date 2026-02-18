@@ -199,7 +199,7 @@ async function onRecordLookup(headword: string, vocabItemId: string) {
       <span>Back to translations</span>
     </Button>
     {#if translationId}
-      <Button variant="ghost" size="sm" onclick={() => (chatPaneOpen = true)} ariaLabel="Open chat">
+      <Button variant="primary" size="sm" onclick={() => (chatPaneOpen = true)} ariaLabel="Open chat">
         <MessageCircle size={16} />
         <span>Chat</span>
       </Button>
