@@ -4,11 +4,7 @@ import Sidepane from '@/ui/Sidepane.svelte';
 import Loader from '@/ui/Loader.svelte';
 import TextArea from '@/ui/TextArea.svelte';
 import { getJson, postJson, postJsonStream } from '@/lib/api';
-import type {
-  ChatMessage,
-  ChatListResponse,
-  ChatStreamEvent,
-} from '@/features/translation/types';
+import type { ChatMessage, ChatListResponse, ChatStreamEvent } from '@/features/translation/types';
 
 const {
   translationId,
@@ -40,9 +36,7 @@ async function loadMessages() {
   listLoading = true;
   listError = '';
   try {
-    const data = await getJson<ChatListResponse>(
-      `/api/translations/${translationId}/chat/list`
-    );
+    const data = await getJson<ChatListResponse>(`/api/translations/${translationId}/chat/list`);
     messages = data.messages ?? [];
   } catch (e) {
     listError = e instanceof Error ? e.message : 'Failed to load chat';
@@ -108,10 +102,7 @@ async function sendMessage() {
 async function clearChat() {
   if (!translationId || streaming) return;
   try {
-    await postJson<{ ok: boolean }>(
-      `/api/translations/${translationId}/chat/clear`,
-      {}
-    );
+    await postJson<{ ok: boolean }>(`/api/translations/${translationId}/chat/clear`, {});
     messages = [];
     errorMessage = '';
   } catch (e) {
