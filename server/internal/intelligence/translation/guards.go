@@ -1,11 +1,11 @@
-package intelligence
+package translation
 
 import (
 	"strings"
 	"unicode"
 )
 
-const chinesePunctuation = "，。！？；：、（）【】《》〈〉「」『』“”‘’—…·"
+const chinesePunctuation = `，。！？；：、（）【】《》〈〉「」『』""''—…·`
 
 func isCJKIdeograph(r rune) bool {
 	return (r >= 0x4E00 && r <= 0x9FFF) || // Main CJK block

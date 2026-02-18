@@ -1,12 +1,11 @@
-// TODO: Add a way to allow the user to create new segments for AI interatactions in chat
+// TODO: Add a way to allow the user to create new segments for AI interactions in chat
 
-// TODO: prompt hardeining for structured outputs
-package intelligence
+// TODO: prompt hardening for structured outputs
+package translation
 
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -21,7 +20,7 @@ import (
 	"github.com/XiaoConstantine/dspy-go/pkg/llms"
 	"github.com/XiaoConstantine/dspy-go/pkg/modules"
 	"github.com/anath2/language-app/internal/config"
-	"github.com/anath2/language-app/internal/translation"
+	store "github.com/anath2/language-app/internal/translation"
 )
 
 const llmTimeout = 10 * time.Minute
@@ -32,14 +31,13 @@ type DSPyProvider struct {
 	pinyinTranslator  *modules.Predict
 	meaningTranslator *modules.Predict
 	fullTranslator    *modules.Predict
-	chatResponder     *modules.Predict
 	cedict            *cedictDictionary
 }
 
 func NewDSPyProvider(cfg config.Config) (*DSPyProvider, error) {
 	llms.EnsureFactory()
 
-	modelID := core.ModelID(strings.TrimSpace(cfg.OpenAIModel))
+	modelID := core.ModelID(strings.TrimSpace(cfg.OpenAITranslationModel))
 	baseURL, path, err := normalizeOpenAIEndpoint(cfg.OpenAIBaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("invalid OPENAI_BASE_URL %q: %w", cfg.OpenAIBaseURL, err)
@@ -103,18 +101,6 @@ func NewDSPyProvider(cfg config.Config) (*DSPyProvider, error) {
 		},
 	).WithInstruction("Return concise translation data for the full text. Keep output JSON structured.")
 
-	chatSig := core.NewSignature(
-		[]core.InputField{
-			{Field: core.NewField("translation_text", core.WithDescription("Original article text the translation belongs to"))},
-			{Field: core.NewField("selected_segments_json", core.WithDescription("JSON array of selected segment objects with id/segment/pinyin/english"))},
-			{Field: core.NewField("history_json", core.WithDescription("JSON array of prior chat messages with role/content"))},
-			{Field: core.NewField("user_message", core.WithDescription("User question about the article/segments"))},
-		},
-		[]core.OutputField{
-			{Field: core.NewField("response_text", core.WithDescription("Assistant answer grounded in the provided context"))},
-		},
-	).WithInstruction("Answer the user's question using translation_text and selected_segments_json as primary grounding context. Be explicit when evidence is missing and avoid inventing facts.")
-
 	segmenter := modules.NewPredict(segmentSig).WithStructuredOutput()
 	segmenter.SetLLM(openAILLM)
 
@@ -127,9 +113,6 @@ func NewDSPyProvider(cfg config.Config) (*DSPyProvider, error) {
 	fullTranslator := modules.NewPredict(fullTranslateSig).WithStructuredOutput()
 	fullTranslator.SetLLM(openAILLM)
 
-	chatResponder := modules.NewPredict(chatSig).WithStructuredOutput()
-	chatResponder.SetLLM(openAILLM)
-
 	cedict, err := loadCedictDictionary(cfg.CedictPath)
 	if err != nil {
 		log.Printf("cedict load warning: path=%s err=%v", cfg.CedictPath, err)
@@ -140,7 +123,6 @@ func NewDSPyProvider(cfg config.Config) (*DSPyProvider, error) {
 		pinyinTranslator:  pinyinTranslator,
 		meaningTranslator: meaningTranslator,
 		fullTranslator:    fullTranslator,
-		chatResponder:     chatResponder,
 		cedict:            cedict,
 	}, nil
 }
@@ -205,15 +187,15 @@ func (p *DSPyProvider) Segment(ctx context.Context, text string) ([]string, erro
 	return segments, nil
 }
 
-func (p *DSPyProvider) TranslateSegments(ctx context.Context, segments []string, sentenceContext string) ([]translation.SegmentResult, error) {
-	out := make([]translation.SegmentResult, 0, len(segments))
+func (p *DSPyProvider) TranslateSegments(ctx context.Context, segments []string, sentenceContext string) ([]store.SegmentResult, error) {
+	out := make([]store.SegmentResult, 0, len(segments))
 	for _, segment := range segments {
 		segment = strings.TrimSpace(segment)
 		if segment == "" {
 			continue
 		}
 		if shouldSkipSegment(segment) {
-			out = append(out, translation.SegmentResult{
+			out = append(out, store.SegmentResult{
 				Segment: segment,
 				Pinyin:  "",
 				English: "",
@@ -224,7 +206,7 @@ func (p *DSPyProvider) TranslateSegments(ctx context.Context, segments []string,
 		pinyin := p.resolvePinyin(ctx, segment, sentenceContext)
 		english := p.resolveMeaning(ctx, segment, sentenceContext)
 
-		out = append(out, translation.SegmentResult{
+		out = append(out, store.SegmentResult{
 			Segment: segment,
 			Pinyin:  pinyin,
 			English: english,
@@ -341,68 +323,6 @@ func (p *DSPyProvider) TranslateFull(ctx context.Context, text string) (string, 
 		return t, nil
 	}
 	return "", fmt.Errorf("translate full text with dspy: empty translation response")
-}
-
-func (p *DSPyProvider) ChatWithTranslationContext(ctx context.Context, req ChatWithTranslationRequest, onChunk func(string) error) (string, error) {
-	userMessage := strings.TrimSpace(req.UserMessage)
-	if userMessage == "" {
-		return "", fmt.Errorf("chat user message is required")
-	}
-	translationText := strings.TrimSpace(req.TranslationText)
-	if translationText == "" {
-		return "", fmt.Errorf("translation text is required")
-	}
-
-	selectedPayload, err := json.Marshal(req.Selected)
-	if err != nil {
-		return "", fmt.Errorf("marshal selected context: %w", err)
-	}
-	historyPayload, err := json.Marshal(req.History)
-	if err != nil {
-		return "", fmt.Errorf("marshal chat history: %w", err)
-	}
-
-	res, err := p.chatResponder.Process(ctx, map[string]any{
-		"translation_text":       translationText,
-		"selected_segments_json": string(selectedPayload),
-		"history_json":           string(historyPayload),
-		"user_message":           userMessage,
-	})
-	if err != nil {
-		return "", fmt.Errorf("chat with translation context: %w", err)
-	}
-
-	reply := strings.TrimSpace(toString(res["response_text"]))
-	if reply == "" {
-		reply = strings.TrimSpace(toString(res["response"]))
-	}
-	if reply == "" {
-		return "", fmt.Errorf("chat with translation context: empty response")
-	}
-
-	if onChunk != nil {
-		if err := streamInChunks(reply, 24, onChunk); err != nil {
-			return "", err
-		}
-	}
-	return reply, nil
-}
-
-func streamInChunks(text string, chunkRunes int, onChunk func(string) error) error {
-	if chunkRunes <= 0 {
-		chunkRunes = 24
-	}
-	runes := []rune(text)
-	for start := 0; start < len(runes); start += chunkRunes {
-		end := start + chunkRunes
-		if end > len(runes) {
-			end = len(runes)
-		}
-		if err := onChunk(string(runes[start:end])); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func preview(s string, max int) string {

@@ -1,4 +1,4 @@
-package intelligence
+package translation
 
 import (
 	"bufio"
