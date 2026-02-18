@@ -50,14 +50,50 @@ func (p *Pipeline) execute(ctx context.Context, runID string) (int, error) {
 		return 0, err
 	}
 
-	candidateURLs, err := p.provider.SuggestArticleURLs(ctx, topics, existingURLs)
-	if err != nil {
-		return 0, err
+	// Try Juejin first (real articles, no API key required), fall back to LLM.
+	juejinPages, err := fetchJuejinPages(ctx, topics, existingURLs)
+	if err != nil || len(juejinPages) == 0 {
+		log.Printf("discovery juejin unavailable (err=%v), falling back to LLM", err)
+		candidateURLs, err := p.provider.SuggestArticleURLs(ctx, topics, existingURLs)
+		if err != nil {
+			return 0, err
+		}
+		log.Printf("discovery sourced %d URLs for topics=%v", len(candidateURLs), topics)
+		return p.processURLs(ctx, runID, candidateURLs, knownVocab)
 	}
-	log.Printf("discovery suggested %d URLs for topics=%v: %v", len(candidateURLs), topics, candidateURLs)
 
+	log.Printf("discovery sourced %d URLs for topics=%v", len(juejinPages), topics)
+	return p.processPages(ctx, runID, juejinPages, knownVocab)
+}
+
+// processPages scores and saves pre-fetched pages (e.g. from Juejin API) without
+// making additional HTTP requests. The page Body must already contain CJK text.
+func (p *Pipeline) processPages(ctx context.Context, runID string, pages []FetchedPage, knownVocab map[string]string) (int, error) {
 	var saved int
-	for _, url := range candidateURLs {
+	for _, page := range pages {
+		if !HasCJKContent(page.Body) {
+			log.Printf("discovery skip non-CJK: url=%s", page.URL)
+			continue
+		}
+		scored, err := ScoreArticle(ctx, page, p.provider, knownVocab)
+		if err != nil {
+			log.Printf("discovery score failed: url=%s err=%v", page.URL, err)
+			continue
+		}
+		if _, err := p.store.SaveArticle(runID, scored); err != nil {
+			log.Printf("discovery save failed: url=%s err=%v", page.URL, err)
+			continue
+		}
+		saved++
+	}
+	return saved, nil
+}
+
+// processURLs fetches HTML for each URL then scores and saves the result.
+// Used for LLM-suggested URLs where the page body is not yet available.
+func (p *Pipeline) processURLs(ctx context.Context, runID string, urls []string, knownVocab map[string]string) (int, error) {
+	var saved int
+	for _, url := range urls {
 		page, err := FetchPage(ctx, url)
 		if err != nil {
 			log.Printf("discovery fetch failed: url=%s err=%v", url, err)
@@ -67,20 +103,17 @@ func (p *Pipeline) execute(ctx context.Context, runID string) (int, error) {
 			log.Printf("discovery skip non-CJK: url=%s", url)
 			continue
 		}
-
 		scored, err := ScoreArticle(ctx, page, p.provider, knownVocab)
 		if err != nil {
 			log.Printf("discovery score failed: url=%s err=%v", url, err)
 			continue
 		}
-
 		if _, err := p.store.SaveArticle(runID, scored); err != nil {
 			log.Printf("discovery save failed: url=%s err=%v", url, err)
 			continue
 		}
 		saved++
 	}
-
 	return saved, nil
 }
 
