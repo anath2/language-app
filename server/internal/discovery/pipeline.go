@@ -54,6 +54,7 @@ func (p *Pipeline) execute(ctx context.Context, runID string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	log.Printf("discovery suggested %d URLs for topics=%v: %v", len(candidateURLs), topics, candidateURLs)
 
 	var saved int
 	for _, url := range candidateURLs {

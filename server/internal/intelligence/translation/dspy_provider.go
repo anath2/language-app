@@ -410,6 +410,7 @@ func (p *DSPyProvider) SuggestArticleURLs(ctx context.Context, topics []string, 
 		return nil, fmt.Errorf("suggest article urls: %w", err)
 	}
 
+	log.Printf("SuggestArticleURLs raw response: %v", res)
 	urls := parseURLList(res["urls"])
 	if len(urls) == 0 {
 		urls = parseURLList(res["response"])
@@ -423,6 +424,19 @@ func parseURLList(raw any) []string {
 	}
 	s := toString(raw)
 	s = strings.TrimSpace(s)
+	// Strip markdown code fences (```json ... ``` or ``` ... ```)
+	if idx := strings.Index(s, "```"); idx != -1 {
+		s = s[idx:]
+		// Skip the opening fence line
+		if nl := strings.Index(s, "\n"); nl != -1 {
+			s = s[nl+1:]
+		}
+		// Remove closing fence
+		if end := strings.LastIndex(s, "```"); end != -1 {
+			s = s[:end]
+		}
+		s = strings.TrimSpace(s)
+	}
 	// Try JSON array parse
 	var urls []string
 	if err := json.Unmarshal([]byte(s), &urls); err == nil {
@@ -434,6 +448,24 @@ func parseURLList(raw any) []string {
 			}
 		}
 		return valid
+	}
+	// Try JSON object with "urls" key
+	var obj map[string][]string
+	if err := json.Unmarshal([]byte(s), &obj); err == nil {
+		for _, key := range []string{"urls", "url_list", "articles"} {
+			if list, ok := obj[key]; ok {
+				var valid []string
+				for _, u := range list {
+					u = strings.TrimSpace(u)
+					if strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://") {
+						valid = append(valid, u)
+					}
+				}
+				if len(valid) > 0 {
+					return valid
+				}
+			}
+		}
 	}
 	// Fallback: line-separated
 	var out []string
