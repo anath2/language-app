@@ -13,13 +13,13 @@ import (
 	"github.com/anath2/language-app/internal/translation"
 )
 
-type mockChatProvider struct{}
+type mockTranslationProvider struct{}
 
-func (m mockChatProvider) Segment(_ context.Context, text string) ([]string, error) {
+func (m mockTranslationProvider) Segment(_ context.Context, text string) ([]string, error) {
 	return []string{text}, nil
 }
 
-func (m mockChatProvider) TranslateSegments(_ context.Context, segments []string, _ string) ([]translation.SegmentResult, error) {
+func (m mockTranslationProvider) TranslateSegments(_ context.Context, segments []string, _ string) ([]translation.SegmentResult, error) {
 	out := make([]translation.SegmentResult, 0, len(segments))
 	for _, seg := range segments {
 		out = append(out, translation.SegmentResult{
@@ -31,13 +31,15 @@ func (m mockChatProvider) TranslateSegments(_ context.Context, segments []string
 	return out, nil
 }
 
-func (m mockChatProvider) TranslateFull(_ context.Context, text string) (string, error) {
+func (m mockTranslationProvider) TranslateFull(_ context.Context, text string) (string, error) {
 	return "mock full: " + text, nil
 }
 
-func (m mockChatProvider) LookupCharacter(_ string) (string, string, bool) {
+func (m mockTranslationProvider) LookupCharacter(_ string) (string, string, bool) {
 	return "", "", false
 }
+
+type mockChatProvider struct{}
 
 func (m mockChatProvider) ChatWithTranslationContext(_ context.Context, req intelligence.ChatWithTranslationRequest, onChunk func(string) error) (string, error) {
 	reply := "mock answer: " + req.UserMessage
@@ -59,9 +61,10 @@ func overrideDepsWithMockProvider(t *testing.T, cfg config.Config) *translation.
 	textEventStore := translation.NewTextEventStore(db)
 	srsStore := translation.NewSRSStore(db)
 	profileStore := translation.NewProfileStore(db)
-	provider := mockChatProvider{}
-	manager := queue.NewManager(translationStore, provider)
-	handlers.ConfigureDependencies(translationStore, textEventStore, srsStore, profileStore, manager, provider)
+	transProv := mockTranslationProvider{}
+	chatProv := mockChatProvider{}
+	manager := queue.NewManager(translationStore, transProv)
+	handlers.ConfigureDependencies(translationStore, textEventStore, srsStore, profileStore, manager, transProv, chatProv)
 	return translationStore
 }
 
