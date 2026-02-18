@@ -11,10 +11,10 @@ var defaultTopics = []string{"technology", "culture", "news"}
 
 type Pipeline struct {
 	store    *Store
-	provider intelligence.Provider
+	provider intelligence.TranslationProvider
 }
 
-func NewPipeline(store *Store, provider intelligence.Provider) *Pipeline {
+func NewPipeline(store *Store, provider intelligence.TranslationProvider) *Pipeline {
 	return &Pipeline{store: store, provider: provider}
 }
 

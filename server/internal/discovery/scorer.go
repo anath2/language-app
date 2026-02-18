@@ -8,7 +8,7 @@ import (
 
 const sampleCharLimit = 500
 
-func ScoreArticle(ctx context.Context, page FetchedPage, provider intelligence.Provider, knownVocab map[string]string) (ScoredArticle, error) {
+func ScoreArticle(ctx context.Context, page FetchedPage, provider intelligence.TranslationProvider, knownVocab map[string]string) (ScoredArticle, error) {
 	sample := page.Body
 	runes := []rune(sample)
 	if len(runes) > sampleCharLimit {

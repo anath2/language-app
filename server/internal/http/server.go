@@ -55,7 +55,6 @@ func NewRouter(cfg config.Config) stdhttp.Handler {
 	chatProv := ilchat.New(cfg)
 
 	manager := queue.NewManager(translationStore, translationProv)
-	handlers.ConfigureDependencies(translationStore, textEventStore, srsStore, profileStore, manager, translationProv, chatProv)
 	discoveryStore := discovery.NewStore(db.Conn)
 	discoveryPipeline := discovery.NewPipeline(discoveryStore, translationProv)
 	handlers.ConfigureDependencies(translationStore, textEventStore, srsStore, profileStore, manager, translationProv, chatProv, discoveryStore, discoveryPipeline)
