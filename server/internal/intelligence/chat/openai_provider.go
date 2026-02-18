@@ -56,7 +56,16 @@ func (p *Provider) ChatWithTranslationContext(ctx context.Context, req intellige
 	}
 
 	systemPrompt := fmt.Sprintf(
-		"You are a Chinese language tutor. Answer questions grounded in the following article and highlighted segments.\n\nARTICLE:\n%s\n\nHIGHLIGHTED SEGMENTS:\n%s",
+		`You are a Chinese language learning tutor responding in a chat context. 
+Answer questions grounded in the following article and highlighted segments if available.
+You will be provided a chat history of previous messages. Use the chat history for context only — respond solely to the most recent user message and do not re-answer prior messages.
+Make sure you answer the question in a concise manner. When answering questions in target language, always provide pinyin or english translation.
+
+## ARTICLE: 
+%s
+## HIGHLIGHTED SEGMENTS:
+%s
+`,
 		translationText,
 		string(selectedJSON),
 	)
@@ -79,10 +88,17 @@ func (p *Provider) ChatWithTranslationContext(ctx context.Context, req intellige
 		"content": userMessage,
 	})
 
+	reasoning := map[string]any{
+		"enabled": false,
+	}
+
 	body, err := json.Marshal(map[string]any{
-		"model":    p.model,
-		"messages": messages,
-		"stream":   true,
+		"model":       p.model,
+		"messages":    messages,
+		"stream":      true,
+		"thinking":    false,
+		"temperature": 0.7,
+		"reasoning":   reasoning,
 	})
 	if err != nil {
 		return "", fmt.Errorf("marshal chat request: %w", err)
