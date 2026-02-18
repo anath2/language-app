@@ -16,8 +16,10 @@ func TestLoadRequiresOpenAIEnv(t *testing.T) {
 	t.Setenv("APP_SECRET_KEY", "secret")
 	t.Setenv("OPENAI_API_KEY", "")
 	t.Setenv("OPENROUTER_API_KEY", "")
-	t.Setenv("OPENAI_MODEL", "")
-	t.Setenv("OPENROUTER_MODEL", "")
+	t.Setenv("OPENAI_TRANSLATION_MODEL", "")
+	t.Setenv("OPENAI_CHAT_MODEL", "")
+	t.Setenv("OPENROUTER_TRANSLATION_MODEL", "")
+	t.Setenv("OPENROUTER_CHAT_MODEL", "")
 
 	_, err := Load()
 	if err == nil {
@@ -30,7 +32,7 @@ func TestLoadFromDotenvThenValidate(t *testing.T) {
 	withChdir(t, repoRoot)
 
 	envPath := filepath.Join(repoRoot, ".env")
-	envContent := "APP_PASSWORD=testpass\nAPP_SECRET_KEY=testsecret\nOPENAI_API_KEY=oa-key\nOPENAI_MODEL=openai/gpt-4o-mini\nSECURE_COOKIES=false\nCEDICT_PATH=custom/cedict_ts.u8\n"
+	envContent := "APP_PASSWORD=testpass\nAPP_SECRET_KEY=testsecret\nOPENAI_API_KEY=oa-key\nOPENAI_TRANSLATION_MODEL=openai/gpt-4o-mini\nOPENAI_CHAT_MODEL=openai/gpt-4o-mini\nSECURE_COOKIES=false\nCEDICT_PATH=custom/cedict_ts.u8\n"
 	if err := os.WriteFile(envPath, []byte(envContent), 0o644); err != nil {
 		t.Fatalf("write .env: %v", err)
 	}
@@ -39,8 +41,10 @@ func TestLoadFromDotenvThenValidate(t *testing.T) {
 	t.Setenv("APP_SECRET_KEY", "")
 	t.Setenv("OPENAI_API_KEY", "")
 	t.Setenv("OPENROUTER_API_KEY", "")
-	t.Setenv("OPENAI_MODEL", "")
-	t.Setenv("OPENROUTER_MODEL", "")
+	t.Setenv("OPENAI_TRANSLATION_MODEL", "")
+	t.Setenv("OPENAI_CHAT_MODEL", "")
+	t.Setenv("OPENROUTER_TRANSLATION_MODEL", "")
+	t.Setenv("OPENROUTER_CHAT_MODEL", "")
 	t.Setenv("SECURE_COOKIES", "")
 
 	if err := godotenv.Overload(envPath); err != nil {
@@ -54,8 +58,8 @@ func TestLoadFromDotenvThenValidate(t *testing.T) {
 	if cfg.OpenAIAPIKey != "oa-key" {
 		t.Fatalf("unexpected OPENAI_API_KEY: %q", cfg.OpenAIAPIKey)
 	}
-	if cfg.OpenAIModel != "openai/gpt-4o-mini" {
-		t.Fatalf("unexpected OPENAI_MODEL: %q", cfg.OpenAIModel)
+	if cfg.OpenAITranslationModel != "openai/gpt-4o-mini" {
+		t.Fatalf("unexpected OPENAI_TRANSLATION_MODEL: %q", cfg.OpenAITranslationModel)
 	}
 	if cfg.SecureCookies {
 		t.Fatal("expected secure cookies false from dotenv")
@@ -72,7 +76,8 @@ func TestLoadCedictPathAliases(t *testing.T) {
 	t.Setenv("APP_PASSWORD", "pw")
 	t.Setenv("APP_SECRET_KEY", "secret")
 	t.Setenv("OPENAI_API_KEY", "oa-key")
-	t.Setenv("OPENAI_MODEL", "openai/gpt-4o-mini")
+	t.Setenv("OPENAI_TRANSLATION_MODEL", "openai/gpt-4o-mini")
+	t.Setenv("OPENAI_CHAT_MODEL", "openai/gpt-4o-mini")
 	t.Setenv("CEDICT_PATH", "")
 	t.Setenv("CEDIT_PATH", "alias/cedit_path.u8")
 	t.Setenv("CCEDICT_PATH", "")
@@ -93,7 +98,8 @@ func TestLoadValidatesOpenAIBaseURL(t *testing.T) {
 	t.Setenv("APP_PASSWORD", "pw")
 	t.Setenv("APP_SECRET_KEY", "secret")
 	t.Setenv("OPENAI_API_KEY", "oa-key")
-	t.Setenv("OPENAI_MODEL", "openai/gpt-4o-mini")
+	t.Setenv("OPENAI_TRANSLATION_MODEL", "openai/gpt-4o-mini")
+	t.Setenv("OPENAI_CHAT_MODEL", "openai/gpt-4o-mini")
 	t.Setenv("OPENAI_BASE_URL", "https://openrouter.ai/api/v1/chat/completions")
 
 	_, err := Load()
@@ -109,7 +115,8 @@ func TestLoadNormalizesOpenAIBaseURL(t *testing.T) {
 	t.Setenv("APP_PASSWORD", "pw")
 	t.Setenv("APP_SECRET_KEY", "secret")
 	t.Setenv("OPENAI_API_KEY", "oa-key")
-	t.Setenv("OPENAI_MODEL", "openai/gpt-4o-mini")
+	t.Setenv("OPENAI_TRANSLATION_MODEL", "openai/gpt-4o-mini")
+	t.Setenv("OPENAI_CHAT_MODEL", "openai/gpt-4o-mini")
 	t.Setenv("OPENAI_BASE_URL", "http://127.0.0.1:11434/v1/")
 
 	cfg, err := Load()
@@ -128,10 +135,12 @@ func TestLoadSupportsLegacyOpenRouterEnvNames(t *testing.T) {
 	t.Setenv("APP_PASSWORD", "pw")
 	t.Setenv("APP_SECRET_KEY", "secret")
 	t.Setenv("OPENAI_API_KEY", "")
-	t.Setenv("OPENAI_MODEL", "")
+	t.Setenv("OPENAI_TRANSLATION_MODEL", "")
+	t.Setenv("OPENAI_CHAT_MODEL", "")
 	t.Setenv("OPENAI_BASE_URL", "")
 	t.Setenv("OPENROUTER_API_KEY", "or-key")
-	t.Setenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")
+	t.Setenv("OPENROUTER_TRANSLATION_MODEL", "openai/gpt-4o-mini")
+	t.Setenv("OPENROUTER_CHAT_MODEL", "openai/gpt-4o-mini")
 	t.Setenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
 
 	cfg, err := Load()
@@ -141,8 +150,8 @@ func TestLoadSupportsLegacyOpenRouterEnvNames(t *testing.T) {
 	if cfg.OpenAIAPIKey != "or-key" {
 		t.Fatalf("unexpected API key from legacy env: %q", cfg.OpenAIAPIKey)
 	}
-	if cfg.OpenAIModel != "openai/gpt-4o-mini" {
-		t.Fatalf("unexpected model from legacy env: %q", cfg.OpenAIModel)
+	if cfg.OpenAITranslationModel != "openai/gpt-4o-mini" {
+		t.Fatalf("unexpected translation model from legacy env: %q", cfg.OpenAITranslationModel)
 	}
 	if cfg.OpenAIBaseURL != "https://openrouter.ai/api/v1" {
 		t.Fatalf("unexpected base URL from legacy env: %q", cfg.OpenAIBaseURL)

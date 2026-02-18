@@ -32,7 +32,7 @@ func main() {
 		log.Fatalf("failed to load config: %v", err)
 	}
 	if override := strings.TrimSpace(*modelOverride); override != "" {
-		cfg.OpenAIModel = override
+		cfg.OpenAITranslationModel = override
 	}
 
 	corpus, err := segmentation.LoadCasesFromCSV(*datasetPath)
@@ -41,7 +41,7 @@ func main() {
 	}
 	log.Printf("loaded sentence dataset: rows=%d path=%s", len(corpus), *datasetPath)
 
-	llm, err := segmentation.NewSegmentationLLM(cfg, cfg.OpenAIModel)
+	llm, err := segmentation.NewSegmentationLLM(cfg, cfg.OpenAITranslationModel)
 	if err != nil {
 		log.Fatalf("failed to initialize segmentation llm: %v", err)
 	}
@@ -55,7 +55,7 @@ func main() {
 	runs, summary, decision, err := segmentation.RunMultiSeedOptimization(
 		context.Background(),
 		llm,
-		cfg.OpenAIModel,
+		cfg.OpenAITranslationModel,
 		corpus,
 		*datasetPath,
 		*seeds,
@@ -70,7 +70,7 @@ func main() {
 
 	if err := segmentation.WriteOptimizationCampaignArtifacts(
 		*artifactsDir,
-		cfg.OpenAIModel,
+		cfg.OpenAITranslationModel,
 		*datasetPath,
 		gepaCfg,
 		runs,
@@ -82,7 +82,7 @@ func main() {
 
 	log.Printf(
 		"gepa campaign complete model=%s seeds=%d promotable=%d mean_acc_delta=%.3f promoted=%t artifacts_dir=%s",
-		cfg.OpenAIModel,
+		cfg.OpenAITranslationModel,
 		summary.Seeds,
 		summary.PromotableCount,
 		summary.AccuracyDeltaMean,

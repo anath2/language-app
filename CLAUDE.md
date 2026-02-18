@@ -54,17 +54,19 @@ cd server_old && uv run ruff check .
 **Package structure** (`internal/`):
 - `config/` — Environment variable loading with legacy key fallbacks (`OPENAI_*` preferred, `OPENROUTER_*` supported). Validates config at startup.
 - `http/` — Chi router setup, middleware, route registration, and handlers. `server.go` wires all dependencies via `handlers.ConfigureDependencies()`.
-- `http/handlers/` — Request handlers organized by domain. `deps.go` defines four store interfaces (`translationStore`, `textEventStore`, `srsStore`, `profileStore`) plus the queue manager and intelligence provider as package-level vars.
+- `http/handlers/` — Request handlers organized by domain. `deps.go` defines four store interfaces (`translationStore`, `textEventStore`, `srsStore`, `profileStore`) plus the queue manager and two intelligence providers (`translationProvider`, `chatProvider`) as package-level vars.
 - `http/routes/` — Route group registration: `auth.go`, `translation.go`, `api.go`, `admin.go`.
 - `http/middleware/` — Auth (session cookie-based) and timeout middleware. Timeout is skipped for SSE streaming endpoints.
-- `intelligence/` — LLM integration via dspy-go `modules.Predict` with structured output. `Provider` interface (`Segment`, `TranslateSegments`). `DSPyProvider` implementation loads CC-CEDICT dictionary for preferred pinyin and compiled GEPA instruction for segmentation. `guards.go` has CJK detection and segment skip logic. Response parsing handles multiple LLM output formats (JSON arrays, objects with "segments" key, markdown-fenced blocks, newline-separated, freeform text).
+- `intelligence/` — Defines `TranslationProvider` and `ChatProvider` interfaces plus shared request types (`ChatWithTranslationRequest`, `ChatSegmentContext`). No implementation lives here.
+  - `intelligence/translation/` — `DSPyProvider` implements `TranslationProvider` via dspy-go structured outputs. Also contains `parse.go` (response parsing), `guards.go` (CJK detection/segment skip), `cedict.go` (CC-CEDICT dictionary). Loads compiled GEPA instruction at startup.
+  - `intelligence/chat/` — `Provider` implements `ChatProvider` with real OpenAI SSE streaming: POSTs to `/chat/completions` with `stream: true`, reads response line-by-line with `bufio.Scanner`, calls `onChunk` per token.
 - `queue/` — In-memory job manager with lease-based processing (30s lease). Tracks running jobs with mutex. Resumes restartable jobs on startup. Segments input by sentence boundaries, processes one-by-one.
 - `translation/` — SQLite persistence layer split into four store files: `store_translation.go` (CRUD, progress), `store_vocab_srs.go` (SM-2 SRS scheduling, review queue, export/import), `store_text_events.go` (text records, events), `store_profile.go` (user profile). Common types in `store.go`.
 - `migrations/` — Goose migration runner. SQL files in `server/migrations/` (6 migrations, latest `00006_go_compat.sql`).
 
 **Key patterns**:
-- Dependency injection via `handlers.ConfigureDependencies(translationStore, textEventStore, srsStore, profileStore, manager, provider)` — package-level vars, not a DI container.
-- `intelligence.Provider` interface allows swapping LLM backends for testing.
+- Dependency injection via `handlers.ConfigureDependencies(translationStore, textEventStore, srsStore, profileStore, manager, translationProvider, chatProvider)` — package-level vars, not a DI container.
+- `intelligence.TranslationProvider` and `intelligence.ChatProvider` interfaces allow swapping LLM backends for testing.
 - Translation jobs flow: `POST /api/translations` → `store.Create()` → `manager.StartProcessing()` → background goroutine segments + translates one-by-one → progress saved to DB → SSE stream reads from DB.
 - Pure REST API — JSON-only auth (`POST /api/auth/login` with `{"password":"..."}`) returns `{"ok":true}` + Set-Cookie. All admin routes under `/api/admin/*`. OCR at `/api/extract-text`.
 - OpenAPI 3.2.0 spec at `server/docs/openapi.yaml`.
@@ -76,7 +78,8 @@ cd server_old && uv run ruff check .
 
 Requires `.env` file in `server/` (or repo root):
 - `OPENAI_API_KEY` (or legacy `OPENROUTER_API_KEY`) — Required for LLM
-- `OPENAI_MODEL` (or legacy `OPENROUTER_MODEL`) — Model identifier
+- `OPENAI_TRANSLATION_MODEL` (or legacy `OPENROUTER_TRANSLATION_MODEL`) — Model for segmentation/translation (dspy-go)
+- `OPENAI_CHAT_MODEL` (or legacy `OPENROUTER_CHAT_MODEL`) — Model for chat responses (raw SSE streaming)
 - `OPENAI_BASE_URL` (or legacy `OPENROUTER_BASE_URL`) — Must end with `/v1`. Defaults to `https://openrouter.ai/api/v1`
 - `APP_PASSWORD` — Required for authentication
 - `APP_SECRET_KEY` — Required for signing session cookies
@@ -96,7 +99,7 @@ When touching code under `server/internal/intelligence/`, run the upstream integ
 cd server && go test ./tests/integration -v -run '^TestUpstream' -args -upstream
 ```
 
-Key unit test files: `dspy_provider_endpoint_test.go` (URL normalization), `dspy_provider_parse_test.go` (response parsing), `guards_cedict_test.go` (segment filtering + dictionary), `queue/manager_test.go` (job lifecycle).
+Key unit test files: `intelligence/translation/cedict_test.go` (segment filtering + dictionary + pinyin), `intelligence/translation/parse_test.go` (response parsing), `queue/manager_test.go` (job lifecycle).
 
 ## Key Conventions
 

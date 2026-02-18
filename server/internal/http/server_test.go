@@ -24,16 +24,17 @@ func newTestConfig(t *testing.T) config.Config {
 	serverRoot := detectServerRoot(t)
 
 	return config.Config{
-		Addr:                 ":0",
-		AppPassword:          "test-password",
-		AppSecretKey:         "test-secret",
-		SessionMaxAgeSeconds: 3600,
-		SecureCookies:        false,
-		MigrationsDir:        filepath.Join(serverRoot, "migrations"),
-		TranslationDBPath:    filepath.Join(tmp, "translations.db"),
-		OpenAIAPIKey:         "test-openrouter-key",
-		OpenAIModel:          "openai/gpt-4o-mini",
-		OpenAIBaseURL:        "http://127.0.0.1:9/v1",
+		Addr:                   ":0",
+		AppPassword:            "test-password",
+		AppSecretKey:           "test-secret",
+		SessionMaxAgeSeconds:   3600,
+		SecureCookies:          false,
+		MigrationsDir:          filepath.Join(serverRoot, "migrations"),
+		TranslationDBPath:      filepath.Join(tmp, "translations.db"),
+		OpenAIAPIKey:           "test-openrouter-key",
+		OpenAITranslationModel: "openai/gpt-4o-mini",
+		OpenAIChatModel:        "openai/gpt-4o-mini",
+		OpenAIBaseURL:          "http://127.0.0.1:9/v1",
 	}
 }
 

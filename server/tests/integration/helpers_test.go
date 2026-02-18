@@ -21,17 +21,18 @@ func newLocalConfig(t *testing.T) config.Config {
 
 	serverRoot := detectServerRoot(t)
 	return config.Config{
-		Addr:                 ":0",
-		AppPassword:          "test-password",
-		AppSecretKey:         "test-secret",
-		SessionMaxAgeSeconds: 3600,
-		SecureCookies:        false,
-		MigrationsDir:        filepath.Join(serverRoot, "migrations"),
-		TranslationDBPath:    filepath.Join(t.TempDir(), "translations.db"),
-		CedictPath:           filepath.Join(serverRoot, "data", "cedict_ts.u8"),
-		OpenAIAPIKey:         "test-openai-key",
-		OpenAIModel:          "openai/gpt-4o-mini",
-		OpenAIBaseURL:        "http://127.0.0.1:9/v1",
+		Addr:                   ":0",
+		AppPassword:            "test-password",
+		AppSecretKey:           "test-secret",
+		SessionMaxAgeSeconds:   3600,
+		SecureCookies:          false,
+		MigrationsDir:          filepath.Join(serverRoot, "migrations"),
+		TranslationDBPath:      filepath.Join(t.TempDir(), "translations.db"),
+		CedictPath:             filepath.Join(serverRoot, "data", "cedict_ts.u8"),
+		OpenAIAPIKey:           "test-openai-key",
+		OpenAITranslationModel: "openai/gpt-4o-mini",
+		OpenAIChatModel:        "openai/gpt-4o-mini",
+		OpenAIBaseURL:          "http://127.0.0.1:9/v1",
 	}
 }
 
@@ -42,7 +43,8 @@ func newUpstreamConfig(t *testing.T) config.Config {
 	requireEnv(t, "APP_PASSWORD")
 	requireEnv(t, "APP_SECRET_KEY")
 	requireEnv(t, "OPENAI_API_KEY")
-	requireEnv(t, "OPENAI_MODEL")
+	requireEnv(t, "OPENAI_TRANSLATION_MODEL")
+	requireEnv(t, "OPENAI_CHAT_MODEL")
 	requireEnv(t, "OPENAI_BASE_URL")
 
 	secureCookies := true
@@ -67,18 +69,19 @@ func newUpstreamConfig(t *testing.T) config.Config {
 	}
 
 	return config.Config{
-		Addr:                 ":0",
-		AppPassword:          os.Getenv("APP_PASSWORD"),
-		AppSecretKey:         os.Getenv("APP_SECRET_KEY"),
-		SessionMaxAgeSeconds: sessionHours * 3600,
-		SecureCookies:        secureCookies,
-		MigrationsDir:        filepath.Join(serverRoot, "migrations"),
-		TranslationDBPath:    filepath.Join(t.TempDir(), "translations.db"),
-		CedictPath:           cedictPath,
-		OpenAIAPIKey:         os.Getenv("OPENAI_API_KEY"),
-		OpenAIModel:          os.Getenv("OPENAI_MODEL"),
-		OpenAIBaseURL:        os.Getenv("OPENAI_BASE_URL"),
-		OpenAIDebugLog:       strings.EqualFold(strings.TrimSpace(os.Getenv("OPENAI_DEBUG_LOG")), "true"),
+		Addr:                   ":0",
+		AppPassword:            os.Getenv("APP_PASSWORD"),
+		AppSecretKey:           os.Getenv("APP_SECRET_KEY"),
+		SessionMaxAgeSeconds:   sessionHours * 3600,
+		SecureCookies:          secureCookies,
+		MigrationsDir:          filepath.Join(serverRoot, "migrations"),
+		TranslationDBPath:      filepath.Join(t.TempDir(), "translations.db"),
+		CedictPath:             cedictPath,
+		OpenAIAPIKey:           os.Getenv("OPENAI_API_KEY"),
+		OpenAITranslationModel: os.Getenv("OPENAI_TRANSLATION_MODEL"),
+		OpenAIChatModel:        os.Getenv("OPENAI_CHAT_MODEL"),
+		OpenAIBaseURL:          os.Getenv("OPENAI_BASE_URL"),
+		OpenAIDebugLog:         strings.EqualFold(strings.TrimSpace(os.Getenv("OPENAI_DEBUG_LOG")), "true"),
 	}
 }
 

@@ -20,11 +20,15 @@ type ChatWithTranslationRequest struct {
 	History         []translation.ChatMessage
 }
 
-// Provider defines the translation intelligence contract.
-type Provider interface {
+// TranslationProvider defines the translation intelligence contract.
+type TranslationProvider interface {
 	Segment(ctx context.Context, text string) ([]string, error)
 	TranslateSegments(ctx context.Context, segments []string, sentenceContext string) ([]translation.SegmentResult, error)
 	TranslateFull(ctx context.Context, text string) (string, error)
 	LookupCharacter(char string) (pinyin string, english string, found bool)
+}
+
+// ChatProvider defines the chat intelligence contract.
+type ChatProvider interface {
 	ChatWithTranslationContext(ctx context.Context, req ChatWithTranslationRequest, onChunk func(string) error) (string, error)
 }

@@ -103,7 +103,7 @@ func CreateChatMessage(w http.ResponseWriter, r *http.Request) {
 	})
 	flusher.Flush()
 
-	aiText, err := sharedProvider.ChatWithTranslationContext(r.Context(), intelligence.ChatWithTranslationRequest{
+	aiText, err := chatProvider.ChatWithTranslationContext(r.Context(), intelligence.ChatWithTranslationRequest{
 		TranslationText: item.InputText,
 		UserMessage:     req.Message,
 		Selected:        selectedContext,
