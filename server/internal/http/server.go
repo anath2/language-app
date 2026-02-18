@@ -9,7 +9,8 @@ import (
 	"github.com/anath2/language-app/internal/http/handlers"
 	"github.com/anath2/language-app/internal/http/middleware"
 	"github.com/anath2/language-app/internal/http/routes"
-	"github.com/anath2/language-app/internal/intelligence"
+	ilchat "github.com/anath2/language-app/internal/intelligence/chat"
+	iltrans "github.com/anath2/language-app/internal/intelligence/translation"
 	"github.com/anath2/language-app/internal/migrations"
 	"github.com/anath2/language-app/internal/queue"
 	"github.com/anath2/language-app/internal/translation"
@@ -41,16 +42,19 @@ func NewRouter(cfg config.Config) stdhttp.Handler {
 	textEventStore := translation.NewTextEventStore(db)
 	srsStore := translation.NewSRSStore(db)
 	profileStore := translation.NewProfileStore(db)
-	provider, err := intelligence.NewDSPyProvider(cfg)
+
+	translationProv, err := iltrans.NewDSPyProvider(cfg)
 	if err != nil {
-		log.Printf("failed to initialize intelligence provider: %v", err)
+		log.Printf("failed to initialize translation provider: %v", err)
 		return stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 			w.WriteHeader(stdhttp.StatusInternalServerError)
 			_, _ = w.Write([]byte("Server initialization error"))
 		})
 	}
-	manager := queue.NewManager(translationStore, provider)
-	handlers.ConfigureDependencies(translationStore, textEventStore, srsStore, profileStore, manager, provider)
+	chatProv := ilchat.New(cfg)
+
+	manager := queue.NewManager(translationStore, translationProv)
+	handlers.ConfigureDependencies(translationStore, textEventStore, srsStore, profileStore, manager, translationProv, chatProv)
 	manager.ResumeRestartableJobs()
 
 	r := chi.NewRouter()

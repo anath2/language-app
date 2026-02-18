@@ -12,18 +12,19 @@ import (
 const defaultSessionMaxAgeHours = 168
 
 type Config struct {
-	Addr                 string
-	AppPassword          string
-	AppSecretKey         string
-	SessionMaxAgeSeconds int
-	SecureCookies        bool
-	MigrationsDir        string
-	TranslationDBPath    string
-	CedictPath           string
-	OpenAIAPIKey         string
-	OpenAIModel          string
-	OpenAIBaseURL        string
-	OpenAIDebugLog       bool
+	Addr                   string
+	AppPassword            string
+	AppSecretKey           string
+	SessionMaxAgeSeconds   int
+	SecureCookies          bool
+	MigrationsDir          string
+	TranslationDBPath      string
+	CedictPath             string
+	OpenAIAPIKey           string
+	OpenAITranslationModel string
+	OpenAIChatModel        string
+	OpenAIBaseURL          string
+	OpenAIDebugLog         bool
 }
 
 func Load() (Config, error) {
@@ -40,10 +41,15 @@ func Load() (Config, error) {
 	if openAIAPIKey == "" {
 		return Config{}, fmt.Errorf("OPENAI_API_KEY environment variable is required (or legacy OPENROUTER_API_KEY)")
 	}
-	openAIModel := envFirstOrDefault([]string{"OPENAI_MODEL", "OPENROUTER_MODEL"}, "")
-	if openAIModel == "" {
-		return Config{}, fmt.Errorf("OPENAI_MODEL environment variable is required (or legacy OPENROUTER_MODEL)")
+	openAITranslationModel := envFirstOrDefault([]string{"OPENAI_TRANSLATION_MODEL", "OPENROUTER_TRANSLATION_MODEL"}, "")
+	if openAITranslationModel == "" {
+		return Config{}, fmt.Errorf("OPENAI_TRANSLATION_MODEL environment variable is required (or legacy OPENROUTER_TRANSLATION_MODEL)")
 	}
+	openAIChatModel := envFirstOrDefault([]string{"OPENAI_CHAT_MODEL", "OPENROUTER_CHAT_MODEL"}, "")
+	if openAIChatModel == "" {
+		return Config{}, fmt.Errorf("OPENAI_CHAT_MODEL environment variable is required (or legacy OPENROUTER_CHAT_MODEL)")
+	}
+
 	openAIBaseURL, err := normalizeAndValidateOpenAIBaseURL(
 		envFirstOrDefault([]string{"OPENAI_BASE_URL", "OPENROUTER_BASE_URL"}, "https://openrouter.ai/api/v1"),
 	)
@@ -76,18 +82,19 @@ func Load() (Config, error) {
 	}
 
 	return Config{
-		Addr:                 addr,
-		AppPassword:          appPassword,
-		AppSecretKey:         appSecretKey,
-		SessionMaxAgeSeconds: sessionHours * 3600,
-		SecureCookies:        secureCookies,
-		MigrationsDir:        envOrDefault("LANGUAGE_APP_MIGRATIONS_DIR", filepath.Join(repoRoot, "server", "migrations")),
-		TranslationDBPath:    envOrDefault("LANGUAGE_APP_DB_PATH", filepath.Join(repoRoot, "server", "data", "language_app.db")),
-		CedictPath:           envFirstOrDefault([]string{"CEDICT_PATH", "CEDIT_PATH", "CCEDICT_PATH"}, filepath.Join(repoRoot, "server", "data", "cedict_ts.u8")),
-		OpenAIAPIKey:         openAIAPIKey,
-		OpenAIModel:          openAIModel,
-		OpenAIBaseURL:        openAIBaseURL,
-		OpenAIDebugLog:       strings.EqualFold(envFirstOrDefault([]string{"OPENAI_DEBUG_LOG", "OPENROUTER_DEBUG_LOG"}, ""), "true"),
+		Addr:                   addr,
+		AppPassword:            appPassword,
+		AppSecretKey:           appSecretKey,
+		SessionMaxAgeSeconds:   sessionHours * 3600,
+		SecureCookies:          secureCookies,
+		MigrationsDir:          envOrDefault("LANGUAGE_APP_MIGRATIONS_DIR", filepath.Join(repoRoot, "server", "migrations")),
+		TranslationDBPath:      envOrDefault("LANGUAGE_APP_DB_PATH", filepath.Join(repoRoot, "server", "data", "language_app.db")),
+		CedictPath:             envFirstOrDefault([]string{"CEDICT_PATH", "CEDIT_PATH", "CCEDICT_PATH"}, filepath.Join(repoRoot, "server", "data", "cedict_ts.u8")),
+		OpenAIAPIKey:           openAIAPIKey,
+		OpenAITranslationModel: openAITranslationModel,
+		OpenAIChatModel:        openAIChatModel,
+		OpenAIBaseURL:          openAIBaseURL,
+		OpenAIDebugLog:         strings.EqualFold(envFirstOrDefault([]string{"OPENAI_DEBUG_LOG", "OPENROUTER_DEBUG_LOG"}, ""), "true"),
 	}, nil
 }
 

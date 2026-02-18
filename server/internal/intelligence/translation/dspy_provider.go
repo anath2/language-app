@@ -1,5 +1,7 @@
-// TODO: prompt hardeining for structured outputs
-package intelligence
+// TODO: Add a way to allow the user to create new segments for AI interactions in chat
+
+// TODO: prompt hardening for structured outputs
+package translation
 
 import (
 	"bytes"
@@ -18,7 +20,7 @@ import (
 	"github.com/XiaoConstantine/dspy-go/pkg/llms"
 	"github.com/XiaoConstantine/dspy-go/pkg/modules"
 	"github.com/anath2/language-app/internal/config"
-	"github.com/anath2/language-app/internal/translation"
+	store "github.com/anath2/language-app/internal/translation"
 )
 
 const llmTimeout = 10 * time.Minute
@@ -35,7 +37,7 @@ type DSPyProvider struct {
 func NewDSPyProvider(cfg config.Config) (*DSPyProvider, error) {
 	llms.EnsureFactory()
 
-	modelID := core.ModelID(strings.TrimSpace(cfg.OpenAIModel))
+	modelID := core.ModelID(strings.TrimSpace(cfg.OpenAITranslationModel))
 	baseURL, path, err := normalizeOpenAIEndpoint(cfg.OpenAIBaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("invalid OPENAI_BASE_URL %q: %w", cfg.OpenAIBaseURL, err)
@@ -185,15 +187,15 @@ func (p *DSPyProvider) Segment(ctx context.Context, text string) ([]string, erro
 	return segments, nil
 }
 
-func (p *DSPyProvider) TranslateSegments(ctx context.Context, segments []string, sentenceContext string) ([]translation.SegmentResult, error) {
-	out := make([]translation.SegmentResult, 0, len(segments))
+func (p *DSPyProvider) TranslateSegments(ctx context.Context, segments []string, sentenceContext string) ([]store.SegmentResult, error) {
+	out := make([]store.SegmentResult, 0, len(segments))
 	for _, segment := range segments {
 		segment = strings.TrimSpace(segment)
 		if segment == "" {
 			continue
 		}
 		if shouldSkipSegment(segment) {
-			out = append(out, translation.SegmentResult{
+			out = append(out, store.SegmentResult{
 				Segment: segment,
 				Pinyin:  "",
 				English: "",
@@ -204,7 +206,7 @@ func (p *DSPyProvider) TranslateSegments(ctx context.Context, segments []string,
 		pinyin := p.resolvePinyin(ctx, segment, sentenceContext)
 		english := p.resolveMeaning(ctx, segment, sentenceContext)
 
-		out = append(out, translation.SegmentResult{
+		out = append(out, store.SegmentResult{
 			Segment: segment,
 			Pinyin:  pinyin,
 			English: english,

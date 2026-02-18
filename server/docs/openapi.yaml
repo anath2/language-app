@@ -282,6 +282,81 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  /api/translations/{translation_id}/chat/new:
+    post:
+      tags: [translations]
+      summary: Create a chat message and stream AI response via SSE
+      operationId: createTranslationChatMessage
+      parameters:
+        - $ref: "#/components/parameters/translationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatCreateRequest"
+      responses:
+        "200":
+          description: |
+            Server-Sent Events stream for chat completion. Events are JSON objects:
+            - `start` — includes `translation_id`, `chat_id`, `user_message_id`
+            - `chunk` — includes incremental `delta` text
+            - `complete` — includes `message_id` and final `content`
+            - `error` — includes `message`
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: SSE stream of JSON events
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/translations/{translation_id}/chat/list:
+    get:
+      tags: [translations]
+      summary: List chat messages for a translation
+      operationId: listTranslationChatMessages
+      parameters:
+        - $ref: "#/components/parameters/translationId"
+      responses:
+        "200":
+          description: Chat thread messages ordered by insertion
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/translations/{translation_id}/chat/clear:
+    post:
+      tags: [translations]
+      summary: Clear all chat messages for a translation
+      operationId: clearTranslationChatMessages
+      parameters:
+        - $ref: "#/components/parameters/translationId"
+      responses:
+        "200":
+          description: Chat cleared
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /api/texts:
     post:
       tags: [texts]
@@ -975,6 +1050,53 @@ components:
           type: string
         english:
           type: string
+
+    ChatCreateRequest:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+        selected_segment_ids:
+          type: array
+          items:
+            type: string
+
+    ChatMessage:
+      type: object
+      required: [id, chat_id, translation_id, message_idx, role, content, selected_segment_ids, created_at]
+      properties:
+        id:
+          type: string
+        chat_id:
+          type: string
+        translation_id:
+          type: string
+        message_idx:
+          type: integer
+        role:
+          type: string
+          enum: [user, ai]
+        content:
+          type: string
+        selected_segment_ids:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+
+    ChatListResponse:
+      type: object
+      required: [chat_id, messages]
+      properties:
+        chat_id:
+          type: string
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChatMessage"
 
     VocabSRSItem:
       type: object

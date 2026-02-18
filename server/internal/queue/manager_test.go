@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/anath2/language-app/internal/intelligence"
 	"github.com/anath2/language-app/internal/migrations"
 	"github.com/anath2/language-app/internal/translation"
 )
@@ -56,6 +57,14 @@ func (m mockProvider) TranslateSegments(_ context.Context, segments []string, _ 
 		})
 	}
 	return out, nil
+}
+
+func (m mockProvider) ChatWithTranslationContext(_ context.Context, req intelligence.ChatWithTranslationRequest, onChunk func(string) error) (string, error) {
+	reply := "mock chat response to: " + req.UserMessage
+	if onChunk != nil {
+		_ = onChunk(reply)
+	}
+	return reply, nil
 }
 
 func TestQueueProgressLifecycle(t *testing.T) {

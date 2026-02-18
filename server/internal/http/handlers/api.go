@@ -224,7 +224,7 @@ func SaveVocab(w http.ResponseWriter, r *http.Request) {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": err.Error()})
 		return
 	}
-	_ = sharedSRS.ExtractAndLinkCharacters(id, req.Headword, sharedProvider.LookupCharacter)
+	_ = sharedSRS.ExtractAndLinkCharacters(id, req.Headword, translationProvider.LookupCharacter)
 	WriteJSON(w, http.StatusOK, saveVocabResponse{VocabItemID: id})
 }
 
@@ -420,7 +420,7 @@ func TranslateBatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	translations := make([]translationResult, 0, len(req.Segments))
-	segmentResults, err := sharedProvider.TranslateSegments(context.Background(), req.Segments, derefOr(req.Context, ""))
+	segmentResults, err := translationProvider.TranslateSegments(context.Background(), req.Segments, derefOr(req.Context, ""))
 	if err != nil {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": err.Error()})
 		return

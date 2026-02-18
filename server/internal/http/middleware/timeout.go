@@ -22,5 +22,6 @@ func TimeoutUnlessStream(timeout time.Duration) func(http.Handler) http.Handler 
 }
 
 func isTranslationStreamPath(path string) bool {
-	return strings.HasPrefix(path, "/api/translations/") && strings.HasSuffix(path, "/stream")
+	return (strings.HasPrefix(path, "/api/translations/") && strings.HasSuffix(path, "/stream")) ||
+		(strings.HasPrefix(path, "/api/translations/") && strings.HasSuffix(path, "/chat/new"))
 }

@@ -2,6 +2,7 @@ package translation
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -376,6 +377,376 @@ func (s *TranslationStore) GetProgressSnapshot(id string) (ProgressSnapshot, boo
 	}
 
 	return snapshot, true
+}
+
+func (s *TranslationStore) EnsureChatForTranslation(translationID string) (ChatThread, error) {
+	for i := 0; i < 8; i++ {
+		thread, err := s.ensureChatForTranslationOnce(translationID)
+		if err == nil {
+			return thread, nil
+		}
+		if isDBLocked(err) {
+			time.Sleep(10 * time.Millisecond)
+			continue
+		}
+		return ChatThread{}, err
+	}
+	return ChatThread{}, fmt.Errorf("ensure chat: database remained locked")
+}
+
+func (s *TranslationStore) AppendChatMessage(translationID string, role string, content string, selectedSegmentIDs []string) (ChatMessage, error) {
+	role = strings.TrimSpace(strings.ToLower(role))
+	if role != ChatRoleUser && role != ChatRoleAI {
+		return ChatMessage{}, errors.New("role must be either user or ai")
+	}
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return ChatMessage{}, errors.New("content is required")
+	}
+	normalizedIDs := make([]string, 0, len(selectedSegmentIDs))
+	for _, raw := range selectedSegmentIDs {
+		id := strings.TrimSpace(raw)
+		if id == "" {
+			continue
+		}
+		normalizedIDs = append(normalizedIDs, id)
+	}
+	selectedPayload, err := json.Marshal(normalizedIDs)
+	if err != nil {
+		return ChatMessage{}, fmt.Errorf("marshal selected segment ids: %w", err)
+	}
+
+	for i := 0; i < 8; i++ {
+		msg, err := s.appendChatMessageOnce(translationID, role, content, string(selectedPayload))
+		if err == nil {
+			msg.SelectedSegmentIDs = normalizedIDs
+			return msg, nil
+		}
+		if isDBLocked(err) {
+			time.Sleep(10 * time.Millisecond)
+			continue
+		}
+		return ChatMessage{}, err
+	}
+	return ChatMessage{}, fmt.Errorf("append chat message: database remained locked")
+}
+
+func (s *TranslationStore) ListChatMessages(translationID string) ([]ChatMessage, error) {
+	for i := 0; i < 8; i++ {
+		msgs, err := s.listChatMessagesOnce(translationID)
+		if err == nil {
+			return msgs, nil
+		}
+		if isDBLocked(err) {
+			time.Sleep(10 * time.Millisecond)
+			continue
+		}
+		return nil, err
+	}
+	return nil, fmt.Errorf("list chat messages: database remained locked")
+}
+
+func (s *TranslationStore) ClearChatMessages(translationID string) error {
+	for i := 0; i < 8; i++ {
+		err := s.clearChatMessagesOnce(translationID)
+		if err == nil {
+			return nil
+		}
+		if isDBLocked(err) {
+			time.Sleep(10 * time.Millisecond)
+			continue
+		}
+		return err
+	}
+	return fmt.Errorf("clear chat messages: database remained locked")
+}
+
+func (s *TranslationStore) LoadSelectedSegmentsByIDs(translationID string, segmentIDs []string) ([]SegmentResult, error) {
+	if len(segmentIDs) == 0 {
+		return []SegmentResult{}, nil
+	}
+	normalizedIDs := make([]string, 0, len(segmentIDs))
+	for _, raw := range segmentIDs {
+		id := strings.TrimSpace(raw)
+		if id == "" {
+			continue
+		}
+		normalizedIDs = append(normalizedIDs, id)
+	}
+	if len(normalizedIDs) == 0 {
+		return []SegmentResult{}, nil
+	}
+
+	uniqueIDs := make([]string, 0, len(normalizedIDs))
+	seen := make(map[string]struct{}, len(normalizedIDs))
+	for _, id := range normalizedIDs {
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		uniqueIDs = append(uniqueIDs, id)
+	}
+
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(uniqueIDs)), ",")
+	args := make([]any, 0, len(uniqueIDs)+1)
+	args = append(args, translationID)
+	for _, id := range uniqueIDs {
+		args = append(args, id)
+	}
+	query := fmt.Sprintf(
+		`SELECT id, segment_text, pinyin, english
+		 FROM translation_segments
+		 WHERE translation_id = ? AND id IN (%s)`,
+		placeholders,
+	)
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("load selected segments: %w", err)
+	}
+	defer rows.Close()
+
+	byID := make(map[string]SegmentResult, len(uniqueIDs))
+	for rows.Next() {
+		var id string
+		var seg SegmentResult
+		if err := rows.Scan(&id, &seg.Segment, &seg.Pinyin, &seg.English); err != nil {
+			return nil, fmt.Errorf("scan selected segment: %w", err)
+		}
+		byID[id] = seg
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate selected segments: %w", err)
+	}
+
+	if len(byID) != len(uniqueIDs) {
+		return nil, ErrNotFound
+	}
+	out := make([]SegmentResult, 0, len(normalizedIDs))
+	for _, id := range normalizedIDs {
+		out = append(out, byID[id])
+	}
+	return out, nil
+}
+
+func (s *TranslationStore) ensureChatForTranslationOnce(translationID string) (ChatThread, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return ChatThread{}, fmt.Errorf("begin ensure chat tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	var exists int
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM translations WHERE id = ?`, translationID).Scan(&exists); err != nil {
+		return ChatThread{}, fmt.Errorf("check translation exists: %w", err)
+	}
+	if exists == 0 {
+		return ChatThread{}, ErrNotFound
+	}
+
+	thread, err := loadChatThreadTx(tx, translationID)
+	if err == nil {
+		return thread, tx.Commit()
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return ChatThread{}, err
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	id, err := newID()
+	if err != nil {
+		return ChatThread{}, fmt.Errorf("new chat id: %w", err)
+	}
+	if _, err := tx.Exec(
+		`INSERT INTO translation_chats (id, translation_id, created_at, updated_at)
+		 VALUES (?, ?, ?, ?)`,
+		id,
+		translationID,
+		now,
+		now,
+	); err != nil {
+		return ChatThread{}, fmt.Errorf("insert translation chat: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return ChatThread{}, fmt.Errorf("commit ensure chat tx: %w", err)
+	}
+	return ChatThread{
+		ID:            id,
+		TranslationID: translationID,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}, nil
+}
+
+func (s *TranslationStore) appendChatMessageOnce(translationID string, role string, content string, selectedSegmentIDsJSON string) (ChatMessage, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return ChatMessage{}, fmt.Errorf("begin append chat message tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	thread, err := loadChatThreadTx(tx, translationID)
+	if errors.Is(err, sql.ErrNoRows) {
+		now := time.Now().UTC().Format(time.RFC3339Nano)
+		chatID, idErr := newID()
+		if idErr != nil {
+			return ChatMessage{}, fmt.Errorf("new chat id: %w", idErr)
+		}
+		if _, existsErr := tx.Exec(
+			`INSERT INTO translation_chats (id, translation_id, created_at, updated_at)
+			 SELECT ?, ?, ?, ?
+			 WHERE EXISTS(SELECT 1 FROM translations WHERE id = ?)`,
+			chatID,
+			translationID,
+			now,
+			now,
+			translationID,
+		); existsErr != nil {
+			return ChatMessage{}, fmt.Errorf("insert translation chat: %w", existsErr)
+		}
+		thread, err = loadChatThreadTx(tx, translationID)
+	}
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ChatMessage{}, ErrNotFound
+		}
+		return ChatMessage{}, err
+	}
+
+	var maxIdx sql.NullInt64
+	if err := tx.QueryRow(
+		`SELECT MAX(message_idx) FROM translation_chat_messages WHERE translation_id = ?`,
+		translationID,
+	).Scan(&maxIdx); err != nil {
+		return ChatMessage{}, fmt.Errorf("query max message idx: %w", err)
+	}
+	nextIdx := 0
+	if maxIdx.Valid {
+		nextIdx = int(maxIdx.Int64) + 1
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	messageID, err := newID()
+	if err != nil {
+		return ChatMessage{}, fmt.Errorf("new chat message id: %w", err)
+	}
+	if _, err := tx.Exec(
+		`INSERT INTO translation_chat_messages
+		   (id, chat_id, translation_id, message_idx, role, content, selected_segment_ids_json, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		messageID,
+		thread.ID,
+		translationID,
+		nextIdx,
+		role,
+		content,
+		selectedSegmentIDsJSON,
+		now,
+	); err != nil {
+		return ChatMessage{}, fmt.Errorf("insert chat message: %w", err)
+	}
+	if _, err := tx.Exec(
+		`UPDATE translation_chats SET updated_at = ? WHERE id = ?`,
+		now,
+		thread.ID,
+	); err != nil {
+		return ChatMessage{}, fmt.Errorf("touch chat updated_at: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return ChatMessage{}, fmt.Errorf("commit append chat message tx: %w", err)
+	}
+
+	return ChatMessage{
+		ID:            messageID,
+		ChatID:        thread.ID,
+		TranslationID: translationID,
+		MessageIdx:    nextIdx,
+		Role:          role,
+		Content:       content,
+		CreatedAt:     now,
+	}, nil
+}
+
+func (s *TranslationStore) listChatMessagesOnce(translationID string) ([]ChatMessage, error) {
+	thread, err := s.EnsureChatForTranslation(translationID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.db.Query(
+		`SELECT id, message_idx, role, content, selected_segment_ids_json, created_at
+		 FROM translation_chat_messages
+		 WHERE translation_id = ?
+		 ORDER BY message_idx ASC`,
+		translationID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list chat messages query: %w", err)
+	}
+	defer rows.Close()
+
+	out := make([]ChatMessage, 0)
+	for rows.Next() {
+		var msg ChatMessage
+		var selectedJSON string
+		if err := rows.Scan(&msg.ID, &msg.MessageIdx, &msg.Role, &msg.Content, &selectedJSON, &msg.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan chat message: %w", err)
+		}
+		msg.ChatID = thread.ID
+		msg.TranslationID = translationID
+		var selected []string
+		if err := json.Unmarshal([]byte(selectedJSON), &selected); err != nil {
+			return nil, fmt.Errorf("decode selected segment ids: %w", err)
+		}
+		msg.SelectedSegmentIDs = selected
+		out = append(out, msg)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate chat messages: %w", err)
+	}
+	return out, nil
+}
+
+func (s *TranslationStore) clearChatMessagesOnce(translationID string) error {
+	thread, err := s.EnsureChatForTranslation(translationID)
+	if err != nil {
+		return err
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin clear chat messages tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec(
+		`DELETE FROM translation_chat_messages WHERE translation_id = ?`,
+		translationID,
+	); err != nil {
+		return fmt.Errorf("clear chat messages: %w", err)
+	}
+	if _, err := tx.Exec(
+		`UPDATE translation_chats SET updated_at = ? WHERE id = ?`,
+		time.Now().UTC().Format(time.RFC3339Nano),
+		thread.ID,
+	); err != nil {
+		return fmt.Errorf("touch chat updated_at on clear: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit clear chat messages tx: %w", err)
+	}
+	return nil
+}
+
+func loadChatThreadTx(tx *sql.Tx, translationID string) (ChatThread, error) {
+	var thread ChatThread
+	row := tx.QueryRow(
+		`SELECT id, translation_id, created_at, updated_at
+		 FROM translation_chats
+		 WHERE translation_id = ?`,
+		translationID,
+	)
+	if err := row.Scan(&thread.ID, &thread.TranslationID, &thread.CreatedAt, &thread.UpdatedAt); err != nil {
+		return ChatThread{}, err
+	}
+	return thread, nil
 }
 
 func (s *TranslationStore) getOnce(id string) (Translation, error) {

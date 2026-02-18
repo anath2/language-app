@@ -30,7 +30,7 @@ type Progress struct {
 
 type Manager struct {
 	store    translationStore
-	provider intelligence.Provider
+	provider intelligence.TranslationProvider
 	mu       sync.RWMutex
 	running  map[string]struct{}
 }
@@ -55,7 +55,7 @@ type queuedSegment struct {
 
 const jobLeaseDuration = 30 * time.Second
 
-func NewManager(store translationStore, provider intelligence.Provider) *Manager {
+func NewManager(store translationStore, provider intelligence.TranslationProvider) *Manager {
 	return &Manager{
 		store:    store,
 		provider: provider,

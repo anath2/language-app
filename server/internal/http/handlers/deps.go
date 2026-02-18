@@ -14,6 +14,11 @@ type translationStore interface {
 	Get(id string) (translation.Translation, bool)
 	Delete(id string) bool
 	UpdateTranslationSegments(translationID string, paragraphIdx int, segments []translation.SegmentResult) error
+	EnsureChatForTranslation(translationID string) (translation.ChatThread, error)
+	AppendChatMessage(translationID string, role string, content string, selectedSegmentIDs []string) (translation.ChatMessage, error)
+	ListChatMessages(translationID string) ([]translation.ChatMessage, error)
+	ClearChatMessages(translationID string) error
+	LoadSelectedSegmentsByIDs(translationID string, segmentIDs []string) ([]translation.SegmentResult, error)
 }
 
 type textEventStore interface {
@@ -49,26 +54,29 @@ var sharedTextEvents textEventStore
 var sharedSRS srsStore
 var sharedProfile profileStore
 var sharedQueue *queue.Manager
-var sharedProvider intelligence.Provider
+var translationProvider intelligence.TranslationProvider
+var chatProvider intelligence.ChatProvider
 
 func ConfigureDependencies(
-	translationStore translationStore,
-	textEventStore textEventStore,
-	srsStore srsStore,
-	profileStore profileStore,
+	ts translationStore,
+	te textEventStore,
+	ss srsStore,
+	ps profileStore,
 	manager *queue.Manager,
-	provider intelligence.Provider,
+	tp intelligence.TranslationProvider,
+	cp intelligence.ChatProvider,
 ) {
-	sharedTranslations = translationStore
-	sharedTextEvents = textEventStore
-	sharedSRS = srsStore
-	sharedProfile = profileStore
+	sharedTranslations = ts
+	sharedTextEvents = te
+	sharedSRS = ss
+	sharedProfile = ps
 	sharedQueue = manager
-	sharedProvider = provider
+	translationProvider = tp
+	chatProvider = cp
 }
 
 func validateDependencies() error {
-	if sharedTranslations == nil || sharedTextEvents == nil || sharedSRS == nil || sharedProfile == nil || sharedQueue == nil || sharedProvider == nil {
+	if sharedTranslations == nil || sharedTextEvents == nil || sharedSRS == nil || sharedProfile == nil || sharedQueue == nil || translationProvider == nil || chatProvider == nil {
 		return errors.New("application dependencies are not configured")
 	}
 	return nil
