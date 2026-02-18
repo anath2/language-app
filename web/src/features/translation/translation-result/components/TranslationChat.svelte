@@ -1,6 +1,7 @@
 <script lang="ts">
 import Button from '@/ui/Button.svelte';
 import Sidepane from '@/ui/Sidepane.svelte';
+import Loader from '@/ui/Loader.svelte';
 import TextArea from '@/ui/TextArea.svelte';
 import { getJson, postJson, postJsonStream } from '@/lib/api';
 import type {
@@ -134,7 +135,11 @@ async function clearChat() {
             <div class="chat-bubble-content">{msg.content}</div>
           </div>
         {/each}
-        {#if streamingContent}
+        {#if streaming && !streamingContent}
+          <div class="chat-bubble chat-bubble-ai">
+            <Loader variant="chat" />
+          </div>
+        {:else if streamingContent}
           <div class="chat-bubble chat-bubble-ai chat-bubble-streaming">
             <div class="chat-bubble-content">{streamingContent}</div>
           </div>
