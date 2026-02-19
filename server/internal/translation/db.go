@@ -56,6 +56,9 @@ func verifySchema(db *sql.DB) error {
 		"vocab_lookups",
 		"user_profile",
 		"character_word_links",
+		"discovery_preferences",
+		"discovery_runs",
+		"article_recommendations",
 	}
 	for _, table := range requiredTables {
 		var exists int

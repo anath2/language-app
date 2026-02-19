@@ -9,8 +9,9 @@ type HomeRoute = { page: 'home' };
 type TranslationRoute = { page: 'translation'; id: string };
 type VocabRoute = { page: 'vocab' };
 type AdminRoute = { page: 'admin' };
+type DiscoverRoute = { page: 'discover' };
 type LoginRoute = { page: 'login'; returnUrl?: string };
-type Route = HomeRoute | TranslationRoute | VocabRoute | AdminRoute | LoginRoute;
+type Route = HomeRoute | TranslationRoute | VocabRoute | AdminRoute | DiscoverRoute | LoginRoute;
 
 /**
  * Router class managing navigation and route state.
@@ -75,6 +76,14 @@ class Router {
   }
 
   /**
+   * Navigate to the discover/explore page.
+   */
+  navigateToDiscover() {
+    this.route = { page: 'discover' };
+    history.pushState(null, '', '/discover');
+  }
+
+  /**
    * Navigate to the login page with optional return URL.
    * Uses hash-based navigation for login to avoid backend auth issues.
    * @param returnUrl - The URL to redirect to after login
@@ -113,6 +122,7 @@ class Router {
   private parsePath(pathname: string): Route {
     if (pathname === '/vocab') return { page: 'vocab' };
     if (pathname === '/admin') return { page: 'admin' };
+    if (pathname === '/discover') return { page: 'discover' };
     const match = pathname.match(/^\/translations\/([^/]+)\/?$/);
     if (match) return { page: 'translation', id: match[1] };
     return { page: 'home' };

@@ -7,6 +7,7 @@ import NavBar from '@/ui/NavBar.svelte';
 import Admin from '@/features/admin/components/Admin.svelte';
 import Login from '@/features/auth/components/Login.svelte';
 import { auth } from '@/features/auth/stores/authStore.svelte';
+import DiscoverIndex from '@/features/discovery/Index.svelte';
 import TranslateTextIndex from '@/features/translation/translation-home/Index.svelte';
 import TranslationResultIndex from '@/features/translation/translation-result/Index.svelte';
 import { router } from '@/lib/router.svelte';
@@ -50,6 +51,12 @@ function backToList() {
     <!-- Admin Page -->
     <div class="page-container max-w-4xl">
       <Admin />
+    </div>
+
+{:else if currentPage === "discover"}
+    <!-- Discover/Explore Page -->
+    <div class="page-container">
+      <DiscoverIndex />
     </div>
   {/if}
 

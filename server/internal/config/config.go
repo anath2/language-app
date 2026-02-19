@@ -25,6 +25,7 @@ type Config struct {
 	OpenAIChatModel        string
 	OpenAIBaseURL          string
 	OpenAIDebugLog         bool
+	DiscoveryIntervalHours int
 }
 
 func Load() (Config, error) {
@@ -81,6 +82,15 @@ func Load() (Config, error) {
 		secureCookies = true
 	}
 
+	discoveryHours := 24
+	if raw := os.Getenv("DISCOVERY_INTERVAL_HOURS"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil {
+			return Config{}, fmt.Errorf("invalid DISCOVERY_INTERVAL_HOURS: %w", err)
+		}
+		discoveryHours = parsed
+	}
+
 	return Config{
 		Addr:                   addr,
 		AppPassword:            appPassword,
@@ -95,6 +105,7 @@ func Load() (Config, error) {
 		OpenAIChatModel:        openAIChatModel,
 		OpenAIBaseURL:          openAIBaseURL,
 		OpenAIDebugLog:         strings.EqualFold(envFirstOrDefault([]string{"OPENAI_DEBUG_LOG", "OPENROUTER_DEBUG_LOG"}, ""), "true"),
+		DiscoveryIntervalHours: discoveryHours,
 	}, nil
 }
 

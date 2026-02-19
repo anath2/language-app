@@ -59,7 +59,7 @@ function handleLogoutClick() {
       </button>
       <button
         class="nav-item"
-        onclick={() => router.navigateToVocab()}
+        onclick={() => router.navigateToDiscover()}
       >
         <span class="nav-label">Explore</span>
       </button>

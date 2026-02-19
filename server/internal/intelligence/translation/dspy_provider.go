@@ -6,6 +6,7 @@ package translation
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -31,6 +32,7 @@ type DSPyProvider struct {
 	pinyinTranslator  *modules.Predict
 	meaningTranslator *modules.Predict
 	fullTranslator    *modules.Predict
+	articleSuggester  *modules.Predict
 	cedict            *cedictDictionary
 }
 
@@ -113,6 +115,19 @@ func NewDSPyProvider(cfg config.Config) (*DSPyProvider, error) {
 	fullTranslator := modules.NewPredict(fullTranslateSig).WithStructuredOutput()
 	fullTranslator.SetLLM(openAILLM)
 
+	articleSuggestSig := core.NewSignature(
+		[]core.InputField{
+			{Field: core.NewField("topics", core.WithDescription("Comma-separated list of topics to find Chinese-language articles about"))},
+			{Field: core.NewField("exclude_urls", core.WithDescription("Comma-separated list of URLs to exclude (already seen)"))},
+		},
+		[]core.OutputField{
+			{Field: core.NewField("urls", core.WithDescription("JSON array of 10 real Chinese-language article URLs from major Chinese news/blog sites"))},
+		},
+	).WithInstruction("Suggest approximately 10 real, currently accessible Chinese-language article URLs from well-known Chinese websites (e.g. zhihu.com, 36kr.com, sspai.com, ifanr.com, people.com.cn) for the given topics. Return only a JSON array of URL strings. Do not include any URLs from the exclude list.")
+
+	articleSuggester := modules.NewPredict(articleSuggestSig).WithStructuredOutput()
+	articleSuggester.SetLLM(openAILLM)
+
 	cedict, err := loadCedictDictionary(cfg.CedictPath)
 	if err != nil {
 		log.Printf("cedict load warning: path=%s err=%v", cfg.CedictPath, err)
@@ -123,6 +138,7 @@ func NewDSPyProvider(cfg config.Config) (*DSPyProvider, error) {
 		pinyinTranslator:  pinyinTranslator,
 		meaningTranslator: meaningTranslator,
 		fullTranslator:    fullTranslator,
+		articleSuggester:  articleSuggester,
 		cedict:            cedict,
 	}, nil
 }
@@ -380,6 +396,86 @@ func (rt *openAIDebugRoundTripper) RoundTrip(req *http.Request) (*http.Response,
 	}
 	log.Printf("openai-compatible upstream non-2xx body: status=%d body=%s", resp.StatusCode, snippet)
 	return resp, nil
+}
+
+func (p *DSPyProvider) SuggestArticleURLs(ctx context.Context, topics []string, existingURLs []string) ([]string, error) {
+	topicsStr := strings.Join(topics, ", ")
+	excludeStr := strings.Join(existingURLs, ", ")
+
+	res, err := p.articleSuggester.Process(ctx, map[string]any{
+		"topics":       topicsStr,
+		"exclude_urls": excludeStr,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("suggest article urls: %w", err)
+	}
+
+	log.Printf("SuggestArticleURLs raw response: %v", res)
+	urls := parseURLList(res["urls"])
+	if len(urls) == 0 {
+		urls = parseURLList(res["response"])
+	}
+	return urls, nil
+}
+
+func parseURLList(raw any) []string {
+	if raw == nil {
+		return nil
+	}
+	s := toString(raw)
+	s = strings.TrimSpace(s)
+	// Strip markdown code fences (```json ... ``` or ``` ... ```)
+	if idx := strings.Index(s, "```"); idx != -1 {
+		s = s[idx:]
+		// Skip the opening fence line
+		if nl := strings.Index(s, "\n"); nl != -1 {
+			s = s[nl+1:]
+		}
+		// Remove closing fence
+		if end := strings.LastIndex(s, "```"); end != -1 {
+			s = s[:end]
+		}
+		s = strings.TrimSpace(s)
+	}
+	// Try JSON array parse
+	var urls []string
+	if err := json.Unmarshal([]byte(s), &urls); err == nil {
+		var valid []string
+		for _, u := range urls {
+			u = strings.TrimSpace(u)
+			if strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://") {
+				valid = append(valid, u)
+			}
+		}
+		return valid
+	}
+	// Try JSON object with "urls" key
+	var obj map[string][]string
+	if err := json.Unmarshal([]byte(s), &obj); err == nil {
+		for _, key := range []string{"urls", "url_list", "articles"} {
+			if list, ok := obj[key]; ok {
+				var valid []string
+				for _, u := range list {
+					u = strings.TrimSpace(u)
+					if strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://") {
+						valid = append(valid, u)
+					}
+				}
+				if len(valid) > 0 {
+					return valid
+				}
+			}
+		}
+	}
+	// Fallback: line-separated
+	var out []string
+	for _, line := range strings.Split(s, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "http://") || strings.HasPrefix(line, "https://") {
+			out = append(out, line)
+		}
+	}
+	return out
 }
 
 func normalizeOpenAIEndpoint(rawBaseURL string) (string, string, error) {

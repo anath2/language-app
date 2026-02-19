@@ -39,6 +39,10 @@ func (m mockTranslationProvider) LookupCharacter(_ string) (string, string, bool
 	return "", "", false
 }
 
+func (m mockTranslationProvider) SuggestArticleURLs(_ context.Context, _ []string, _ []string) ([]string, error) {
+	return nil, nil
+}
+
 type mockChatProvider struct{}
 
 func (m mockChatProvider) ChatWithTranslationContext(_ context.Context, req intelligence.ChatWithTranslationRequest, onChunk func(string) error) (string, error) {
@@ -64,7 +68,7 @@ func overrideDepsWithMockProvider(t *testing.T, cfg config.Config) *translation.
 	transProv := mockTranslationProvider{}
 	chatProv := mockChatProvider{}
 	manager := queue.NewManager(translationStore, transProv)
-	handlers.ConfigureDependencies(translationStore, textEventStore, srsStore, profileStore, manager, transProv, chatProv)
+	handlers.ConfigureDependencies(translationStore, textEventStore, srsStore, profileStore, manager, transProv, chatProv, nil, nil)
 	return translationStore
 }
 
