@@ -222,15 +222,23 @@ export interface ChatCreateRequest {
   selected_segment_ids?: string[];
 }
 
+export interface ChatReviewCard {
+  chinese_text: string;
+  pinyin: string;
+  english: string;
+  status: 'pending' | 'accepted';
+}
+
 export interface ChatMessage {
   id: string;
   chat_id: string;
   translation_id: string;
   message_idx: number;
-  role: 'user' | 'ai';
+  role: 'user' | 'ai' | 'tool';
   content: string;
   selected_segment_ids: string[];
   created_at: string;
+  review_card?: ChatReviewCard;
 }
 
 export interface ChatListResponse {
@@ -250,10 +258,21 @@ export type ChatStreamChunkEvent = {
   delta?: string;
 };
 
+export type ChatToolResult = {
+  message_id: string;
+  review_card: ChatReviewCard;
+};
+
 export type ChatStreamCompleteEvent = {
   type: 'complete';
   message_id?: string;
   content?: string;
+  tool_results?: ChatToolResult[];
+};
+
+export type ChatStreamToolCallStartEvent = {
+  type: 'tool_call_start';
+  tool_name?: string;
 };
 
 export type ChatStreamErrorEvent = {
@@ -265,4 +284,5 @@ export type ChatStreamEvent =
   | ChatStreamStartEvent
   | ChatStreamChunkEvent
   | ChatStreamCompleteEvent
+  | ChatStreamToolCallStartEvent
   | ChatStreamErrorEvent;

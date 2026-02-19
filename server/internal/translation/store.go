@@ -43,6 +43,7 @@ type SegmentProgressEntry struct {
 const (
 	ChatRoleUser = "user"
 	ChatRoleAI   = "ai"
+	ChatRoleTool = "tool" // tool result message; one per tool call, owns review_card_json
 )
 
 type ProgressSnapshot struct {
@@ -60,15 +61,26 @@ type ChatThread struct {
 	UpdatedAt     string
 }
 
+// ChatReviewCard is stored as JSON in translation_chat_messages.review_card_json.
+// Status is either "pending" (awaiting user action) or "accepted" (saved to SRS).
+// A NULL column means rejected or never generated, so ChatReviewCard is nil.
+type ChatReviewCard struct {
+	ChineseText string `json:"chinese_text"`
+	Pinyin      string `json:"pinyin"`
+	English     string `json:"english"`
+	Status      string `json:"status"` // "pending" | "accepted"
+}
+
 type ChatMessage struct {
-	ID                 string   `json:"id"`
-	ChatID             string   `json:"chat_id"`
-	TranslationID      string   `json:"translation_id"`
-	MessageIdx         int      `json:"message_idx"`
-	Role               string   `json:"role"`
-	Content            string   `json:"content"`
-	SelectedSegmentIDs []string `json:"selected_segment_ids"`
-	CreatedAt          string   `json:"created_at"`
+	ID                 string          `json:"id"`
+	ChatID             string          `json:"chat_id"`
+	TranslationID      string          `json:"translation_id"`
+	MessageIdx         int             `json:"message_idx"`
+	Role               string          `json:"role"`
+	Content            string          `json:"content"`
+	SelectedSegmentIDs []string        `json:"selected_segment_ids"`
+	CreatedAt          string          `json:"created_at"`
+	ReviewCard         *ChatReviewCard `json:"review_card,omitempty"`
 }
 
 type TextRecord struct {

@@ -41,14 +41,14 @@ func (m mockTranslationProvider) LookupCharacter(_ string) (string, string, bool
 
 type mockChatProvider struct{}
 
-func (m mockChatProvider) ChatWithTranslationContext(_ context.Context, req intelligence.ChatWithTranslationRequest, onChunk func(string) error) (string, error) {
+func (m mockChatProvider) ChatWithTranslationContext(_ context.Context, req intelligence.ChatWithTranslationRequest, onChunk func(string) error, _ func(string)) (intelligence.ChatResult, error) {
 	reply := "mock answer: " + req.UserMessage
 	if onChunk != nil {
 		_ = onChunk("mock ")
 		_ = onChunk("answer: ")
 		_ = onChunk(req.UserMessage)
 	}
-	return reply, nil
+	return intelligence.ChatResult{Content: reply}, nil
 }
 
 func overrideDepsWithMockProvider(t *testing.T, cfg config.Config) *translation.TranslationStore {
