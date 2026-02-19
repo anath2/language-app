@@ -22,6 +22,7 @@ let messages = $state<ChatMessage[]>([]);
 let listLoading = $state(false);
 let streaming = $state(false);
 let streamingContent = $state('');
+let streamingToolCall = $state(false);
 let inputValue = $state('');
 let errorMessage = $state('');
 let listError = $state('');
@@ -57,7 +58,7 @@ async function sendMessage() {
     id: `temp-${Date.now()}`,
     chat_id: '',
     translation_id: translationId,
-    message_idx: messages.length,
+    message_idx: 0, // placeholder; server-assigned index is loaded on reload
     role: 'user',
     content: text,
     selected_segment_ids: selectedSegmentIds,
@@ -68,27 +69,40 @@ async function sendMessage() {
   errorMessage = '';
   streaming = true;
   streamingContent = '';
+  streamingToolCall = false;
 
   try {
     await postJsonStream<ChatStreamEvent>(
       `/api/translations/${translationId}/chat/new`,
       { message: text, selected_segment_ids: selectedSegmentIds },
       (event) => {
-        if (event.type === 'chunk' && event.delta != null) {
+        if (event.type === 'tool_call_start') {
+          streamingToolCall = true;
+        } else if (event.type === 'chunk' && event.delta != null) {
           streamingContent += event.delta;
         } else if (event.type === 'complete') {
           const aiMessage: ChatMessage = {
             id: event.message_id ?? `ai-${Date.now()}`,
             chat_id: '',
             translation_id: translationId,
-            message_idx: messages.length + 1,
+            message_idx: 0, // placeholder; server-assigned index is loaded on reload
             role: 'ai',
             content: event.content ?? streamingContent,
             selected_segment_ids: [],
             created_at: new Date().toISOString(),
-            review_card: event.review_card,
           };
-          messages = [...messages, aiMessage];
+          const toolMessages: ChatMessage[] = (event.tool_results ?? []).map((tr) => ({
+            id: tr.message_id,
+            chat_id: '',
+            translation_id: translationId,
+            message_idx: 0, // placeholder; server-assigned index is loaded on reload
+            role: 'tool',
+            content: tr.review_card.chinese_text,
+            selected_segment_ids: [],
+            created_at: new Date().toISOString(),
+            review_card: tr.review_card,
+          }));
+          messages = [...messages, aiMessage, ...toolMessages];
           streamingContent = '';
         } else if (event.type === 'error') {
           errorMessage = event.message ?? 'Stream error';
@@ -100,6 +114,7 @@ async function sendMessage() {
   } finally {
     streaming = false;
     streamingContent = '';
+    streamingToolCall = false;
   }
 }
 
@@ -141,11 +156,8 @@ async function rejectReviewCard(msg: ChatMessage) {
       `/api/translations/${translationId}/chat/messages/${msg.id}/reject`,
       {}
     );
-    messages = messages.map((m) =>
-      m.id === msg.id
-        ? { ...m, review_card: undefined, content: '_(Review card dismissed)_' }
-        : m
-    );
+    // Tool message with null card is not rendered — just drop it from the local array.
+    messages = messages.filter((m) => m.id !== msg.id);
   } catch (e) {
     errorMessage = e instanceof Error ? e.message : 'Failed to reject review card';
   }
@@ -163,10 +175,9 @@ async function rejectReviewCard(msg: ChatMessage) {
         <p class="chat-status">No messages yet. Ask something about this translation.</p>
       {:else}
         {#each messages as msg (msg.id)}
-          <div class="chat-bubble chat-bubble-{msg.role}">
-            <div class="chat-bubble-content">{msg.content}</div>
-            {#if msg.role === 'ai' && msg.review_card}
-              <div class="review-card">
+          {#if msg.role === 'tool'}
+            {#if msg.review_card}
+              <div class="review-card review-card-standalone">
                 <div class="review-card-chinese">{msg.review_card.chinese_text}</div>
                 <div class="review-card-pinyin">{msg.review_card.pinyin}</div>
                 <div class="review-card-english">{msg.review_card.english}</div>
@@ -186,9 +197,18 @@ async function rejectReviewCard(msg: ChatMessage) {
                 {/if}
               </div>
             {/if}
-          </div>
+          {:else}
+            <div class="chat-bubble chat-bubble-{msg.role}">
+              <div class="chat-bubble-content">{msg.content}</div>
+            </div>
+          {/if}
         {/each}
-        {#if streaming && !streamingContent}
+        {#if streaming && streamingToolCall}
+          <div class="chat-bubble chat-bubble-ai chat-bubble-tool-call">
+            <Loader variant="chat" />
+            <span class="tool-call-label">Generating review card…</span>
+          </div>
+        {:else if streaming && !streamingContent}
           <div class="chat-bubble chat-bubble-ai">
             <Loader variant="chat" />
           </div>
@@ -294,6 +314,17 @@ async function rejectReviewCard(msg: ChatMessage) {
 
   .chat-bubble-streaming {
     opacity: 0.95;
+  }
+
+  .chat-bubble-tool-call {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+  }
+
+  .tool-call-label {
+    font-size: var(--text-xs);
+    color: var(--text-muted);
   }
 
   .chat-bubble-content {

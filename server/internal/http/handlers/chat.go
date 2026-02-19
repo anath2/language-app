@@ -118,6 +118,12 @@ func CreateChatMessage(w http.ResponseWriter, r *http.Request) {
 		})
 		flusher.Flush()
 		return nil
+	}, func(toolName string) {
+		emitSSE(w, map[string]any{
+			"type":      "tool_call_start",
+			"tool_name": toolName,
+		})
+		flusher.Flush()
 	})
 	if err != nil {
 		emitSSE(w, map[string]any{"type": "error", "message": err.Error()})

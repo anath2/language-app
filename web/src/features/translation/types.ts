@@ -234,7 +234,7 @@ export interface ChatMessage {
   chat_id: string;
   translation_id: string;
   message_idx: number;
-  role: 'user' | 'ai';
+  role: 'user' | 'ai' | 'tool';
   content: string;
   selected_segment_ids: string[];
   created_at: string;
@@ -258,11 +258,21 @@ export type ChatStreamChunkEvent = {
   delta?: string;
 };
 
+export type ChatToolResult = {
+  message_id: string;
+  review_card: ChatReviewCard;
+};
+
 export type ChatStreamCompleteEvent = {
   type: 'complete';
   message_id?: string;
   content?: string;
-  review_card?: ChatReviewCard;
+  tool_results?: ChatToolResult[];
+};
+
+export type ChatStreamToolCallStartEvent = {
+  type: 'tool_call_start';
+  tool_name?: string;
 };
 
 export type ChatStreamErrorEvent = {
@@ -274,4 +284,5 @@ export type ChatStreamEvent =
   | ChatStreamStartEvent
   | ChatStreamChunkEvent
   | ChatStreamCompleteEvent
+  | ChatStreamToolCallStartEvent
   | ChatStreamErrorEvent;

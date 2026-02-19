@@ -41,7 +41,7 @@ func (m mockTranslationProvider) LookupCharacter(_ string) (string, string, bool
 
 type mockChatProvider struct{}
 
-func (m mockChatProvider) ChatWithTranslationContext(_ context.Context, req intelligence.ChatWithTranslationRequest, onChunk func(string) error) (intelligence.ChatResult, error) {
+func (m mockChatProvider) ChatWithTranslationContext(_ context.Context, req intelligence.ChatWithTranslationRequest, onChunk func(string) error, _ func(string)) (intelligence.ChatResult, error) {
 	reply := "mock answer: " + req.UserMessage
 	if onChunk != nil {
 		_ = onChunk("mock ")
