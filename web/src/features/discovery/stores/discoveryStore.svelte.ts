@@ -1,7 +1,6 @@
 import {
   deletePreference,
   dismissArticle,
-  importArticle,
   listArticles,
   listPreferences,
   savePreference,
@@ -74,24 +73,6 @@ class DiscoveryStore {
       }
     } catch (err) {
       console.error('Failed to dismiss article:', err);
-    }
-  }
-
-  async import(id: string): Promise<string | null> {
-    try {
-      const result = await importArticle(id);
-      this.articles = this.articles.map((a) =>
-        a.id === id
-          ? { ...a, status: 'imported' as const, translation_id: result.translation_id }
-          : a
-      );
-      if (this.statusFilter === 'new') {
-        this.articles = this.articles.filter((a) => a.id !== id);
-      }
-      return result.translation_id;
-    } catch (err) {
-      console.error('Failed to import article:', err);
-      return null;
     }
   }
 

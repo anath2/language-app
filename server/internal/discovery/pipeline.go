@@ -50,20 +50,20 @@ func (p *Pipeline) execute(ctx context.Context, runID string) (int, error) {
 		return 0, err
 	}
 
-	// Try Juejin first (real articles, no API key required), fall back to LLM.
-	juejinPages, err := fetchJuejinPages(ctx, topics, existingURLs)
-	if err != nil || len(juejinPages) == 0 {
-		log.Printf("discovery juejin unavailable (err=%v), falling back to LLM", err)
+	// Try RSS feeds first (real articles, publicly accessible worldwide), fall back to LLM.
+	rssPages, err := fetchRSSPages(ctx, existingURLs)
+	if err != nil || len(rssPages) == 0 {
+		log.Printf("discovery rss unavailable (err=%v), falling back to LLM", err)
 		candidateURLs, err := p.provider.SuggestArticleURLs(ctx, topics, existingURLs)
 		if err != nil {
 			return 0, err
 		}
-		log.Printf("discovery sourced %d URLs for topics=%v", len(candidateURLs), topics)
+		log.Printf("discovery sourced %d URLs (LLM) for topics=%v", len(candidateURLs), topics)
 		return p.processURLs(ctx, runID, candidateURLs, knownVocab)
 	}
 
-	log.Printf("discovery sourced %d URLs for topics=%v", len(juejinPages), topics)
-	return p.processPages(ctx, runID, juejinPages, knownVocab)
+	log.Printf("discovery sourced %d pages (RSS)", len(rssPages))
+	return p.processPages(ctx, runID, rssPages, knownVocab)
 }
 
 // processPages scores and saves pre-fetched pages (e.g. from Juejin API) without

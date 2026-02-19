@@ -2,14 +2,12 @@
 import { RefreshCw } from '@lucide/svelte';
 import Button from '@/ui/Button.svelte';
 import Card from '@/ui/Card.svelte';
-import { router } from '@/lib/router.svelte';
 import ArticleCard from './components/ArticleCard.svelte';
 import PreferenceManager from './components/PreferenceManager.svelte';
 import { discoveryStore } from './stores/discoveryStore.svelte';
 
 const STATUS_TABS = [
   { value: 'new', label: 'New' },
-  { value: 'imported', label: 'Imported' },
   { value: 'dismissed', label: 'Dismissed' },
 ];
 
@@ -22,16 +20,7 @@ function handleTabChange(status: string) {
   discoveryStore.setStatusFilter(status);
 }
 
-async function handleImport(id: string) {
-  const translationId = await discoveryStore.import(id);
-  if (translationId) {
-    router.navigateTo(translationId);
-  }
-}
 
-function handleNavigateToTranslation(id: string) {
-  router.navigateTo(id);
-}
 </script>
 
 <div class="discover-layout">
@@ -89,9 +78,7 @@ function handleNavigateToTranslation(id: string) {
       <div class="empty-state">
         <p class="empty-text">
           {#if discoveryStore.statusFilter === 'new'}
-            No articles yet. Add topics and run discovery to find articles.
-          {:else if discoveryStore.statusFilter === 'imported'}
-            No imported articles yet.
+            No articles yet. Run discovery to find new articles.
           {:else}
             No dismissed articles.
           {/if}
@@ -103,8 +90,6 @@ function handleNavigateToTranslation(id: string) {
           <ArticleCard
             {article}
             onDismiss={(id) => discoveryStore.dismiss(id)}
-            onImport={handleImport}
-            onNavigateToTranslation={handleNavigateToTranslation}
           />
         {/each}
       </div>

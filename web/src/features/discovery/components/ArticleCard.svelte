@@ -1,5 +1,5 @@
 <script lang="ts">
-import { BookOpen, ExternalLink, X } from '@lucide/svelte';
+import { ExternalLink, X } from '@lucide/svelte';
 import Button from '@/ui/Button.svelte';
 import Card from '@/ui/Card.svelte';
 import type { DiscoveryArticle } from '../types';
@@ -7,13 +7,9 @@ import type { DiscoveryArticle } from '../types';
 interface Props {
   article: DiscoveryArticle;
   onDismiss: (id: string) => void;
-  onImport: (id: string) => Promise<void>;
-  onNavigateToTranslation?: (id: string) => void;
 }
 
-const { article, onDismiss, onImport, onNavigateToTranslation }: Props = $props();
-
-let importing = $state(false);
+const { article, onDismiss }: Props = $props();
 
 function difficultyLabel(score: number): string {
   if (score < 0.3) return 'Easy';
@@ -34,15 +30,6 @@ function hostname(url: string): string {
     return new URL(url).hostname.replace(/^www\./, '');
   } catch {
     return url;
-  }
-}
-
-async function handleImport() {
-  importing = true;
-  try {
-    await onImport(article.id);
-  } finally {
-    importing = false;
   }
 }
 </script>
@@ -81,22 +68,6 @@ async function handleImport() {
       <ExternalLink size={14} />
       <span>Open</span>
     </a>
-
-    {#if article.status === 'imported' && article.translation_id}
-      <Button
-        variant="secondary"
-        size="sm"
-        onclick={() => onNavigateToTranslation?.(article.translation_id!)}
-      >
-        <BookOpen size={14} />
-        <span>View translation</span>
-      </Button>
-    {:else if article.status === 'new'}
-      <Button variant="primary" size="sm" loading={importing} onclick={handleImport}>
-        <BookOpen size={14} />
-        <span>Import</span>
-      </Button>
-    {/if}
   </div>
 </Card>
 
