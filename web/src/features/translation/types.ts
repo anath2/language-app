@@ -222,6 +222,13 @@ export interface ChatCreateRequest {
   selected_segment_ids?: string[];
 }
 
+export interface ChatReviewCard {
+  chinese_text: string;
+  pinyin: string;
+  english: string;
+  status: 'pending' | 'accepted';
+}
+
 export interface ChatMessage {
   id: string;
   chat_id: string;
@@ -231,6 +238,7 @@ export interface ChatMessage {
   content: string;
   selected_segment_ids: string[];
   created_at: string;
+  review_card?: ChatReviewCard;
 }
 
 export interface ChatListResponse {
@@ -254,6 +262,7 @@ export type ChatStreamCompleteEvent = {
   type: 'complete';
   message_id?: string;
   content?: string;
+  review_card?: ChatReviewCard;
 };
 
 export type ChatStreamErrorEvent = {

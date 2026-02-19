@@ -4,7 +4,7 @@ import Sidepane from '@/ui/Sidepane.svelte';
 import Loader from '@/ui/Loader.svelte';
 import TextArea from '@/ui/TextArea.svelte';
 import { getJson, postJson, postJsonStream } from '@/lib/api';
-import type { ChatMessage, ChatListResponse, ChatStreamEvent } from '@/features/translation/types';
+import type { ChatMessage, ChatReviewCard, ChatListResponse, ChatStreamEvent } from '@/features/translation/types';
 
 const {
   translationId,
@@ -25,6 +25,9 @@ let streamingContent = $state('');
 let inputValue = $state('');
 let errorMessage = $state('');
 let listError = $state('');
+
+// Track per-message dedup state (message_id -> bool)
+let dedupMap = $state<Record<string, boolean>>({});
 
 $effect(() => {
   if (!open || !translationId) return;
@@ -83,6 +86,7 @@ async function sendMessage() {
             content: event.content ?? streamingContent,
             selected_segment_ids: [],
             created_at: new Date().toISOString(),
+            review_card: event.review_card,
           };
           messages = [...messages, aiMessage];
           streamingContent = '';
@@ -109,6 +113,43 @@ async function clearChat() {
     errorMessage = e instanceof Error ? e.message : 'Failed to clear chat';
   }
 }
+
+async function acceptReviewCard(msg: ChatMessage) {
+  if (!translationId || !msg.review_card) return;
+  try {
+    const res = await postJson<{ ok: boolean; deduplicated: boolean }>(
+      `/api/translations/${translationId}/chat/messages/${msg.id}/accept`,
+      {}
+    );
+    messages = messages.map((m) =>
+      m.id === msg.id
+        ? { ...m, review_card: { ...m.review_card!, status: 'accepted' } }
+        : m
+    );
+    if (res.deduplicated) {
+      dedupMap = { ...dedupMap, [msg.id]: true };
+    }
+  } catch (e) {
+    errorMessage = e instanceof Error ? e.message : 'Failed to accept review card';
+  }
+}
+
+async function rejectReviewCard(msg: ChatMessage) {
+  if (!translationId || !msg.review_card) return;
+  try {
+    await postJson<{ ok: boolean }>(
+      `/api/translations/${translationId}/chat/messages/${msg.id}/reject`,
+      {}
+    );
+    messages = messages.map((m) =>
+      m.id === msg.id
+        ? { ...m, review_card: undefined, content: '_(Review card dismissed)_' }
+        : m
+    );
+  } catch (e) {
+    errorMessage = e instanceof Error ? e.message : 'Failed to reject review card';
+  }
+}
 </script>
 
 <Sidepane title="Chat" {open} onClose={onClose} width="400px">
@@ -124,6 +165,27 @@ async function clearChat() {
         {#each messages as msg (msg.id)}
           <div class="chat-bubble chat-bubble-{msg.role}">
             <div class="chat-bubble-content">{msg.content}</div>
+            {#if msg.role === 'ai' && msg.review_card}
+              <div class="review-card">
+                <div class="review-card-chinese">{msg.review_card.chinese_text}</div>
+                <div class="review-card-pinyin">{msg.review_card.pinyin}</div>
+                <div class="review-card-english">{msg.review_card.english}</div>
+                {#if msg.review_card.status === 'pending'}
+                  <div class="review-card-actions">
+                    <Button variant="primary" size="xs" onclick={() => acceptReviewCard(msg)}>
+                      Accept
+                    </Button>
+                    <Button variant="ghost" size="xs" onclick={() => rejectReviewCard(msg)}>
+                      Reject
+                    </Button>
+                  </div>
+                {:else if msg.review_card.status === 'accepted'}
+                  <div class="review-card-badge">
+                    {dedupMap[msg.id] ? 'Already in SRS' : 'Saved to SRS'}
+                  </div>
+                {/if}
+              </div>
+            {/if}
           </div>
         {/each}
         {#if streaming && !streamingContent}
@@ -239,6 +301,46 @@ async function clearChat() {
     line-height: 1.5;
     white-space: pre-wrap;
     word-break: break-word;
+  }
+
+  .review-card {
+    margin-top: var(--space-3);
+    padding: var(--space-3);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .review-card-chinese {
+    font-size: var(--text-lg);
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .review-card-pinyin {
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+  }
+
+  .review-card-english {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+  }
+
+  .review-card-actions {
+    display: flex;
+    gap: var(--space-2);
+    margin-top: var(--space-1);
+  }
+
+  .review-card-badge {
+    font-size: var(--text-xs);
+    color: var(--success, #16a34a);
+    font-weight: 500;
+    margin-top: var(--space-1);
   }
 
   .chat-inline-error {
