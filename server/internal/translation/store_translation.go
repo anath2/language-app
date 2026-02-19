@@ -396,8 +396,8 @@ func (s *TranslationStore) EnsureChatForTranslation(translationID string) (ChatT
 
 func (s *TranslationStore) AppendChatMessage(translationID string, role string, content string, selectedSegmentIDs []string) (ChatMessage, error) {
 	role = strings.TrimSpace(strings.ToLower(role))
-	if role != ChatRoleUser && role != ChatRoleAI {
-		return ChatMessage{}, errors.New("role must be either user or ai")
+	if role != ChatRoleUser && role != ChatRoleAI && role != ChatRoleTool {
+		return ChatMessage{}, errors.New("role must be user, ai, or tool")
 	}
 	content = strings.TrimSpace(content)
 	if content == "" {
@@ -783,8 +783,10 @@ func (s *TranslationStore) AcceptMessageReviewCard(messageID string) error {
 }
 
 func (s *TranslationStore) RejectMessageReviewCard(messageID string) error {
+	// Null the card only. The tool message itself is not rendered when review_card_json is NULL,
+	// so no content update is needed (unlike when cards lived on the AI text message).
 	_, err := s.db.Exec(
-		`UPDATE translation_chat_messages SET review_card_json = NULL, content = '_(Review card dismissed)_' WHERE id = ?`,
+		`UPDATE translation_chat_messages SET review_card_json = NULL WHERE id = ?`,
 		messageID,
 	)
 	return err

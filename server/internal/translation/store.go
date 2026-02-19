@@ -43,6 +43,7 @@ type SegmentProgressEntry struct {
 const (
 	ChatRoleUser = "user"
 	ChatRoleAI   = "ai"
+	ChatRoleTool = "tool" // tool result message; one per tool call, owns review_card_json
 )
 
 type ProgressSnapshot struct {

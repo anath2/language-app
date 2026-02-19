@@ -125,34 +125,51 @@ func CreateChatMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if result.ToolCall != nil && result.ToolCall.Name == "create_review_card" {
-		args := result.ToolCall.Arguments
-		chineseText, _ := args["chinese_text"].(string)
-		pinyin, _ := args["pinyin"].(string)
-		english, _ := args["english"].(string)
-
+	if len(result.ToolCalls) > 0 {
+		// One AI text message for the whole turn.
 		aiMsg, err := sharedTranslations.AppendChatMessage(translationID, translation.ChatRoleAI, "Here's a practice card for you:", nil)
 		if err != nil {
 			emitSSE(w, map[string]any{"type": "error", "message": err.Error()})
 			flusher.Flush()
 			return
 		}
-		if err := sharedTranslations.SetReviewCard(aiMsg.ID, chineseText, pinyin, english); err != nil {
-			emitSSE(w, map[string]any{"type": "error", "message": err.Error()})
-			flusher.Flush()
-			return
-		}
-		card := translation.ChatReviewCard{
-			ChineseText: chineseText,
-			Pinyin:      pinyin,
-			English:     english,
-			Status:      "pending",
+
+		// One tool message per tool call — each owns its own review card.
+		toolResults := make([]map[string]any, 0, len(result.ToolCalls))
+		for _, tc := range result.ToolCalls {
+			if tc.Name != "create_review_card" {
+				continue
+			}
+			chineseText, _ := tc.Arguments["chinese_text"].(string)
+			pinyin, _ := tc.Arguments["pinyin"].(string)
+			english, _ := tc.Arguments["english"].(string)
+
+			toolMsg, err := sharedTranslations.AppendChatMessage(translationID, translation.ChatRoleTool, chineseText, nil)
+			if err != nil {
+				emitSSE(w, map[string]any{"type": "error", "message": err.Error()})
+				flusher.Flush()
+				return
+			}
+			if err := sharedTranslations.SetReviewCard(toolMsg.ID, chineseText, pinyin, english); err != nil {
+				emitSSE(w, map[string]any{"type": "error", "message": err.Error()})
+				flusher.Flush()
+				return
+			}
+			toolResults = append(toolResults, map[string]any{
+				"message_id": toolMsg.ID,
+				"review_card": translation.ChatReviewCard{
+					ChineseText: chineseText,
+					Pinyin:      pinyin,
+					English:     english,
+					Status:      "pending",
+				},
+			})
 		}
 		emitSSE(w, map[string]any{
-			"type":        "complete",
-			"message_id":  aiMsg.ID,
-			"content":     aiMsg.Content,
-			"review_card": card,
+			"type":         "complete",
+			"message_id":   aiMsg.ID,
+			"content":      aiMsg.Content,
+			"tool_results": toolResults,
 		})
 		flusher.Flush()
 		return

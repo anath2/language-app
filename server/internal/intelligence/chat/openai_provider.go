@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -39,7 +40,7 @@ func New(cfg config.Config) *Provider {
 var reviewCardTool = map[string]any{
 	"type": "function",
 	"function": map[string]any{
-		"name":        "create_review_card",
+		"name": "create_review_card",
 		"description": `Generate a Chinese practice sentence as a review card. 
 Call this when the user asks to create either a 
 - review card
@@ -63,7 +64,7 @@ Call this when the user asks to create either a
 // It builds a messages array with a system prompt containing the article and
 // highlighted segments, appends prior history turns, then streams the response
 // token-by-token via onChunk.
-func (p *Provider) ChatWithTranslationContext(ctx context.Context, req intelligence.ChatWithTranslationRequest, onChunk func(string) error) (intelligence.ChatResult, error) {
+func (p *Provider) ChatWithTranslationContext(ctx context.Context, req intelligence.ChatWithTranslationRequest, onChunk func(string) error, onToolCallStart func(name string)) (intelligence.ChatResult, error) {
 	userMessage := strings.TrimSpace(req.UserMessage)
 	if userMessage == "" {
 		return intelligence.ChatResult{}, fmt.Errorf("chat user message is required")
@@ -155,8 +156,9 @@ When the user asks to:
 	}
 
 	var fullReply strings.Builder
-	var toolCallName string
-	var toolCallArgs strings.Builder
+	// toolAccumulators collects streaming argument fragments per tool-call index,
+	// supporting multiple parallel tool calls in a single assistant turn.
+	toolAccumulators := make(map[int]*toolCallAccumulator)
 
 	scanner := bufio.NewScanner(resp.Body)
 	for scanner.Scan() {
@@ -168,16 +170,26 @@ When the user asks to:
 		if payload == "[DONE]" {
 			break
 		}
-		content, toolName, toolArgs, err := extractDelta(payload)
+		content, td, err := extractDelta(payload)
 		if err != nil {
 			log.Printf("chat SSE parse error: %v payload=%q", err, payload)
 			continue
 		}
-		if toolName != "" && toolCallName == "" {
-			toolCallName = toolName
-		}
-		if toolArgs != "" {
-			toolCallArgs.WriteString(toolArgs)
+		if td != nil {
+			acc, ok := toolAccumulators[td.Index]
+			if !ok {
+				acc = &toolCallAccumulator{}
+				toolAccumulators[td.Index] = acc
+				// Notify the caller as soon as we detect a new tool call so it can
+				// signal progress to the client while arguments are still streaming.
+				if onToolCallStart != nil {
+					onToolCallStart(td.Name)
+				}
+			}
+			if td.Name != "" && acc.name == "" {
+				acc.name = td.Name
+			}
+			acc.args.WriteString(td.Args)
 		}
 		if content == "" {
 			continue
@@ -193,20 +205,35 @@ When the user asks to:
 		return intelligence.ChatResult{Content: fullReply.String()}, fmt.Errorf("reading chat stream: %w", err)
 	}
 
-	// If a tool call was accumulated, return it as a ToolCall result.
+	// Build ToolCalls slice sorted by index for deterministic ordering.
 	// Use json.Decoder (not Unmarshal) so that if some providers send duplicate or
 	// trailing JSON objects (e.g. "{"..."}{}"), we decode only the first valid one.
-	if argsStr := toolCallArgs.String(); argsStr != "" {
-		var args map[string]any
-		if err := json.NewDecoder(strings.NewReader(argsStr)).Decode(&args); err != nil {
-			return intelligence.ChatResult{}, fmt.Errorf("parse tool call arguments: %w", err)
+	if len(toolAccumulators) > 0 {
+		indices := make([]int, 0, len(toolAccumulators))
+		for idx := range toolAccumulators {
+			indices = append(indices, idx)
 		}
-		return intelligence.ChatResult{
-			ToolCall: &intelligence.ToolCallResult{
-				Name:      toolCallName,
+		sort.Ints(indices)
+
+		toolCalls := make([]intelligence.ToolCallResult, 0, len(indices))
+		for _, idx := range indices {
+			acc := toolAccumulators[idx]
+			argsStr := acc.args.String()
+			if argsStr == "" {
+				continue
+			}
+			var args map[string]any
+			if err := json.NewDecoder(strings.NewReader(argsStr)).Decode(&args); err != nil {
+				return intelligence.ChatResult{}, fmt.Errorf("parse tool call arguments[%d]: %w", idx, err)
+			}
+			toolCalls = append(toolCalls, intelligence.ToolCallResult{
+				Name:      acc.name,
 				Arguments: args,
-			},
-		}, nil
+			})
+		}
+		if len(toolCalls) > 0 {
+			return intelligence.ChatResult{ToolCalls: toolCalls}, nil
+		}
 	}
 
 	reply := fullReply.String()
@@ -214,6 +241,19 @@ When the user asks to:
 		return intelligence.ChatResult{}, fmt.Errorf("chat with translation context: empty response")
 	}
 	return intelligence.ChatResult{Content: reply}, nil
+}
+
+// toolCallAccumulator collects streaming fragments for one tool call.
+type toolCallAccumulator struct {
+	name string
+	args strings.Builder
+}
+
+// toolDelta carries the parsed tool-call fields from one SSE chunk.
+type toolDelta struct {
+	Index int
+	Name  string
+	Args  string
 }
 
 // sseChunk is the minimal structure needed to extract delta content and tool calls from an SSE line.
@@ -234,19 +274,21 @@ type sseChunk struct {
 	} `json:"choices"`
 }
 
-// extractDelta returns (content, toolCallName, toolCallArgs, error).
-func extractDelta(payload string) (string, string, string, error) {
+// extractDelta parses one SSE payload and returns either content text or a tool-call delta.
+// All tool calls present in the chunk are iterated so each index's fragments are returned.
+// Only the first tool-call entry per chunk is returned; callers accumulate across chunks by index.
+func extractDelta(payload string) (content string, td *toolDelta, err error) {
 	var chunk sseChunk
 	if err := json.Unmarshal([]byte(payload), &chunk); err != nil {
-		return "", "", "", fmt.Errorf("unmarshal SSE chunk: %w", err)
+		return "", nil, fmt.Errorf("unmarshal SSE chunk: %w", err)
 	}
 	if len(chunk.Choices) == 0 {
-		return "", "", "", nil
+		return "", nil, nil
 	}
 	delta := chunk.Choices[0].Delta
 	if len(delta.ToolCalls) > 0 {
 		tc := delta.ToolCalls[0]
-		return "", tc.Function.Name, tc.Function.Arguments, nil
+		return "", &toolDelta{Index: tc.Index, Name: tc.Function.Name, Args: tc.Function.Arguments}, nil
 	}
-	return delta.Content, "", "", nil
+	return delta.Content, nil, nil
 }

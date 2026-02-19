@@ -34,11 +34,14 @@ type ToolCallResult struct {
 }
 
 type ChatResult struct {
-	Content  string
-	ToolCall *ToolCallResult // nil if LLM replied with text only
+	Content   string
+	ToolCalls []ToolCallResult // empty if LLM replied with text only
 }
 
 // ChatProvider defines the chat intelligence contract.
+// onChunk is called for each content token; onToolCallStart is called once per tool call
+// the moment its first streaming delta arrives, so callers can signal progress to clients
+// before the full arguments have been accumulated.
 type ChatProvider interface {
-	ChatWithTranslationContext(ctx context.Context, req ChatWithTranslationRequest, onChunk func(string) error) (ChatResult, error)
+	ChatWithTranslationContext(ctx context.Context, req ChatWithTranslationRequest, onChunk func(string) error, onToolCallStart func(name string)) (ChatResult, error)
 }
