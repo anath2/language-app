@@ -25,5 +25,7 @@ func RegisterAPIRoutes(r chi.Router) {
 		api.Method(http.MethodPost, "/translations/{translation_id}/chat/new", http.HandlerFunc(handlers.CreateChatMessage))
 		api.Method(http.MethodGet, "/translations/{translation_id}/chat/list", http.HandlerFunc(handlers.ListChatMessages))
 		api.Method(http.MethodPost, "/translations/{translation_id}/chat/clear", http.HandlerFunc(handlers.ClearChatMessages))
+		api.Method(http.MethodPost, "/translations/{translation_id}/chat/messages/{message_id}/accept", http.HandlerFunc(handlers.AcceptReviewCard))
+		api.Method(http.MethodPost, "/translations/{translation_id}/chat/messages/{message_id}/reject", http.HandlerFunc(handlers.RejectReviewCard))
 	})
 }

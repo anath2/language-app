@@ -28,7 +28,17 @@ type TranslationProvider interface {
 	LookupCharacter(char string) (pinyin string, english string, found bool)
 }
 
+type ToolCallResult struct {
+	Name      string
+	Arguments map[string]any
+}
+
+type ChatResult struct {
+	Content  string
+	ToolCall *ToolCallResult // nil if LLM replied with text only
+}
+
 // ChatProvider defines the chat intelligence contract.
 type ChatProvider interface {
-	ChatWithTranslationContext(ctx context.Context, req ChatWithTranslationRequest, onChunk func(string) error) (string, error)
+	ChatWithTranslationContext(ctx context.Context, req ChatWithTranslationRequest, onChunk func(string) error) (ChatResult, error)
 }

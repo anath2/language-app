@@ -19,6 +19,10 @@ type translationStore interface {
 	ListChatMessages(translationID string) ([]translation.ChatMessage, error)
 	ClearChatMessages(translationID string) error
 	LoadSelectedSegmentsByIDs(translationID string, segmentIDs []string) ([]translation.SegmentResult, error)
+	SetReviewCard(messageID, chineseText, pinyin, english string) error
+	GetMessageReviewCard(messageID string) (*translation.ChatReviewCard, error)
+	AcceptMessageReviewCard(messageID string) error
+	RejectMessageReviewCard(messageID string) error
 }
 
 type textEventStore interface {
