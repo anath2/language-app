@@ -672,7 +672,7 @@ func (s *TranslationStore) listChatMessagesOnce(translationID string) ([]ChatMes
 		return nil, err
 	}
 	rows, err := s.db.Query(
-		`SELECT id, message_idx, role, content, selected_segment_ids_json, created_at
+		`SELECT id, message_idx, role, content, selected_segment_ids_json, created_at, review_card_json
 		 FROM translation_chat_messages
 		 WHERE translation_id = ?
 		 ORDER BY message_idx ASC`,
@@ -687,7 +687,8 @@ func (s *TranslationStore) listChatMessagesOnce(translationID string) ([]ChatMes
 	for rows.Next() {
 		var msg ChatMessage
 		var selectedJSON string
-		if err := rows.Scan(&msg.ID, &msg.MessageIdx, &msg.Role, &msg.Content, &selectedJSON, &msg.CreatedAt); err != nil {
+		var reviewCardJSON sql.NullString
+		if err := rows.Scan(&msg.ID, &msg.MessageIdx, &msg.Role, &msg.Content, &selectedJSON, &msg.CreatedAt, &reviewCardJSON); err != nil {
 			return nil, fmt.Errorf("scan chat message: %w", err)
 		}
 		msg.ChatID = thread.ID
@@ -697,12 +698,96 @@ func (s *TranslationStore) listChatMessagesOnce(translationID string) ([]ChatMes
 			return nil, fmt.Errorf("decode selected segment ids: %w", err)
 		}
 		msg.SelectedSegmentIDs = selected
+		if reviewCardJSON.Valid {
+			var card ChatReviewCard
+			if err := json.Unmarshal([]byte(reviewCardJSON.String), &card); err != nil {
+				return nil, fmt.Errorf("decode review card json: %w", err)
+			}
+			msg.ReviewCard = &card
+		}
 		out = append(out, msg)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate chat messages: %w", err)
 	}
 	return out, nil
+}
+
+func (s *TranslationStore) SetReviewCard(messageID, chineseText, pinyin, english string) error {
+	card := ChatReviewCard{
+		ChineseText: chineseText,
+		Pinyin:      pinyin,
+		English:     english,
+		Status:      "pending",
+	}
+	cardJSON, err := json.Marshal(card)
+	if err != nil {
+		return fmt.Errorf("marshal review card: %w", err)
+	}
+	res, err := s.db.Exec(
+		`UPDATE translation_chat_messages SET review_card_json = ? WHERE id = ?`,
+		string(cardJSON),
+		messageID,
+	)
+	if err != nil {
+		return fmt.Errorf("set review card: %w", err)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil || affected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (s *TranslationStore) GetMessageReviewCard(messageID string) (*ChatReviewCard, error) {
+	var reviewCardJSON sql.NullString
+	err := s.db.QueryRow(
+		`SELECT review_card_json FROM translation_chat_messages WHERE id = ?`,
+		messageID,
+	).Scan(&reviewCardJSON)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get message review card: %w", err)
+	}
+	if !reviewCardJSON.Valid {
+		return nil, nil
+	}
+	var card ChatReviewCard
+	if err := json.Unmarshal([]byte(reviewCardJSON.String), &card); err != nil {
+		return nil, fmt.Errorf("decode review card json: %w", err)
+	}
+	return &card, nil
+}
+
+func (s *TranslationStore) AcceptMessageReviewCard(messageID string) error {
+	card, err := s.GetMessageReviewCard(messageID)
+	if err != nil {
+		return err
+	}
+	if card == nil {
+		return ErrNotFound
+	}
+	card.Status = "accepted"
+	cardJSON, err := json.Marshal(card)
+	if err != nil {
+		return fmt.Errorf("marshal accepted review card: %w", err)
+	}
+	_, err = s.db.Exec(
+		`UPDATE translation_chat_messages SET review_card_json = ? WHERE id = ?`,
+		string(cardJSON),
+		messageID,
+	)
+	return err
+}
+
+func (s *TranslationStore) RejectMessageReviewCard(messageID string) error {
+	_, err := s.db.Exec(
+		`UPDATE translation_chat_messages SET review_card_json = NULL, content = '_(Review card dismissed)_' WHERE id = ?`,
+		messageID,
+	)
+	return err
 }
 
 func (s *TranslationStore) clearChatMessagesOnce(translationID string) error {
