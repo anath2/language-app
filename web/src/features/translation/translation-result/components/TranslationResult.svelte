@@ -6,10 +6,10 @@ import SegmentResult from './SegmentResult.svelte';
 import TranslationTable from './TranslationTable.svelte';
 import SegmentEditor from './SegmentEditor.svelte';
 import type {
-  DisplayParagraph,
+  DisplaySentence,
   LoadingState,
-  ParagraphMeta,
-  ParagraphResult,
+  SentenceMeta,
+  SentenceResult,
   ProgressState,
   SavedVocabInfo,
   SegmentResult as SegmentResultType,
@@ -48,14 +48,14 @@ const {
 } = $props();
 
 let translationResults = $state<SegmentResultType[]>([]);
-let paragraphMeta = $state<ParagraphMeta[]>([]);
+let sentenceMeta = $state<SentenceMeta[]>([]);
 let fullTranslation = $state('');
 let progress = $state<ProgressState>({ current: 0, total: 0 });
 let loadingState = $state<LoadingState>('idle');
 let errorMessage = $state('');
 let isEditMode = $state(false);
 
-const displayParagraphs = $derived(buildDisplayParagraphs(paragraphMeta, translationResults));
+const displaySentences = $derived(buildDisplaySentences(sentenceMeta, translationResults));
 
 let lastTranslationId = $state<string | null>(null);
 
@@ -85,7 +85,7 @@ $effect(() => {
 
 function resetState() {
   translationResults = [];
-  paragraphMeta = [];
+  sentenceMeta = [];
   fullTranslation = '';
   progress = { current: 0, total: 0 };
   loadingState = 'idle';
@@ -93,13 +93,13 @@ function resetState() {
   isEditMode = false;
 }
 
-function buildDisplayParagraphs(
-  meta: ParagraphMeta[],
+function buildDisplaySentences(
+  meta: SentenceMeta[],
   results: SegmentResultType[]
-): DisplayParagraph[] {
+): DisplaySentence[] {
   let globalIndex = 0;
-  return meta.map((para, paraIdx) => {
-    const segments = Array.from({ length: para.segment_count }).map(() => {
+  return meta.map((sent, sentenceIdx) => {
+    const segments = Array.from({ length: sent.segment_count }).map(() => {
       const existing = results[globalIndex];
       const entry = existing
         ? { ...existing }
@@ -108,28 +108,28 @@ function buildDisplayParagraphs(
             pinyin: '',
             english: '',
             index: globalIndex,
-            paragraph_index: paraIdx,
+            sentence_index: sentenceIdx,
             pending: true,
           };
       entry.index = globalIndex;
-      entry.paragraph_index = paraIdx;
+      entry.sentence_index = sentenceIdx;
       globalIndex += 1;
       return entry;
     });
-    return { ...para, paragraph_index: paraIdx, segments };
+    return { ...sent, sentence_index: sentenceIdx, segments };
   });
 }
 
-function flattenParagraphs(paragraphs: ParagraphResult[]): SegmentResultType[] {
+function flattenSentences(sentences: SentenceResult[]): SegmentResultType[] {
   const results: SegmentResultType[] = [];
-  paragraphs.forEach((para, paraIdx) => {
-    para.translations.forEach((t) => {
+  sentences.forEach((sent, sentenceIdx) => {
+    sent.translations.forEach((t) => {
       results.push({
         segment: t.segment,
         pinyin: t.pinyin,
         english: t.english,
         index: results.length,
-        paragraph_index: paraIdx,
+        sentence_index: sentenceIdx,
         pending: false,
       });
     });
@@ -144,7 +144,7 @@ function errorToMessage(error: unknown): string {
 
 async function streamTranslation(streamId: string) {
   translationResults = [];
-  paragraphMeta = [];
+  sentenceMeta = [];
   fullTranslation = '';
   progress = { current: 0, total: 0 };
   loadingState = 'loading';
@@ -172,9 +172,9 @@ async function streamTranslation(streamId: string) {
         if (!line.startsWith('data: ')) continue;
         const data = JSON.parse(line.slice(6)) as StreamEvent;
         if (data.type === 'start') {
-          paragraphMeta = data.paragraphs || [];
-          if (paragraphMeta.length === 0 && data.total) {
-            paragraphMeta = [{ segment_count: data.total, indent: '', separator: '' }];
+          sentenceMeta = data.sentences || [];
+          if (sentenceMeta.length === 0 && data.total) {
+            sentenceMeta = [{ segment_count: data.total, indent: '', separator: '' }];
           }
           progress = { current: 0, total: data.total || 0 };
           fullTranslation = data.fullTranslation || '';
@@ -184,13 +184,13 @@ async function streamTranslation(streamId: string) {
           updateSegmentResult(data.result);
         } else if (data.type === 'complete') {
           fullTranslation = data.fullTranslation || fullTranslation;
-          if (data.paragraphs) {
-            paragraphMeta = data.paragraphs.map((para) => ({
-              segment_count: para.translations.length,
-              indent: para.indent,
-              separator: para.separator,
+          if (data.sentences) {
+            sentenceMeta = data.sentences.map((sent) => ({
+              segment_count: sent.translations.length,
+              indent: sent.indent,
+              separator: sent.separator,
             }));
-            translationResults = flattenParagraphs(data.paragraphs);
+            translationResults = flattenSentences(data.sentences);
           }
           loadingState = 'idle';
           onStreamComplete();
@@ -216,7 +216,7 @@ function updateSegmentResult(result: StreamSegmentResult) {
     pinyin: result.pinyin,
     english: result.english,
     index,
-    paragraph_index: result.paragraph_index,
+    sentence_index: result.sentence_index,
     pending: false,
   };
   const next = translationResults.slice();
@@ -228,9 +228,9 @@ function enterEditMode() {
   isEditMode = true;
 }
 
-function handleEditSave(results: SegmentResultType[], meta: ParagraphMeta[]) {
+function handleEditSave(results: SegmentResultType[], meta: SentenceMeta[]) {
   translationResults = results;
-  paragraphMeta = meta;
+  sentenceMeta = meta;
   isEditMode = false;
   onSegmentsChanged(translationResults);
 }
@@ -250,7 +250,7 @@ function handleEditCancel() {
     <div class="error-banner">
       <p>{errorMessage}</p>
     </div>
-  {:else if displayParagraphs.length === 0}
+  {:else if displaySentences.length === 0}
     <div class="empty-state-inline">
       <p>Translation results will appear here</p>
     </div>
@@ -267,7 +267,7 @@ function handleEditCancel() {
     {#if isEditMode}
       <SegmentEditor
         {translationResults}
-        {paragraphMeta}
+        sentenceMeta={sentenceMeta}
         currentTranslationId={translationId}
         currentRawText={rawText}
         onSave={handleEditSave}
@@ -275,7 +275,7 @@ function handleEditCancel() {
       />
     {:else}
       <SegmentResult
-        {displayParagraphs}
+        displaySentences={displaySentences}
         {savedVocabMap}
         {progress}
         {fullTranslation}

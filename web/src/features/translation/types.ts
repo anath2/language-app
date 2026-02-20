@@ -26,7 +26,7 @@ export interface TranslationDetailResponse {
   input_text: string;
   full_translation: string | null;
   error_message: string | null;
-  paragraphs: ParagraphMeta[] | null;
+  sentences: SentenceMeta[] | null;
 }
 
 export interface CreateTranslationResponse {
@@ -40,7 +40,7 @@ export interface TranslationResult {
   english: string;
 }
 
-export interface ParagraphResult {
+export interface SentenceResult {
   translations: TranslationResult[];
   indent: string;
   separator: string;
@@ -51,7 +51,7 @@ export interface ProgressState {
   total: number;
 }
 
-export interface ParagraphMeta {
+export interface SentenceMeta {
   segment_count: number;
   indent: string;
   separator: string;
@@ -62,12 +62,12 @@ export interface SegmentResult {
   pinyin: string;
   english: string;
   index: number;
-  paragraph_index: number;
+  sentence_index: number;
   pending: boolean;
 }
 
-export interface DisplayParagraph extends ParagraphMeta {
-  paragraph_index: number;
+export interface DisplaySentence extends SentenceMeta {
+  sentence_index: number;
   segments: SegmentResult[];
 }
 
@@ -76,14 +76,14 @@ export interface StreamSegmentResult {
   pinyin: string;
   english: string;
   index: number;
-  paragraph_index: number;
+  sentence_index: number;
 }
 
 export type StreamStartEvent = {
   type: 'start';
   translation_id: string;
   total?: number;
-  paragraphs?: ParagraphMeta[];
+  sentences?: SentenceMeta[];
   fullTranslation?: string | null;
 };
 
@@ -96,7 +96,7 @@ export type StreamProgressEvent = {
 
 export type StreamCompleteEvent = {
   type: 'complete';
-  paragraphs?: ParagraphResult[];
+  sentences?: SentenceResult[];
   fullTranslation?: string | null;
 };
 
