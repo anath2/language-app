@@ -8,6 +8,10 @@ export async function updateTranslationSource(
   return patchJson(`/api/translations/${id}`, { input_text: inputText });
 }
 
+export async function updateTranslationTitle(id: string, title: string): Promise<void> {
+  await patchJson(`/api/translations/${id}`, { title });
+}
+
 export async function translateBatch(
   segments: string[],
   context: string | null,

@@ -1,7 +1,7 @@
 <script lang="ts">
 import { ChevronLeft, MessageCircle, Pencil } from '@lucide/svelte';
 import { getJson, postJson } from '@/lib/api';
-import { updateTranslationSource } from '@/features/translation/api';
+import { updateTranslationSource, updateTranslationTitle } from '@/features/translation/api';
 import Button from '@/ui/Button.svelte';
 import Card from '@/ui/Card.svelte';
 import { translationStore } from '@/features/translation/stores/translationStore.svelte';
@@ -22,7 +22,12 @@ const { translationId, onBack }: { translationId: string | null; onBack: () => v
 let chatPaneOpen = $state(false);
 let currentTranslationStatus = $state<string | null>(null);
 let currentFullTranslation = $state<string | null>(null);
+let currentTitle = $state('');
 let detailLoading = $state(false);
+
+let isEditingTitle = $state(false);
+let editedTitle = $state('');
+let isSavingTitle = $state(false);
 
 let isEditingSource = $state(false);
 let editedSourceText = $state('');
@@ -46,6 +51,7 @@ async function loadTranslationFromRoute(id: string) {
   detailLoading = true;
   currentTranslationStatus = null;
   currentFullTranslation = null;
+  currentTitle = '';
   isEditingSource = false;
   editedSourceText = '';
   editSourceNotice = '';
@@ -56,10 +62,50 @@ async function loadTranslationFromRoute(id: string) {
     currentTextId = null;
     currentFullTranslation = detail.full_translation || null;
     currentTranslationStatus = detail.status;
+    currentTitle = detail.title || '';
   } catch (_error) {
     currentTranslationStatus = 'failed';
   } finally {
     detailLoading = false;
+  }
+}
+
+function startEditTitle() {
+  editedTitle = currentTitle;
+  isEditingTitle = true;
+}
+
+function cancelEditTitle() {
+  isEditingTitle = false;
+  editedTitle = '';
+}
+
+async function saveTitle() {
+  if (!translationId || isSavingTitle) return;
+  const trimmed = editedTitle.trim();
+  if (!trimmed) {
+    isEditingTitle = false;
+    return;
+  }
+  isSavingTitle = true;
+  try {
+    await updateTranslationTitle(translationId, trimmed);
+    currentTitle = trimmed;
+    isEditingTitle = false;
+  } catch (_error) {
+    // silently revert
+    isEditingTitle = false;
+  } finally {
+    isSavingTitle = false;
+    editedTitle = '';
+  }
+}
+
+function handleTitleKeydown(e: KeyboardEvent) {
+  if (e.key === 'Enter') {
+    void saveTitle();
+  } else if (e.key === 'Escape') {
+    cancelEditTitle();
   }
 }
 
@@ -100,6 +146,7 @@ function clearDetailState() {
   detailLoading = false;
   currentTranslationStatus = null;
   currentFullTranslation = null;
+  currentTitle = '';
 }
 
 function handleStreamComplete() {
@@ -240,6 +287,28 @@ async function onRecordLookup(headword: string, vocabItemId: string) {
       <ChevronLeft size={16} />
       <span>Back to translations</span>
     </Button>
+    {#if currentTitle || translationId}
+      <div class="title-area">
+        {#if isEditingTitle}
+          <!-- svelte-ignore a11y_autofocus -->
+          <input
+            class="title-input"
+            autofocus
+            bind:value={editedTitle}
+            onblur={saveTitle}
+            onkeydown={handleTitleKeydown}
+            disabled={isSavingTitle}
+          />
+        {:else}
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <span class="title-text" onclick={startEditTitle} title="Click to edit title">
+            {currentTitle}
+            <Pencil size={12} class="title-edit-icon" />
+          </span>
+        {/if}
+      </div>
+    {/if}
     {#if translationId}
       <Button variant="primary" size="sm" onclick={() => (chatPaneOpen = true)} ariaLabel="Open chat">
         <MessageCircle size={16} />
@@ -326,6 +395,57 @@ async function onRecordLookup(headword: string, vocabItemId: string) {
     justify-content: space-between;
     gap: var(--space-2);
     flex-wrap: wrap;
+  }
+
+  .title-area {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    justify-content: center;
+  }
+
+  .title-text {
+    font-size: var(--text-base);
+    font-weight: 600;
+    color: var(--text-primary);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: 2px var(--space-2);
+    border-radius: var(--radius-sm);
+    max-width: 400px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .title-text:hover {
+    background: var(--surface-hover);
+  }
+
+  :global(.title-edit-icon) {
+    opacity: 0;
+    color: var(--text-muted);
+    flex-shrink: 0;
+    transition: opacity 0.15s ease;
+  }
+
+  .title-text:hover :global(.title-edit-icon) {
+    opacity: 1;
+  }
+
+  .title-input {
+    font-size: var(--text-base);
+    font-weight: 600;
+    color: var(--text-primary);
+    background: var(--surface);
+    border: 1px solid var(--color-primary);
+    border-radius: var(--radius-sm);
+    padding: 2px var(--space-2);
+    outline: none;
+    min-width: 200px;
+    max-width: 400px;
   }
 
   .page-container {

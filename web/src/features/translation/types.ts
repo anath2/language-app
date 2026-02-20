@@ -7,6 +7,7 @@ export interface TranslationSummary {
   created_at: string;
   status: TranslationStatus;
   source_type: string;
+  title: string;
   input_preview: string;
   full_translation_preview: string | null;
   segment_count: number | null;
@@ -23,6 +24,7 @@ export interface TranslationDetailResponse {
   created_at: string;
   status: TranslationStatus;
   source_type: string;
+  title: string;
   input_text: string;
   full_translation: string | null;
   error_message: string | null;
