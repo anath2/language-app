@@ -13,6 +13,7 @@ type Translation struct {
 	Status          string
 	SourceType      string
 	InputText       string
+	Title           string
 	FullTranslation *string
 	ErrorMessage    *string
 	Sentences       []SentenceResult

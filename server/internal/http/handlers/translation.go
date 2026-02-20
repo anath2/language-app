@@ -27,6 +27,7 @@ type translationSummary struct {
 	CreatedAt              string  `json:"created_at"`
 	Status                 string  `json:"status"`
 	SourceType             string  `json:"source_type"`
+	Title                  string  `json:"title"`
 	InputPreview           string  `json:"input_preview"`
 	FullTranslationPreview *string `json:"full_translation_preview"`
 	SegmentCount           *int    `json:"segment_count"`
@@ -43,6 +44,7 @@ type translationDetailResponse struct {
 	CreatedAt       string      `json:"created_at"`
 	Status          string      `json:"status"`
 	SourceType      string      `json:"source_type"`
+	Title           string      `json:"title"`
 	InputText       string      `json:"input_text"`
 	FullTranslation *string     `json:"full_translation"`
 	ErrorMessage    *string     `json:"error_message"`
@@ -107,6 +109,7 @@ func ListTranslations(w http.ResponseWriter, r *http.Request) {
 			CreatedAt:              item.CreatedAt,
 			Status:                 item.Status,
 			SourceType:             item.SourceType,
+			Title:                  item.Title,
 			InputPreview:           preview(item.InputText, 100),
 			FullTranslationPreview: previewPtr(item.FullTranslation, 100),
 			SegmentCount:           intPtrIfKnown(item.Progress, item.Status),
@@ -138,6 +141,7 @@ func GetTranslation(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:       item.CreatedAt,
 		Status:          item.Status,
 		SourceType:      item.SourceType,
+		Title:           item.Title,
 		InputText:       item.InputText,
 		FullTranslation: item.FullTranslation,
 		ErrorMessage:    item.ErrorMessage,
@@ -168,6 +172,7 @@ func GetTranslationStatus(w http.ResponseWriter, r *http.Request) {
 
 type updateTranslationRequest struct {
 	InputText string `json:"input_text"`
+	Title     string `json:"title"`
 }
 
 type updateTranslationResponse struct {
@@ -188,8 +193,28 @@ func UpdateTranslation(w http.ResponseWriter, r *http.Request) {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": "Invalid JSON payload"})
 		return
 	}
-	if strings.TrimSpace(req.InputText) == "" {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": "input_text is required"})
+
+	hasTitle := req.Title != ""
+	hasInputText := strings.TrimSpace(req.InputText) != ""
+
+	if !hasTitle && !hasInputText {
+		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": "input_text or title is required"})
+		return
+	}
+
+	if hasTitle {
+		if err := sharedTranslations.UpdateTitle(translationID, req.Title); err != nil {
+			if errors.Is(err, translation.ErrNotFound) {
+				WriteJSON(w, http.StatusNotFound, map[string]string{"detail": "Translation not found"})
+				return
+			}
+			WriteJSON(w, http.StatusInternalServerError, map[string]string{"detail": err.Error()})
+			return
+		}
+	}
+
+	if !hasInputText {
+		WriteJSON(w, http.StatusOK, map[string]bool{"ok": true})
 		return
 	}
 

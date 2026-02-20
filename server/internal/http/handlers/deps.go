@@ -14,6 +14,7 @@ type translationStore interface {
 	Get(id string) (translation.Translation, bool)
 	Delete(id string) bool
 	UpdateTranslationSegments(translationID string, sentenceIdx int, segments []translation.SegmentResult) error
+	UpdateTitle(id string, title string) error
 	UpdateInputTextForReprocessing(id string, newText string) (map[int]string, error)
 	EnsureChatForTranslation(translationID string) (translation.ChatThread, error)
 	AppendChatMessage(translationID string, role string, content string, selectedSegmentIDs []string) (translation.ChatMessage, error)

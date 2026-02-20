@@ -11,6 +11,14 @@ import (
 	"unicode/utf8"
 )
 
+func computeTitle(inputText string) string {
+	runes := []rune(strings.TrimSpace(inputText))
+	if len(runes) <= 10 {
+		return string(runes)
+	}
+	return string(runes[:10]) + "…"
+}
+
 func (s *TranslationStore) Create(inputText string, sourceType string) (Translation, error) {
 	if strings.TrimSpace(inputText) == "" {
 		return Translation{}, errors.New("input_text is required")
@@ -30,6 +38,7 @@ func (s *TranslationStore) Create(inputText string, sourceType string) (Translat
 		Status:     "pending",
 		SourceType: sourceType,
 		InputText:  inputText,
+		Title:      computeTitle(inputText),
 		Sentences:  nil,
 		Progress:   0,
 		Total:      0,
@@ -44,15 +53,16 @@ func (s *TranslationStore) Create(inputText string, sourceType string) (Translat
 	if _, err := tx.Exec(
 		`INSERT INTO translations (
 		    id, created_at, updated_at, status, translation_type, source_type, input_text,
-		    full_translation, error_message, metadata_json, text_id, progress, total
+		    full_translation, error_message, metadata_json, text_id, progress, total, title
 		 )
-		 VALUES (?, ?, ?, ?, 'translation', ?, ?, NULL, NULL, '{}', NULL, 0, 0)`,
+		 VALUES (?, ?, ?, ?, 'translation', ?, ?, NULL, NULL, '{}', NULL, 0, 0, ?)`,
 		tr.ID,
 		tr.CreatedAt,
 		tr.CreatedAt,
 		tr.Status,
 		tr.SourceType,
 		tr.InputText,
+		tr.Title,
 	); err != nil {
 		return Translation{}, fmt.Errorf("insert translation: %w", err)
 	}
@@ -839,7 +849,7 @@ func loadChatThreadTx(tx *sql.Tx, translationID string) (ChatThread, error) {
 
 func (s *TranslationStore) getOnce(id string) (Translation, error) {
 	row := s.db.QueryRow(
-		`SELECT id, created_at, status, source_type, input_text, full_translation, error_message, progress, total
+		`SELECT id, created_at, status, source_type, input_text, title, full_translation, error_message, progress, total
 		 FROM translations WHERE id = ?`,
 		id,
 	)
@@ -853,6 +863,7 @@ func (s *TranslationStore) getOnce(id string) (Translation, error) {
 		&tr.Status,
 		&tr.SourceType,
 		&tr.InputText,
+		&tr.Title,
 		&fullTranslation,
 		&errorMessage,
 		&tr.Progress,
@@ -875,7 +886,7 @@ func (s *TranslationStore) getOnce(id string) (Translation, error) {
 
 func (s *TranslationStore) listOnce(limit int, offset int, status string) ([]Translation, int, error) {
 	countQuery := `SELECT COUNT(*) FROM translations`
-	listQuery := `SELECT id, created_at, status, source_type, input_text, full_translation, error_message, progress, total
+	listQuery := `SELECT id, created_at, status, source_type, input_text, title, full_translation, error_message, progress, total
 		FROM translations`
 	args := make([]any, 0, 3)
 	if status != "" {
@@ -908,6 +919,7 @@ func (s *TranslationStore) listOnce(limit int, offset int, status string) ([]Tra
 			&tr.Status,
 			&tr.SourceType,
 			&tr.InputText,
+			&tr.Title,
 			&fullTranslation,
 			&errorMessage,
 			&tr.Progress,
@@ -1151,6 +1163,18 @@ func (s *TranslationStore) AddReprocessedSegment(id string, result SegmentResult
 
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit add reprocessed segment tx: %w", err)
+	}
+	return nil
+}
+
+func (s *TranslationStore) UpdateTitle(id string, title string) error {
+	res, err := s.db.Exec(`UPDATE translations SET title = ? WHERE id = ?`, title, id)
+	if err != nil {
+		return fmt.Errorf("update title: %w", err)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil || affected == 0 {
+		return ErrNotFound
 	}
 	return nil
 }
