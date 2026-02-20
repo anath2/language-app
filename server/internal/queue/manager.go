@@ -41,16 +41,24 @@ type translationStore interface {
 	ClaimTranslationJob(translationID string, leaseDuration time.Duration) (bool, error)
 	Fail(id string, message string) error
 	SetFullTranslation(id string, fullTranslation string) error
-	SetProcessing(id string, total int, sentenceCount int) error
+	SetProcessing(id string, total int, sentences []translation.SentenceInit) error
+	SetReprocessing(id string, total int) error
 	Complete(id string) error
 	GetProgressSnapshot(id string) (translation.ProgressSnapshot, bool)
 	AddProgressSegment(id string, result translation.SegmentResult, sentenceIndex int) (int, int, error)
+	AddReprocessedSegment(id string, result translation.SegmentResult, sentenceIdx int, segIdx int) error
 }
 
 type queuedSegment struct {
 	SentenceIndex int
 	SentenceText  string
 	Segment       string
+}
+
+type sentenceInfo struct {
+	Text      string
+	Indent    string
+	Separator string
 }
 
 const jobLeaseDuration = 30 * time.Second
@@ -140,7 +148,11 @@ func (m *Manager) StartProcessing(translationID string) {
 		startIndex := item.Progress
 		if item.Status == "pending" {
 			startIndex = 0
-			if err := m.store.SetProcessing(translationID, total, len(sentences)); err != nil {
+			sentenceInits := make([]translation.SentenceInit, len(sentences))
+			for i, s := range sentences {
+				sentenceInits[i] = translation.SentenceInit{Indent: s.Indent, Separator: s.Separator}
+			}
+			if err := m.store.SetProcessing(translationID, total, sentenceInits); err != nil {
 				m.removeRunning(translationID)
 				return
 			}
@@ -156,6 +168,120 @@ func (m *Manager) StartProcessing(translationID string) {
 
 		m.runJob(ctx, translationID, queued, startIndex)
 	}(item)
+}
+
+// StartReprocessing processes only the sentences in sentencesToProcess (sentenceIdx → sentence text).
+// It does not call TranslateFull — the existing full translation is preserved.
+func (m *Manager) StartReprocessing(translationID string, sentencesToProcess map[int]string) {
+	if len(sentencesToProcess) == 0 {
+		return
+	}
+
+	m.mu.Lock()
+	if _, exists := m.running[translationID]; exists {
+		m.mu.Unlock()
+		return
+	}
+	m.running[translationID] = struct{}{}
+	m.mu.Unlock()
+
+	claimed, err := m.store.ClaimTranslationJob(translationID, jobLeaseDuration)
+	if err != nil || !claimed {
+		m.removeRunning(translationID)
+		return
+	}
+
+	go func() {
+		ctx := context.Background()
+
+		// Load the full input text for generating the full translation.
+		item, ok := m.store.Get(translationID)
+		if !ok {
+			_ = m.store.Fail(translationID, "Translation not found during reprocessing")
+			m.removeRunning(translationID)
+			return
+		}
+
+		// Generate new full translation (non-fatal).
+		if fullTranslation, err := m.provider.TranslateFull(ctx, item.InputText); err != nil {
+			log.Printf("full translation failed (non-fatal): id=%s err=%v", translationID, err)
+		} else if fullTranslation != "" {
+			if err := m.store.SetFullTranslation(translationID, fullTranslation); err != nil {
+				log.Printf("set full translation failed (non-fatal): id=%s err=%v", translationID, err)
+			}
+		}
+
+		// Pre-segment all changed sentences to get the total count.
+		type reprocessWork struct {
+			sentenceIdx  int
+			sentenceText string
+			segment      string
+		}
+		var allWork []reprocessWork
+		// Process in stable order.
+		orderedIdxs := make([]int, 0, len(sentencesToProcess))
+		for idx := range sentencesToProcess {
+			orderedIdxs = append(orderedIdxs, idx)
+		}
+		// Sort indices for deterministic ordering.
+		for i := 0; i < len(orderedIdxs); i++ {
+			for j := i + 1; j < len(orderedIdxs); j++ {
+				if orderedIdxs[i] > orderedIdxs[j] {
+					orderedIdxs[i], orderedIdxs[j] = orderedIdxs[j], orderedIdxs[i]
+				}
+			}
+		}
+
+		for _, sentenceIdx := range orderedIdxs {
+			sentence := sentencesToProcess[sentenceIdx]
+			segments, err := m.provider.Segment(ctx, sentence)
+			if err != nil {
+				_ = m.store.Fail(translationID, "Failed to segment during reprocessing: "+err.Error())
+				m.removeRunning(translationID)
+				return
+			}
+			for _, seg := range segments {
+				seg = strings.TrimSpace(seg)
+				if seg == "" {
+					continue
+				}
+				allWork = append(allWork, reprocessWork{
+					sentenceIdx:  sentenceIdx,
+					sentenceText: sentence,
+					segment:      seg,
+				})
+			}
+		}
+
+		if err := m.store.SetReprocessing(translationID, len(allWork)); err != nil {
+			m.removeRunning(translationID)
+			return
+		}
+
+		// Translate each segment and store with explicit (sentenceIdx, localSegIdx).
+		localSegIdx := make(map[int]int) // per-sentence counter
+		for _, work := range allWork {
+			translated, err := m.provider.TranslateSegments(ctx, []string{work.segment}, work.sentenceText)
+			if err != nil || len(translated) == 0 {
+				_ = m.store.Fail(translationID, "Failed to translate segment during reprocessing")
+				m.removeRunning(translationID)
+				return
+			}
+			segIdx := localSegIdx[work.sentenceIdx]
+			if err := m.store.AddReprocessedSegment(translationID, translated[0], work.sentenceIdx, segIdx); err != nil {
+				_ = m.store.Fail(translationID, "Failed to store reprocessed segment")
+				m.removeRunning(translationID)
+				return
+			}
+			localSegIdx[work.sentenceIdx]++
+			time.Sleep(15 * time.Millisecond)
+		}
+
+		if err := m.store.Complete(translationID); err != nil {
+			_ = m.store.Fail(translationID, "Failed to complete reprocessed translation")
+		}
+		m.removeRunning(translationID)
+	}()
 }
 
 func (m *Manager) GetProgress(translationID string) (Progress, bool) {
@@ -212,10 +338,10 @@ func (m *Manager) runJob(ctx context.Context, translationID string, segments []q
 	}
 }
 
-func (m *Manager) segmentInputBySentence(ctx context.Context, sentences []string) ([]queuedSegment, error) {
+func (m *Manager) segmentInputBySentence(ctx context.Context, sentences []sentenceInfo) ([]queuedSegment, error) {
 	queued := make([]queuedSegment, 0, len(sentences)*4)
-	for sentenceIdx, sentence := range sentences {
-		segments, err := m.provider.Segment(ctx, sentence)
+	for sentenceIdx, sent := range sentences {
+		segments, err := m.provider.Segment(ctx, sent.Text)
 		if err != nil {
 			return nil, err
 		}
@@ -226,7 +352,7 @@ func (m *Manager) segmentInputBySentence(ctx context.Context, sentences []string
 			}
 			queued = append(queued, queuedSegment{
 				SentenceIndex: sentenceIdx,
-				SentenceText:  sentence,
+				SentenceText:  sent.Text,
 				Segment:       seg,
 			})
 		}
@@ -234,34 +360,72 @@ func (m *Manager) segmentInputBySentence(ctx context.Context, sentences []string
 	return queued, nil
 }
 
-func splitInputSentences(text string) []string {
-	text = strings.TrimSpace(text)
-	if text == "" {
-		return nil
+func splitInputSentences(text string) []sentenceInfo {
+	var out []sentenceInfo
+	var sentence strings.Builder
+	var lineIndent strings.Builder
+	atLineStart := true
+
+	addSeparatorChar := func(r rune) {
+		if len(out) > 0 {
+			out[len(out)-1].Separator += string(r)
+		}
 	}
-	var out []string
-	var b strings.Builder
+
 	for len(text) > 0 {
 		r, size := utf8.DecodeRuneInString(text)
 		text = text[size:]
-		if r == '\n' || r == '\r' {
-			if s := strings.TrimSpace(b.String()); s != "" {
-				out = append(out, s)
+
+		if atLineStart {
+			if r == ' ' || r == '\t' {
+				lineIndent.WriteRune(r)
+				continue
 			}
-			b.Reset()
+			if r == '\n' || r == '\r' {
+				addSeparatorChar(r)
+				lineIndent.Reset()
+				// atLineStart stays true
+				continue
+			}
+			atLineStart = false
+		}
+
+		if r == '\n' || r == '\r' {
+			s := strings.TrimSpace(sentence.String())
+			if s != "" {
+				out = append(out, sentenceInfo{
+					Text:   s,
+					Indent: lineIndent.String(),
+				})
+			}
+			addSeparatorChar(r)
+			sentence.Reset()
+			lineIndent.Reset()
+			atLineStart = true
 			continue
 		}
-		b.WriteRune(r)
+
+		sentence.WriteRune(r)
 		if isSentenceDelimiter(r) {
-			if s := strings.TrimSpace(b.String()); s != "" {
-				out = append(out, s)
+			s := strings.TrimSpace(sentence.String())
+			if s != "" {
+				out = append(out, sentenceInfo{
+					Text:   s,
+					Indent: lineIndent.String(),
+				})
+				sentence.Reset()
+				lineIndent.Reset()
 			}
-			b.Reset()
 		}
 	}
-	if s := strings.TrimSpace(b.String()); s != "" {
-		out = append(out, s)
+
+	if s := strings.TrimSpace(sentence.String()); s != "" {
+		out = append(out, sentenceInfo{
+			Text:   s,
+			Indent: lineIndent.String(),
+		})
 	}
+
 	return out
 }
 

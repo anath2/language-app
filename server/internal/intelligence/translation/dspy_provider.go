@@ -6,6 +6,7 @@ package translation
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -307,6 +308,17 @@ func (p *DSPyProvider) LookupCharacter(char string) (string, string, bool) {
 	return pinyin, english, true
 }
 
+func cleanFullTranslation(s string) string {
+	s = strings.TrimSpace(s)
+	if len(s) >= 2 && s[0] == '"' && s[len(s)-1] == '"' {
+		var decoded string
+		if err := json.Unmarshal([]byte(s), &decoded); err == nil {
+			return strings.TrimSpace(decoded)
+		}
+	}
+	return s
+}
+
 func (p *DSPyProvider) TranslateFull(ctx context.Context, text string) (string, error) {
 	text = strings.TrimSpace(text)
 	if text == "" {
@@ -316,10 +328,10 @@ func (p *DSPyProvider) TranslateFull(ctx context.Context, text string) (string, 
 	if err != nil {
 		return "", fmt.Errorf("translate full text with dspy: %w", err)
 	}
-	if t := strings.TrimSpace(toString(res["translation"])); t != "" {
+	if t := cleanFullTranslation(toString(res["translation"])); t != "" {
 		return t, nil
 	}
-	if t := parseFullTranslationFromResponse(res["response"]); t != "" {
+	if t := cleanFullTranslation(parseFullTranslationFromResponse(res["response"])); t != "" {
 		return t, nil
 	}
 	return "", fmt.Errorf("translate full text with dspy: empty translation response")

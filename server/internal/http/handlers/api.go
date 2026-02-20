@@ -139,7 +139,7 @@ type translateBatchRequest struct {
 	Segments      []string `json:"segments"`
 	Context       *string  `json:"context"`
 	TranslationID *string  `json:"translation_id"`
-	ParagraphIdx  *int     `json:"paragraph_idx"`
+	SentenceIdx   *int     `json:"sentence_idx"`
 }
 
 type translationResult struct {
@@ -435,8 +435,8 @@ func TranslateBatch(w http.ResponseWriter, r *http.Request) {
 		translations = append(translations, item)
 		storeSegments = append(storeSegments, translated)
 	}
-	if req.TranslationID != nil && req.ParagraphIdx != nil {
-		if err := sharedTranslations.UpdateTranslationSegments(*req.TranslationID, *req.ParagraphIdx, storeSegments); err != nil {
+	if req.TranslationID != nil && req.SentenceIdx != nil {
+		if err := sharedTranslations.UpdateTranslationSegments(*req.TranslationID, *req.SentenceIdx, storeSegments); err != nil {
 			WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": err.Error()})
 			return
 		}

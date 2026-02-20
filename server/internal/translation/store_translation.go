@@ -1,12 +1,14 @@
 package translation
 
 import (
+	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 func (s *TranslationStore) Create(inputText string, sourceType string) (Translation, error) {
@@ -28,7 +30,7 @@ func (s *TranslationStore) Create(inputText string, sourceType string) (Translat
 		Status:     "pending",
 		SourceType: sourceType,
 		InputText:  inputText,
-		Paragraphs: nil,
+		Sentences:  nil,
 		Progress:   0,
 		Total:      0,
 	}
@@ -133,7 +135,7 @@ func (s *TranslationStore) List(limit int, offset int, status string) ([]Transla
 	return nil, 0, fmt.Errorf("list translations: database remained locked")
 }
 
-func (s *TranslationStore) SetProcessing(id string, total int, sentenceCount int) error {
+func (s *TranslationStore) SetProcessing(id string, total int, sentences []SentenceInit) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return fmt.Errorf("begin set processing tx: %w", err)
@@ -149,17 +151,16 @@ func (s *TranslationStore) SetProcessing(id string, total int, sentenceCount int
 		return ErrNotFound
 	}
 
-	if sentenceCount < 0 {
-		sentenceCount = 0
-	}
-	for sentenceIdx := 0; sentenceIdx < sentenceCount; sentenceIdx++ {
+	for sentenceIdx, sent := range sentences {
 		if _, err := tx.Exec(
-			`INSERT INTO translation_paragraphs (id, translation_id, paragraph_idx, indent, separator)
-			 VALUES (?, ?, ?, '', '')
-			 ON CONFLICT (translation_id, paragraph_idx) DO NOTHING`,
+			`INSERT INTO translation_sentences (id, translation_id, sentence_idx, indent, separator, content_hash)
+			 VALUES (?, ?, ?, ?, ?, '')
+			 ON CONFLICT (translation_id, sentence_idx) DO NOTHING`,
 			fmt.Sprintf("%s:%d", id, sentenceIdx),
 			id,
 			sentenceIdx,
+			sent.Indent,
+			sent.Separator,
 		); err != nil {
 			return fmt.Errorf("ensure sentence row %d: %w", sentenceIdx, err)
 		}
@@ -190,9 +191,9 @@ func (s *TranslationStore) AddProgressSegment(id string, result SegmentResult, s
 
 	segIdx := progress
 	if _, err := tx.Exec(
-		`INSERT INTO translation_paragraphs (id, translation_id, paragraph_idx, indent, separator)
+		`INSERT INTO translation_sentences (id, translation_id, sentence_idx, indent, separator)
 		 VALUES (?, ?, ?, '', '')
-		 ON CONFLICT (translation_id, paragraph_idx) DO NOTHING`,
+		 ON CONFLICT (translation_id, sentence_idx) DO NOTHING`,
 		fmt.Sprintf("%s:%d", id, sentenceIndex),
 		id,
 		sentenceIndex,
@@ -200,7 +201,7 @@ func (s *TranslationStore) AddProgressSegment(id string, result SegmentResult, s
 		return 0, 0, fmt.Errorf("ensure sentence row: %w", err)
 	}
 	if _, err := tx.Exec(
-		`INSERT INTO translation_segments (id, translation_id, paragraph_idx, seg_idx, segment_text, pinyin, english, created_at)
+		`INSERT INTO translation_segments (id, translation_id, sentence_idx, seg_idx, segment_text, pinyin, english, created_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 		fmt.Sprintf("%s:%d:%d", id, sentenceIndex, segIdx),
 		id,
@@ -249,7 +250,7 @@ func (s *TranslationStore) Complete(id string) error {
 	rows, err := s.db.Query(
 		`SELECT english FROM translation_segments
 		 WHERE translation_id = ?
-		 ORDER BY paragraph_idx ASC, seg_idx ASC`,
+		 ORDER BY sentence_idx ASC, seg_idx ASC`,
 		id,
 	)
 	if err != nil {
@@ -353,10 +354,10 @@ func (s *TranslationStore) GetProgressSnapshot(id string) (ProgressSnapshot, boo
 	}
 
 	rows, err := s.db.Query(
-		`SELECT segment_text, pinyin, english, seg_idx, paragraph_idx
+		`SELECT segment_text, pinyin, english, seg_idx, sentence_idx
 		 FROM translation_segments
 		 WHERE translation_id = ?
-		 ORDER BY paragraph_idx ASC, seg_idx ASC`,
+		 ORDER BY sentence_idx ASC, seg_idx ASC`,
 		id,
 	)
 	if err != nil {
@@ -868,7 +869,7 @@ func (s *TranslationStore) getOnce(id string) (Translation, error) {
 		tr.ErrorMessage = &v
 	}
 
-	tr.Paragraphs = s.loadParagraphs(id)
+	tr.Sentences = s.loadSentences(id)
 	return tr, nil
 }
 
@@ -931,30 +932,30 @@ func (s *TranslationStore) listOnce(limit int, offset int, status string) ([]Tra
 	return items, total, nil
 }
 
-func (s *TranslationStore) UpdateTranslationSegments(translationID string, paragraphIdx int, segments []SegmentResult) error {
+func (s *TranslationStore) UpdateTranslationSegments(translationID string, sentenceIdx int, segments []SegmentResult) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 	if _, err := tx.Exec(
-		`INSERT INTO translation_paragraphs (id, translation_id, paragraph_idx, indent, separator)
+		`INSERT INTO translation_sentences (id, translation_id, sentence_idx, indent, separator)
 		 VALUES (?, ?, ?, '', '')
-		 ON CONFLICT (translation_id, paragraph_idx) DO NOTHING`,
-		fmt.Sprintf("%s:%d", translationID, paragraphIdx),
-		translationID, paragraphIdx,
+		 ON CONFLICT (translation_id, sentence_idx) DO NOTHING`,
+		fmt.Sprintf("%s:%d", translationID, sentenceIdx),
+		translationID, sentenceIdx,
 	); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(`DELETE FROM translation_segments WHERE translation_id = ? AND paragraph_idx = ?`, translationID, paragraphIdx); err != nil {
+	if _, err := tx.Exec(`DELETE FROM translation_segments WHERE translation_id = ? AND sentence_idx = ?`, translationID, sentenceIdx); err != nil {
 		return err
 	}
 	for idx, seg := range segments {
 		if _, err := tx.Exec(
-			`INSERT INTO translation_segments (id, translation_id, paragraph_idx, seg_idx, segment_text, pinyin, english, created_at)
+			`INSERT INTO translation_segments (id, translation_id, sentence_idx, seg_idx, segment_text, pinyin, english, created_at)
 			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-			fmt.Sprintf("%s:%d:%d", translationID, paragraphIdx, idx),
-			translationID, paragraphIdx, idx, seg.Segment, seg.Pinyin, seg.English, time.Now().UTC().Format(time.RFC3339Nano),
+			fmt.Sprintf("%s:%d:%d", translationID, sentenceIdx, idx),
+			translationID, sentenceIdx, idx, seg.Segment, seg.Pinyin, seg.English, time.Now().UTC().Format(time.RFC3339Nano),
 		); err != nil {
 			return err
 		}
@@ -962,12 +963,290 @@ func (s *TranslationStore) UpdateTranslationSegments(translationID string, parag
 	return tx.Commit()
 }
 
-func (s *TranslationStore) loadParagraphs(translationID string) []ParagraphResult {
+// UpdateInputTextForReprocessing diffs the new text against existing sentence hashes,
+// deletes stale segments, updates the translation's input_text + status, and returns
+// the map of sentenceIdx → sentence for only changed/new sentences.
+// Returns an empty map (no error) when the new text produces no changes.
+func (s *TranslationStore) UpdateInputTextForReprocessing(id string, newText string) (map[int]string, error) {
+	sentences := splitStoreSentences(newText)
+
+	// Compute hashes for the new sentences.
+	newHashes := make([]string, len(sentences))
+	for i, si := range sentences {
+		h := sha256.Sum256([]byte(si.Text))
+		newHashes[i] = fmt.Sprintf("%x", h)
+	}
+
+	// Check translation exists.
+	var exists int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM translations WHERE id = ?`, id).Scan(&exists); err != nil {
+		return nil, fmt.Errorf("check translation exists: %w", err)
+	}
+	if exists == 0 {
+		return nil, ErrNotFound
+	}
+
+	// Load existing sentence hashes (outside transaction — read-only).
 	rows, err := s.db.Query(
-		`SELECT paragraph_idx, indent, separator
-		 FROM translation_paragraphs
+		`SELECT sentence_idx, content_hash FROM translation_sentences WHERE translation_id = ? ORDER BY sentence_idx ASC`,
+		id,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("load sentence hashes: %w", err)
+	}
+	oldHashes := make(map[int]string)
+	for rows.Next() {
+		var idx int
+		var hash string
+		if err := rows.Scan(&idx, &hash); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("scan sentence hash: %w", err)
+		}
+		oldHashes[idx] = hash
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate sentence hashes: %w", err)
+	}
+
+	// Determine changed/new sentences.
+	changed := make(map[int]string)
+	for i, si := range sentences {
+		if oldHash, ok := oldHashes[i]; ok && oldHash == newHashes[i] {
+			continue
+		}
+		changed[i] = si.Text
+	}
+	// Determine removed sentences (old indices beyond new count).
+	removedIdxs := make([]int, 0)
+	for oldIdx := range oldHashes {
+		if oldIdx >= len(sentences) {
+			removedIdxs = append(removedIdxs, oldIdx)
+		}
+	}
+
+	// If nothing changed and nothing removed, return early without touching DB.
+	if len(changed) == 0 && len(removedIdxs) == 0 {
+		return changed, nil
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("begin update input text tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Delete stale segments and upsert hashes for changed/new sentences.
+	for i, si := range sentences {
+		if _, isChanged := changed[i]; !isChanged {
+			continue
+		}
+		if _, err := tx.Exec(`DELETE FROM translation_segments WHERE translation_id = ? AND sentence_idx = ?`, id, i); err != nil {
+			return nil, fmt.Errorf("delete stale segments for sentence %d: %w", i, err)
+		}
+		if _, err := tx.Exec(
+			`INSERT INTO translation_sentences (id, translation_id, sentence_idx, indent, separator, content_hash)
+			 VALUES (?, ?, ?, ?, ?, ?)
+			 ON CONFLICT (translation_id, sentence_idx) DO UPDATE SET content_hash = excluded.content_hash, indent = excluded.indent, separator = excluded.separator`,
+			fmt.Sprintf("%s:%d", id, i),
+			id,
+			i,
+			si.Indent,
+			si.Separator,
+			newHashes[i],
+		); err != nil {
+			return nil, fmt.Errorf("upsert sentence %d: %w", i, err)
+		}
+	}
+
+	// Remove sentences beyond new sentence count.
+	for _, oldIdx := range removedIdxs {
+		if _, err := tx.Exec(`DELETE FROM translation_segments WHERE translation_id = ? AND sentence_idx = ?`, id, oldIdx); err != nil {
+			return nil, fmt.Errorf("delete segments for removed sentence %d: %w", oldIdx, err)
+		}
+		if _, err := tx.Exec(`DELETE FROM translation_sentences WHERE translation_id = ? AND sentence_idx = ?`, id, oldIdx); err != nil {
+			return nil, fmt.Errorf("delete removed sentence %d: %w", oldIdx, err)
+		}
+	}
+
+	if _, err := tx.Exec(
+		`UPDATE translations SET input_text = ?, status = 'pending', progress = 0, total = 0 WHERE id = ?`,
+		newText,
+		id,
+	); err != nil {
+		return nil, fmt.Errorf("update input text: %w", err)
+	}
+
+	// Reset translation_jobs row to pending so the queue can claim it again.
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	if _, err := tx.Exec(
+		`UPDATE translation_jobs SET state = 'pending', lease_until = NULL, last_error = NULL, updated_at = ? WHERE translation_id = ?`,
+		now,
+		id,
+	); err != nil {
+		return nil, fmt.Errorf("reset translation job: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit update input text tx: %w", err)
+	}
+
+	return changed, nil
+}
+
+// SetReprocessing marks the translation as processing with the given total segment count.
+// Unlike SetProcessing it does not touch sentence rows (they are already set up by UpdateInputTextForReprocessing).
+func (s *TranslationStore) SetReprocessing(id string, total int) error {
+	res, err := s.db.Exec(
+		`UPDATE translations SET status = 'processing', total = ?, progress = 0 WHERE id = ?`,
+		total,
+		id,
+	)
+	if err != nil {
+		return fmt.Errorf("set reprocessing: %w", err)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil || affected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// AddReprocessedSegment inserts a segment at an explicit (sentenceIdx, segIdx) position and
+// increments the global progress counter.
+func (s *TranslationStore) AddReprocessedSegment(id string, result SegmentResult, sentenceIdx int, segIdx int) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin add reprocessed segment tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	var progress, total int
+	if err := tx.QueryRow(`SELECT progress, total FROM translations WHERE id = ?`, id).Scan(&progress, &total); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		}
+		return fmt.Errorf("load progress: %w", err)
+	}
+
+	if _, err := tx.Exec(
+		`INSERT INTO translation_segments (id, translation_id, sentence_idx, seg_idx, segment_text, pinyin, english, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		fmt.Sprintf("%s:%d:%d", id, sentenceIdx, segIdx),
+		id,
+		sentenceIdx,
+		segIdx,
+		result.Segment,
+		result.Pinyin,
+		result.English,
+		time.Now().UTC().Format(time.RFC3339Nano),
+	); err != nil {
+		return fmt.Errorf("insert reprocessed segment: %w", err)
+	}
+
+	progress++
+	if _, err := tx.Exec(`UPDATE translations SET progress = ? WHERE id = ?`, progress, id); err != nil {
+		return fmt.Errorf("update progress: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit add reprocessed segment tx: %w", err)
+	}
+	return nil
+}
+
+type storeSentenceInfo struct {
+	Text      string
+	Indent    string
+	Separator string
+}
+
+// splitStoreSentences is a copy of the queue package's splitInputSentences logic,
+// kept here so the store package stays decoupled from queue.
+// It now also captures indent and separator for each sentence.
+func splitStoreSentences(text string) []storeSentenceInfo {
+	var out []storeSentenceInfo
+	var sentence strings.Builder
+	var lineIndent strings.Builder
+	atLineStart := true
+
+	addSeparatorChar := func(r rune) {
+		if len(out) > 0 {
+			out[len(out)-1].Separator += string(r)
+		}
+	}
+
+	for len(text) > 0 {
+		r, size := utf8.DecodeRuneInString(text)
+		text = text[size:]
+
+		if atLineStart {
+			if r == ' ' || r == '\t' {
+				lineIndent.WriteRune(r)
+				continue
+			}
+			if r == '\n' || r == '\r' {
+				addSeparatorChar(r)
+				lineIndent.Reset()
+				continue
+			}
+			atLineStart = false
+		}
+
+		if r == '\n' || r == '\r' {
+			s := strings.TrimSpace(sentence.String())
+			if s != "" {
+				out = append(out, storeSentenceInfo{
+					Text:   s,
+					Indent: lineIndent.String(),
+				})
+			}
+			addSeparatorChar(r)
+			sentence.Reset()
+			lineIndent.Reset()
+			atLineStart = true
+			continue
+		}
+
+		sentence.WriteRune(r)
+		if isStoreSentenceDelimiter(r) {
+			s := strings.TrimSpace(sentence.String())
+			if s != "" {
+				out = append(out, storeSentenceInfo{
+					Text:   s,
+					Indent: lineIndent.String(),
+				})
+				sentence.Reset()
+				lineIndent.Reset()
+			}
+		}
+	}
+
+	if s := strings.TrimSpace(sentence.String()); s != "" {
+		out = append(out, storeSentenceInfo{
+			Text:   s,
+			Indent: lineIndent.String(),
+		})
+	}
+
+	return out
+}
+
+func isStoreSentenceDelimiter(r rune) bool {
+	switch r {
+	case '。', '！', '？', '!', '?', ';', '；':
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *TranslationStore) loadSentences(translationID string) []SentenceResult {
+	rows, err := s.db.Query(
+		`SELECT sentence_idx, indent, separator
+		 FROM translation_sentences
 		 WHERE translation_id = ?
-		 ORDER BY paragraph_idx ASC`,
+		 ORDER BY sentence_idx ASC`,
 		translationID,
 	)
 	if err != nil {
@@ -975,7 +1254,7 @@ func (s *TranslationStore) loadParagraphs(translationID string) []ParagraphResul
 	}
 	defer rows.Close()
 
-	paragraphs := make([]ParagraphResult, 0)
+	sentences := make([]SentenceResult, 0)
 	indices := make([]int, 0)
 	for rows.Next() {
 		var idx int
@@ -984,7 +1263,7 @@ func (s *TranslationStore) loadParagraphs(translationID string) []ParagraphResul
 		if err := rows.Scan(&idx, &indent, &separator); err != nil {
 			return nil
 		}
-		paragraphs = append(paragraphs, ParagraphResult{
+		sentences = append(sentences, SentenceResult{
 			Translations: []SegmentResult{},
 			Indent:       indent,
 			Separator:    separator,
@@ -995,14 +1274,14 @@ func (s *TranslationStore) loadParagraphs(translationID string) []ParagraphResul
 		return nil
 	}
 
-	for i, paraIdx := range indices {
+	for i, sentenceIdx := range indices {
 		segRows, err := s.db.Query(
 			`SELECT segment_text, pinyin, english
 			 FROM translation_segments
-			 WHERE translation_id = ? AND paragraph_idx = ?
+			 WHERE translation_id = ? AND sentence_idx = ?
 			 ORDER BY seg_idx ASC`,
 			translationID,
-			paraIdx,
+			sentenceIdx,
 		)
 		if err != nil {
 			return nil
@@ -1017,8 +1296,8 @@ func (s *TranslationStore) loadParagraphs(translationID string) []ParagraphResul
 			segments = append(segments, seg)
 		}
 		_ = segRows.Close()
-		paragraphs[i].Translations = segments
+		sentences[i].Translations = segments
 	}
 
-	return paragraphs
+	return sentences
 }
