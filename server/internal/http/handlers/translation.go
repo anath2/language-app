@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -45,7 +46,7 @@ type translationDetailResponse struct {
 	InputText       string      `json:"input_text"`
 	FullTranslation *string     `json:"full_translation"`
 	ErrorMessage    *string     `json:"error_message"`
-	Paragraphs      interface{} `json:"paragraphs"`
+	Sentences       interface{} `json:"sentences"`
 }
 
 type translationStatusResponse struct {
@@ -140,7 +141,7 @@ func GetTranslation(w http.ResponseWriter, r *http.Request) {
 		InputText:       item.InputText,
 		FullTranslation: item.FullTranslation,
 		ErrorMessage:    item.ErrorMessage,
-		Paragraphs:      item.Paragraphs,
+		Sentences:       item.Sentences,
 	})
 }
 
@@ -162,6 +163,60 @@ func GetTranslationStatus(w http.ResponseWriter, r *http.Request) {
 		Status:        item.Status,
 		Progress:      intPtrIfKnown(item.Progress, item.Status),
 		Total:         intPtrIfKnown(item.Total, item.Status),
+	})
+}
+
+type updateTranslationRequest struct {
+	InputText string `json:"input_text"`
+}
+
+type updateTranslationResponse struct {
+	Status           string `json:"status"`
+	SentencesChanged int    `json:"sentences_changed"`
+}
+
+func UpdateTranslation(w http.ResponseWriter, r *http.Request) {
+	if err := validateDependencies(); err != nil {
+		WriteJSON(w, http.StatusInternalServerError, map[string]string{"detail": err.Error()})
+		return
+	}
+
+	translationID := pathParam(r, "translation_id")
+
+	var req updateTranslationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": "Invalid JSON payload"})
+		return
+	}
+	if strings.TrimSpace(req.InputText) == "" {
+		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": "input_text is required"})
+		return
+	}
+
+	sentencesToProcess, err := sharedTranslations.UpdateInputTextForReprocessing(translationID, req.InputText)
+	if err != nil {
+		if errors.Is(err, translation.ErrNotFound) {
+			WriteJSON(w, http.StatusNotFound, map[string]string{"detail": "Translation not found"})
+			return
+		}
+		WriteJSON(w, http.StatusInternalServerError, map[string]string{"detail": err.Error()})
+		return
+	}
+
+	if len(sentencesToProcess) == 0 {
+		WriteJSON(w, http.StatusOK, updateTranslationResponse{
+			Status:           "completed",
+			SentencesChanged: 0,
+		})
+		return
+	}
+
+	sharedQueue.Submit(translationID)
+	sharedQueue.StartReprocessing(translationID, sentencesToProcess)
+
+	WriteJSON(w, http.StatusOK, updateTranslationResponse{
+		Status:           "pending",
+		SentencesChanged: len(sentencesToProcess),
 	})
 }
 
@@ -258,7 +313,7 @@ func streamLiveProgress(ctx context.Context, w http.ResponseWriter, flusher http
 					"type":            "start",
 					"translation_id":  translationID,
 					"total":           progress.Total,
-					"sentences":       sentenceInfo(item.Paragraphs),
+					"sentences":       sentenceInfo(item.Sentences),
 					"fullTranslation": item.FullTranslation,
 				})
 				flusher.Flush()
@@ -287,7 +342,7 @@ func streamLiveProgress(ctx context.Context, w http.ResponseWriter, flusher http
 				fresh, _ := sharedTranslations.Get(translationID)
 				emitSSE(w, map[string]any{
 					"type":            "complete",
-					"sentences":       fresh.Paragraphs,
+					"sentences":       fresh.Sentences,
 					"fullTranslation": fresh.FullTranslation,
 				})
 				flusher.Flush()
@@ -303,14 +358,14 @@ func replayCompletedStream(w http.ResponseWriter, flusher http.Flusher, item tra
 		"type":            "start",
 		"translation_id":  item.ID,
 		"total":           item.Total,
-		"sentences":       sentenceInfo(item.Paragraphs),
+		"sentences":       sentenceInfo(item.Sentences),
 		"fullTranslation": item.FullTranslation,
 	})
 	flusher.Flush()
 
 	current := 0
-	for paraIdx, para := range item.Paragraphs {
-		for _, seg := range para.Translations {
+	for sentenceIdx, sent := range item.Sentences {
+		for _, seg := range sent.Translations {
 			current++
 			emitSSE(w, map[string]any{
 				"type":    "progress",
@@ -321,7 +376,7 @@ func replayCompletedStream(w http.ResponseWriter, flusher http.Flusher, item tra
 					"pinyin":         seg.Pinyin,
 					"english":        seg.English,
 					"index":          current - 1,
-					"sentence_index": paraIdx,
+					"sentence_index": sentenceIdx,
 				},
 			})
 			flusher.Flush()
@@ -330,7 +385,7 @@ func replayCompletedStream(w http.ResponseWriter, flusher http.Flusher, item tra
 
 	emitSSE(w, map[string]any{
 		"type":            "complete",
-		"sentences":       item.Paragraphs,
+		"sentences":       item.Sentences,
 		"fullTranslation": item.FullTranslation,
 	})
 	flusher.Flush()
@@ -345,7 +400,7 @@ func emitSSE(w http.ResponseWriter, payload any) {
 	_, _ = fmt.Fprintf(w, "data: %s\n\n", data)
 }
 
-func sentenceInfo(sentences []translation.ParagraphResult) []map[string]any {
+func sentenceInfo(sentences []translation.SentenceResult) []map[string]any {
 	out := make([]map[string]any, 0, len(sentences))
 	for _, sentence := range sentences {
 		out = append(out, map[string]any{

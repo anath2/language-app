@@ -85,6 +85,25 @@ export async function postJsonForm<T = unknown>(url: string, formData: FormData)
  * @returns Promise resolving to the JSON response
  * @throws Error if the request fails or returns non-OK status
  */
+export async function patchJson<T = unknown>(url: string, body: unknown): Promise<T> {
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify(body),
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    if (res.status === 401) {
+      const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+      window.location.href = `#/login?return=$${returnUrl}`;
+      throw new Error('Authentication required');
+    }
+    const message = await safeErrorMessage(res);
+    throw new Error(message || `Request failed: ${res.status}`);
+  }
+  return res.json();
+}
+
 export async function deleteRequest<T = unknown>(url: string): Promise<T> {
   const res = await fetch(url, {
     method: 'DELETE',

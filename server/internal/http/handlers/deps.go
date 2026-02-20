@@ -13,7 +13,8 @@ type translationStore interface {
 	List(limit int, offset int, status string) ([]translation.Translation, int, error)
 	Get(id string) (translation.Translation, bool)
 	Delete(id string) bool
-	UpdateTranslationSegments(translationID string, paragraphIdx int, segments []translation.SegmentResult) error
+	UpdateTranslationSegments(translationID string, sentenceIdx int, segments []translation.SegmentResult) error
+	UpdateInputTextForReprocessing(id string, newText string) (map[int]string, error)
 	EnsureChatForTranslation(translationID string) (translation.ChatThread, error)
 	AppendChatMessage(translationID string, role string, content string, selectedSegmentIDs []string) (translation.ChatMessage, error)
 	ListChatMessages(translationID string) ([]translation.ChatMessage, error)

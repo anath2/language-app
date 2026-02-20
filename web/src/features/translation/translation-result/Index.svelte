@@ -1,6 +1,7 @@
 <script lang="ts">
-import { ChevronLeft, MessageCircle } from '@lucide/svelte';
+import { ChevronLeft, MessageCircle, Pencil } from '@lucide/svelte';
 import { getJson, postJson } from '@/lib/api';
+import { updateTranslationSource } from '@/features/translation/api';
 import Button from '@/ui/Button.svelte';
 import Card from '@/ui/Card.svelte';
 import { translationStore } from '@/features/translation/stores/translationStore.svelte';
@@ -23,6 +24,11 @@ let currentTranslationStatus = $state<string | null>(null);
 let currentFullTranslation = $state<string | null>(null);
 let detailLoading = $state(false);
 
+let isEditingSource = $state(false);
+let editedSourceText = $state('');
+let isSavingSource = $state(false);
+let editSourceNotice = $state('');
+
 let currentTextId = $state<string | null>(null);
 let currentRawText = $state('');
 let savedVocabMap = $state<Map<string, SavedVocabInfo>>(new Map());
@@ -40,6 +46,9 @@ async function loadTranslationFromRoute(id: string) {
   detailLoading = true;
   currentTranslationStatus = null;
   currentFullTranslation = null;
+  isEditingSource = false;
+  editedSourceText = '';
+  editSourceNotice = '';
 
   try {
     const detail = await getJson<TranslationDetailResponse>(`/api/translations/${id}`);
@@ -51,6 +60,39 @@ async function loadTranslationFromRoute(id: string) {
     currentTranslationStatus = 'failed';
   } finally {
     detailLoading = false;
+  }
+}
+
+function startEditSource() {
+  editedSourceText = currentRawText;
+  isEditingSource = true;
+  editSourceNotice = '';
+}
+
+function cancelEditSource() {
+  isEditingSource = false;
+  editedSourceText = '';
+  editSourceNotice = '';
+}
+
+async function saveEditedSource() {
+  if (!translationId || isSavingSource) return;
+  isSavingSource = true;
+  editSourceNotice = '';
+  try {
+    const result = await updateTranslationSource(translationId, editedSourceText);
+    if (result.sentences_changed === 0) {
+      editSourceNotice = 'No changes detected.';
+      isEditingSource = false;
+    } else {
+      currentRawText = editedSourceText;
+      currentTranslationStatus = 'pending';
+      isEditingSource = false;
+    }
+  } catch (error) {
+    editSourceNotice = error instanceof Error ? error.message : 'Failed to save changes.';
+  } finally {
+    isSavingSource = false;
   }
 }
 
@@ -209,8 +251,35 @@ async function onRecordLookup(headword: string, vocabItemId: string) {
   <div class="translation-layout">
     <div class="translation-left">
       <Card padding="5" important class="sticky-top">
-        <span class="panel-label">Original Text</span>
-        <div class="chinese-text">{currentRawText}</div>
+        <div class="panel-header">
+          <span class="panel-label">Original Text</span>
+          {#if currentTranslationStatus === 'completed' && !isEditingSource}
+            <button class="edit-icon-btn" onclick={startEditSource} aria-label="Edit source text">
+              <Pencil size={14} />
+            </button>
+          {/if}
+        </div>
+        {#if isEditingSource}
+          <textarea
+            class="source-textarea"
+            bind:value={editedSourceText}
+            rows={8}
+            disabled={isSavingSource}
+          ></textarea>
+          {#if editSourceNotice}
+            <p class="edit-notice">{editSourceNotice}</p>
+          {/if}
+          <div class="edit-actions">
+            <Button variant="primary" size="sm" onclick={saveEditedSource} disabled={isSavingSource}>
+              {isSavingSource ? 'Saving…' : 'Save & Retranslate'}
+            </Button>
+            <Button variant="ghost" size="sm" onclick={cancelEditSource} disabled={isSavingSource}>
+              Cancel
+            </Button>
+          </div>
+        {:else}
+          <div class="chinese-text">{currentRawText}</div>
+        {/if}
         <div class="panel-divider"></div>
         <span class="panel-label">Translated Text</span>
         <div class="translated-text">{currentFullTranslation}</div>
@@ -278,6 +347,64 @@ async function onRecordLookup(headword: string, vocabItemId: string) {
     min-width: 0;
   }
 
+  .panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--space-2);
+  }
+
+  .panel-header .panel-label {
+    margin-bottom: 0;
+  }
+
+  .edit-icon-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px 4px;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    border-radius: var(--radius-sm);
+  }
+
+  .edit-icon-btn:hover {
+    color: var(--text-primary);
+    background: var(--surface-hover);
+  }
+
+  .source-textarea {
+    width: 100%;
+    box-sizing: border-box;
+    font-family: var(--font-chinese);
+    font-size: var(--text-chinese);
+    line-height: 1.8;
+    color: var(--text-primary);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: var(--space-2);
+    resize: vertical;
+    outline: none;
+  }
+
+  .source-textarea:focus {
+    border-color: var(--color-primary);
+  }
+
+  .edit-notice {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    margin: var(--space-2) 0 0;
+  }
+
+  .edit-actions {
+    display: flex;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+  }
+
   .panel-label {
     display: block;
     color: var(--text-secondary);
@@ -306,6 +433,7 @@ async function onRecordLookup(headword: string, vocabItemId: string) {
     font-size: var(--text-base);
     color: var(--text-primary);
     line-height: var(--leading-relaxed);
+    white-space: pre-wrap;
   }
 
   :global(.loading-card) {
