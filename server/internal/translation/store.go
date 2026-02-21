@@ -13,9 +13,10 @@ type Translation struct {
 	Status          string
 	SourceType      string
 	InputText       string
+	Title           string
 	FullTranslation *string
 	ErrorMessage    *string
-	Paragraphs      []ParagraphResult
+	Sentences       []SentenceResult
 	Progress        int
 	Total           int
 }
@@ -26,10 +27,16 @@ type SegmentResult struct {
 	English string `json:"english"`
 }
 
-type ParagraphResult struct {
+type SentenceResult struct {
 	Translations []SegmentResult `json:"translations"`
 	Indent       string          `json:"indent"`
 	Separator    string          `json:"separator"`
+}
+
+// SentenceInit carries formatting metadata for a sentence when creating sentence rows.
+type SentenceInit struct {
+	Indent    string
+	Separator string
 }
 
 type SegmentProgressEntry struct {

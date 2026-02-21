@@ -1,43 +1,43 @@
 <script lang="ts">
 import { translateBatch } from '@/features/translation/api';
-import type { DisplayParagraph, ParagraphMeta, SegmentResult } from '@/features/translation/types';
+import type { DisplaySentence, SentenceMeta, SegmentResult } from '@/features/translation/types';
 import { getPastelColor } from '@/features/translation/utils';
 import Button from '@/ui/Button.svelte';
 
 const {
   translationResults,
-  paragraphMeta,
+  sentenceMeta,
   currentTranslationId,
   currentRawText,
   onSave,
   onCancel,
 }: {
   translationResults: SegmentResult[];
-  paragraphMeta: ParagraphMeta[];
+  sentenceMeta: SentenceMeta[];
   currentTranslationId: string | null;
   currentRawText: string;
-  onSave: (results: SegmentResult[], meta: ParagraphMeta[]) => void;
+  onSave: (results: SegmentResult[], meta: SentenceMeta[]) => void;
   onCancel: () => void;
 } = $props();
 
 let workingResults = $state<SegmentResult[]>([]);
-let workingMeta = $state<ParagraphMeta[]>([]);
+let workingMeta = $state<SentenceMeta[]>([]);
 let pendingIndices = $state(new Set<number>());
 let saving = $state(false);
 
 // Initialize working copy on mount
 $effect(() => {
   workingResults = translationResults.map((r) => ({ ...r }));
-  workingMeta = paragraphMeta.map((m) => ({ ...m }));
+  workingMeta = sentenceMeta.map((m) => ({ ...m }));
   pendingIndices = new Set();
 });
 
-const workingParagraphs = $derived(buildWorkingParagraphs());
+const workingSentences = $derived(buildWorkingSentences());
 
-function buildWorkingParagraphs(): DisplayParagraph[] {
+function buildWorkingSentences(): DisplaySentence[] {
   let globalIndex = 0;
-  return workingMeta.map((para, paraIdx) => {
-    const segments = Array.from({ length: para.segment_count }).map(() => {
+  return workingMeta.map((sent, sentenceIdx) => {
+    const segments = Array.from({ length: sent.segment_count }).map(() => {
       const existing = workingResults[globalIndex];
       const entry = existing
         ? { ...existing }
@@ -46,15 +46,15 @@ function buildWorkingParagraphs(): DisplayParagraph[] {
             pinyin: '',
             english: '',
             index: globalIndex,
-            paragraph_index: paraIdx,
+            sentence_index: sentenceIdx,
             pending: true,
           };
       entry.index = globalIndex;
-      entry.paragraph_index = paraIdx;
+      entry.sentence_index = sentenceIdx;
       globalIndex += 1;
       return entry;
     });
-    return { ...para, paragraph_index: paraIdx, segments };
+    return { ...sent, sentence_index: sentenceIdx, segments };
   });
 }
 
@@ -73,7 +73,7 @@ function handleSplit(segmentIndex: number, splitAfterChar: number) {
     pinyin: '...',
     english: `[${leftText}]`,
     index: segmentIndex,
-    paragraph_index: seg.paragraph_index,
+    sentence_index: seg.sentence_index,
     pending: true,
   };
   const rightSeg: SegmentResult = {
@@ -81,16 +81,16 @@ function handleSplit(segmentIndex: number, splitAfterChar: number) {
     pinyin: '...',
     english: `[${rightText}]`,
     index: segmentIndex + 1,
-    paragraph_index: seg.paragraph_index,
+    sentence_index: seg.sentence_index,
     pending: true,
   };
 
   const next = workingResults.slice();
   next.splice(segmentIndex, 1, leftSeg, rightSeg);
 
-  // Update meta: increment segment_count for this paragraph
+  // Update meta: increment segment_count for this sentence
   const metaNext = workingMeta.map((m, i) =>
-    i === seg.paragraph_index ? { ...m, segment_count: m.segment_count + 1 } : { ...m }
+    i === seg.sentence_index ? { ...m, segment_count: m.segment_count + 1 } : { ...m }
   );
 
   workingMeta = metaNext;
@@ -124,16 +124,16 @@ function handleJoin(leftIndex: number, rightIndex: number) {
     pinyin: '...',
     english: `[${mergedText}]`,
     index: leftIndex,
-    paragraph_index: leftSeg.paragraph_index,
+    sentence_index: leftSeg.sentence_index,
     pending: true,
   };
 
   const next = workingResults.slice();
   next.splice(leftIndex, 2, mergedSeg);
 
-  // Update meta: decrement segment_count for this paragraph
+  // Update meta: decrement segment_count for this sentence
   const metaNext = workingMeta.map((m, i) =>
-    i === leftSeg.paragraph_index ? { ...m, segment_count: m.segment_count - 1 } : { ...m }
+    i === leftSeg.sentence_index ? { ...m, segment_count: m.segment_count - 1 } : { ...m }
   );
 
   workingMeta = metaNext;
@@ -153,17 +153,17 @@ function handleJoin(leftIndex: number, rightIndex: number) {
   pendingIndices = newPending;
 }
 
-function reindex(results: SegmentResult[], meta: ParagraphMeta[]): SegmentResult[] {
+function reindex(results: SegmentResult[], meta: SentenceMeta[]): SegmentResult[] {
   let globalIndex = 0;
   const reindexed: SegmentResult[] = [];
-  meta.forEach((para, paraIdx) => {
-    for (let i = 0; i < para.segment_count; i++) {
+  meta.forEach((sent, sentenceIdx) => {
+    for (let i = 0; i < sent.segment_count; i++) {
       const existing = results[globalIndex];
       if (existing) {
         reindexed.push({
           ...existing,
           index: globalIndex,
-          paragraph_index: paraIdx,
+          sentence_index: sentenceIdx,
         });
       }
       globalIndex++;
@@ -180,22 +180,22 @@ async function save() {
 
   saving = true;
   try {
-    // Identify the affected paragraph
-    const paragraphIdx = workingResults[[...pendingIndices][0]]?.paragraph_index ?? null;
+    // Identify the affected sentence
+    const sentenceIdx = workingResults[[...pendingIndices][0]]?.sentence_index ?? null;
 
-    if (paragraphIdx === null) {
+    if (sentenceIdx === null) {
       onSave(workingResults, workingMeta);
       return;
     }
 
-    // Get ALL segments for this paragraph (not just pending ones)
-    // This is required because the backend replaces all segments for the paragraph
-    const paragraphSegmentIndices: number[] = [];
+    // Get ALL segments for this sentence (not just pending ones)
+    // This is required because the backend replaces all segments for the sentence
+    const sentenceSegmentIndices: number[] = [];
     const allSegmentTexts: string[] = [];
 
     workingResults.forEach((seg, idx) => {
-      if (seg.paragraph_index === paragraphIdx) {
-        paragraphSegmentIndices.push(idx);
+      if (seg.sentence_index === sentenceIdx) {
+        sentenceSegmentIndices.push(idx);
         allSegmentTexts.push(seg.segment);
       }
     });
@@ -204,12 +204,12 @@ async function save() {
       allSegmentTexts,
       currentRawText || null,
       currentTranslationId,
-      paragraphIdx
+      sentenceIdx
     );
 
-    // Apply translations to ALL segments in the paragraph
+    // Apply translations to ALL segments in the sentence
     const next = workingResults.map((r) => ({ ...r }));
-    paragraphSegmentIndices.forEach((idx, i) => {
+    sentenceSegmentIndices.forEach((idx, i) => {
       if (data.translations[i] && next[idx]) {
         next[idx] = {
           ...next[idx],
@@ -243,12 +243,12 @@ function handleKeydown(event: KeyboardEvent) {
 
 <div class="edit-mode-active">
   <div id="segments-container">
-    {#each workingParagraphs as para}
+    {#each workingSentences as sent}
       <div
-        class="paragraph"
-        style={`margin-bottom: ${para.separator ? para.separator.split("\n").length * 0.4 : 0}rem; padding-left: ${para.indent ? para.indent.length * 0.5 : 0}rem;`}
+        class="sentence"
+        style={`margin-bottom: ${sent.separator ? sent.separator.split("\n").length * 0.4 : 0}rem; padding-left: ${sent.indent ? sent.indent.length * 0.5 : 0}rem;`}
       >
-        {#each para.segments as segment, segIdx (segment.index)}
+        {#each sent.segments as segment, segIdx (segment.index)}
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <span
             class={`segment editing ${pendingIndices.has(segment.index) ? "segment-pending" : ""}`}
@@ -277,7 +277,7 @@ function handleKeydown(event: KeyboardEvent) {
             {/each}
           </span>
 
-          {#if segIdx < para.segments.length - 1}
+          {#if segIdx < sent.segments.length - 1}
             <!-- svelte-ignore a11y_click_events_have_key_events -->
             <!-- svelte-ignore a11y_no_static_element_interactions -->
             <span
@@ -285,7 +285,7 @@ function handleKeydown(event: KeyboardEvent) {
               title="Join segments"
               onclick={(e: MouseEvent) => {
                 e.stopPropagation();
-                handleJoin(segment.index, para.segments[segIdx + 1].index);
+                handleJoin(segment.index, sent.segments[segIdx + 1].index);
               }}
             >
               &#8853;
@@ -310,7 +310,7 @@ function handleKeydown(event: KeyboardEvent) {
 </div>
 
 <style>
-  .paragraph {
+  .sentence {
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-1);

@@ -40,6 +40,9 @@ const statusLabels: Record<TranslationStatus, string> = {
           </div>
           <span class="job-time">{formatTimeAgo(translation.created_at)}</span>
         </div>
+        {#if translation.title}
+          <div class="job-title">{translation.title}</div>
+        {/if}
         <div class="job-preview">{translation.input_preview}</div>
         {#if translation.full_translation_preview}
           <div class="job-translation-preview">"{translation.full_translation_preview}"</div>
@@ -142,6 +145,16 @@ const statusLabels: Record<TranslationStatus, string> = {
   .job-time {
     font-size: var(--text-xs);
     color: var(--text-muted);
+  }
+
+  .job-title {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: var(--space-1);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .job-preview {

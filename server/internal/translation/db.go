@@ -42,7 +42,7 @@ func NewDB(dbPath string) (*DB, error) {
 func verifySchema(db *sql.DB) error {
 	requiredTables := []string{
 		"translations",
-		"translation_paragraphs",
+		"translation_sentences",
 		"translation_segments",
 		"translation_jobs",
 		"translation_chats",

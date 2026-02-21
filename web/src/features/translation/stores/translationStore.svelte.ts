@@ -30,6 +30,7 @@ class TranslationStore {
       created_at: new Date().toISOString(),
       status: (status as TranslationSummary['status']) ?? 'pending',
       source_type: 'text',
+      title: inputPreview.slice(0, 10) + (inputPreview.length > 10 ? '…' : ''),
       input_preview: inputPreview,
       full_translation_preview: null,
       segment_count: null,

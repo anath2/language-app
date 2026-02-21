@@ -12,6 +12,7 @@ func RegisterTranslationRoutes(r chi.Router) {
 	r.Method(http.MethodGet, "/api/translations", http.HandlerFunc(handlers.ListTranslations))
 	r.Method(http.MethodGet, "/api/translations/{translation_id}", http.HandlerFunc(handlers.GetTranslation))
 	r.Method(http.MethodGet, "/api/translations/{translation_id}/status", http.HandlerFunc(handlers.GetTranslationStatus))
+	r.Method(http.MethodPatch, "/api/translations/{translation_id}", http.HandlerFunc(handlers.UpdateTranslation))
 	r.Method(http.MethodDelete, "/api/translations/{translation_id}", http.HandlerFunc(handlers.DeleteTranslation))
 	r.Method(http.MethodGet, "/api/translations/{translation_id}/stream", http.HandlerFunc(handlers.TranslationStream))
 }

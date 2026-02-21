@@ -2,7 +2,7 @@
 import { tick } from 'svelte';
 import Button from '@/ui/Button.svelte';
 import type {
-  DisplayParagraph,
+  DisplaySentence,
   LoadingState,
   ProgressState,
   SavedVocabInfo,
@@ -12,7 +12,7 @@ import type {
 import { getPastelColor } from '@/features/translation/utils';
 
 const {
-  displayParagraphs,
+  displaySentences,
   savedVocabMap,
   progress,
   onSaveVocab,
@@ -20,7 +20,7 @@ const {
   onResumeLearning,
   onRecordLookup,
 }: {
-  displayParagraphs: DisplayParagraph[];
+  displaySentences: DisplaySentence[];
   savedVocabMap: Map<string, SavedVocabInfo>;
   progress: ProgressState;
   fullTranslation: string;
@@ -244,9 +244,9 @@ async function resumeLearning() {
   {/if}
 
   <div id="segments-container">
-    {#each displayParagraphs as para}
-      <div class="paragraph" style={`margin-bottom: ${para.separator ? para.separator.split("\n").length * 0.4 : 0}rem; padding-left: ${para.indent ? para.indent.length * 0.5 : 0}rem;`}>
-        {#each para.segments as segment (segment.index)}
+    {#each displaySentences as sent}
+      <div class="sentence" style={`margin-bottom: ${sent.separator ? sent.separator.split("\n").length * 0.4 : 0}rem; padding-left: ${sent.indent ? sent.indent.length * 0.5 : 0}rem;`}>
+        {#each sent.segments as segment (segment.index)}
           <!-- svelte-ignore a11y_click_events_have_key_events -->
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <span
@@ -334,8 +334,8 @@ async function resumeLearning() {
     transition: width 0.3s ease;
   }
 
-  /* Paragraphs */
-  .paragraph {
+  /* Sentences */
+  .sentence {
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-1);
