@@ -209,6 +209,45 @@ paths:
           $ref: "#/components/responses/NotFound"
         "401":
           $ref: "#/components/responses/Unauthorized"
+    patch:
+      tags: [translations]
+      summary: Update a translation (title and/or re-process input text)
+      operationId: updateTranslation
+      parameters:
+        - $ref: "#/components/parameters/translationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                input_text:
+                  type: string
+              description: At least one of title or input_text is required
+      responses:
+        "200":
+          description: |
+            Update applied. When only title is changed returns `{"ok":true}`.
+            When input_text is provided returns status and sentence count.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    required: [ok]
+                    properties:
+                      ok:
+                        type: boolean
+                  - $ref: "#/components/schemas/UpdateTranslationResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
     delete:
       tags: [translations]
       summary: Delete a translation
@@ -356,6 +395,61 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+
+  /api/translations/{translation_id}/chat/messages/{message_id}/accept:
+    post:
+      tags: [translations]
+      summary: Accept a chat review card (saves word to vocabulary)
+      operationId: acceptReviewCard
+      parameters:
+        - $ref: "#/components/parameters/translationId"
+        - $ref: "#/components/parameters/messageId"
+      responses:
+        "200":
+          description: Review card accepted and word added to vocabulary
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, deduplicated]
+                properties:
+                  ok:
+                    type: boolean
+                  deduplicated:
+                    type: boolean
+                    description: true if the word already existed in vocabulary
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/translations/{translation_id}/chat/messages/{message_id}/reject:
+    post:
+      tags: [translations]
+      summary: Reject a chat review card
+      operationId: rejectReviewCard
+      parameters:
+        - $ref: "#/components/parameters/translationId"
+        - $ref: "#/components/parameters/messageId"
+      responses:
+        "200":
+          description: Review card rejected
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 
   /api/texts:
     post:
@@ -953,6 +1047,12 @@ components:
       required: true
       schema:
         type: string
+    messageId:
+      name: message_id
+      in: path
+      required: true
+      schema:
+        type: string
 
   responses:
     BadRequest:
@@ -973,8 +1073,24 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
+    Conflict:
+      description: Conflicting state (e.g. already accepted)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
 
   schemas:
+    UpdateTranslationResponse:
+      type: object
+      required: [status, sentences_changed]
+      properties:
+        status:
+          type: string
+          enum: [pending, completed]
+        sentences_changed:
+          type: integer
+
     ErrorResponse:
       type: object
       required: [detail]
