@@ -20,6 +20,7 @@ import type {
 const { translationId, onBack }: { translationId: string | null; onBack: () => void } = $props();
 
 let chatPaneOpen = $state(false);
+let selectedText = $state('');
 let currentTranslationStatus = $state<string | null>(null);
 let currentFullTranslation = $state<string | null>(null);
 let currentTitle = $state('');
@@ -140,6 +141,11 @@ async function saveEditedSource() {
   } finally {
     isSavingSource = false;
   }
+}
+
+function handleTextSelection() {
+  const sel = window.getSelection()?.toString().trim() ?? '';
+  if (sel) selectedText = sel;
 }
 
 function clearDetailState() {
@@ -317,7 +323,8 @@ async function onRecordLookup(headword: string, vocabItemId: string) {
     {/if}
   </div>
 
-  <div class="translation-layout">
+  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+  <div class="translation-layout" role="region" onmouseup={handleTextSelection}>
     <div class="translation-left">
       <Card padding="5" important class="sticky-top">
         <div class="panel-header">
@@ -385,6 +392,8 @@ async function onRecordLookup(headword: string, vocabItemId: string) {
     translationId={translationId}
     open={chatPaneOpen}
     onClose={() => (chatPaneOpen = false)}
+    {selectedText}
+    onClearSelectedText={() => { selectedText = ''; }}
   />
 </div>
 

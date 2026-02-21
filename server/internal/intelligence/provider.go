@@ -6,18 +6,11 @@ import (
 	"github.com/anath2/language-app/internal/translation"
 )
 
-type ChatSegmentContext struct {
-	ID      string `json:"id"`
-	Segment string `json:"segment"`
-	Pinyin  string `json:"pinyin"`
-	English string `json:"english"`
-}
-
 type ChatWithTranslationRequest struct {
-	TranslationText string               `json:"translation_text"`
-	UserMessage     string               `json:"user_message"`
-	Selected        []ChatSegmentContext `json:"selected"`
+	TranslationText string
+	UserMessage     string
 	History         []translation.ChatMessage
+	SelectedText    string
 }
 
 // TranslationProvider defines the translation intelligence contract.

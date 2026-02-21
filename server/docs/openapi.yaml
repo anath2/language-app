@@ -1173,14 +1173,12 @@ components:
       properties:
         message:
           type: string
-        selected_segment_ids:
-          type: array
-          items:
-            type: string
+        selected_text:
+          type: string
 
     ChatMessage:
       type: object
-      required: [id, chat_id, translation_id, message_idx, role, content, selected_segment_ids, created_at]
+      required: [id, chat_id, translation_id, message_idx, role, content, created_at]
       properties:
         id:
           type: string
@@ -1195,10 +1193,8 @@ components:
           enum: [user, ai]
         content:
           type: string
-        selected_segment_ids:
-          type: array
-          items:
-            type: string
+        selected_text:
+          type: string
         created_at:
           type: string
           format: date-time

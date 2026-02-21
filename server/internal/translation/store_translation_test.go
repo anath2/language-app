@@ -40,11 +40,11 @@ func TestChatThreadAndMessagesLifecycle(t *testing.T) {
 		t.Fatalf("expected one chat per translation, got %q and %q", threadA.ID, threadB.ID)
 	}
 
-	userMsg, err := store.AppendChatMessage(tr.ID, ChatRoleUser, "What does this mean?", nil)
+	userMsg, err := store.AppendChatMessage(tr.ID, ChatRoleUser, "What does this mean?", "")
 	if err != nil {
 		t.Fatalf("append user message: %v", err)
 	}
-	aiMsg, err := store.AppendChatMessage(tr.ID, ChatRoleAI, "It means hello world.", nil)
+	aiMsg, err := store.AppendChatMessage(tr.ID, ChatRoleAI, "It means hello world.", "")
 	if err != nil {
 		t.Fatalf("append ai message: %v", err)
 	}
@@ -64,41 +64,13 @@ func TestChatThreadAndMessagesLifecycle(t *testing.T) {
 	}
 }
 
-func TestLoadSelectedSegmentsByIDsPreservesOrder(t *testing.T) {
-	store := newTranslationStoreWithMigrations(t)
-	tr, err := store.Create("你好世界", "text")
-	if err != nil {
-		t.Fatalf("create translation: %v", err)
-	}
-	err = store.UpdateTranslationSegments(tr.ID, 0, []SegmentResult{
-		{Segment: "你好", Pinyin: "ni hao", English: "hello"},
-		{Segment: "世界", Pinyin: "shi jie", English: "world"},
-	})
-	if err != nil {
-		t.Fatalf("update translation segments: %v", err)
-	}
-
-	secondID := tr.ID + ":0:1"
-	firstID := tr.ID + ":0:0"
-	selected, err := store.LoadSelectedSegmentsByIDs(tr.ID, []string{secondID, firstID})
-	if err != nil {
-		t.Fatalf("load selected segments: %v", err)
-	}
-	if len(selected) != 2 {
-		t.Fatalf("expected 2 selected segments, got %d", len(selected))
-	}
-	if selected[0].Segment != "世界" || selected[1].Segment != "你好" {
-		t.Fatalf("selected order mismatch: %#v", selected)
-	}
-}
-
 func TestClearChatMessages(t *testing.T) {
 	store := newTranslationStoreWithMigrations(t)
 	tr, err := store.Create("你好", "text")
 	if err != nil {
 		t.Fatalf("create translation: %v", err)
 	}
-	if _, err := store.AppendChatMessage(tr.ID, ChatRoleUser, "test", nil); err != nil {
+	if _, err := store.AppendChatMessage(tr.ID, ChatRoleUser, "test", ""); err != nil {
 		t.Fatalf("append message: %v", err)
 	}
 	if err := store.ClearChatMessages(tr.ID); err != nil {

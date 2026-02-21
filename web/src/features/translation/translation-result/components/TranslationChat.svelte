@@ -10,12 +10,14 @@ const {
   translationId,
   open,
   onClose,
-  selectedSegmentIds = [],
+  selectedText = '',
+  onClearSelectedText,
 }: {
   translationId: string | null;
   open: boolean;
   onClose: () => void;
-  selectedSegmentIds?: string[];
+  selectedText?: string;
+  onClearSelectedText?: () => void;
 } = $props();
 
 let messages = $state<ChatMessage[]>([]);
@@ -61,7 +63,7 @@ async function sendMessage() {
     message_idx: 0, // placeholder; server-assigned index is loaded on reload
     role: 'user',
     content: text,
-    selected_segment_ids: selectedSegmentIds,
+    selected_text: selectedText || undefined,
     created_at: new Date().toISOString(),
   };
   messages = [...messages, userMessage];
@@ -74,7 +76,7 @@ async function sendMessage() {
   try {
     await postJsonStream<ChatStreamEvent>(
       `/api/translations/${translationId}/chat/new`,
-      { message: text, selected_segment_ids: selectedSegmentIds },
+      { message: text, selected_text: selectedText },
       (event) => {
         if (event.type === 'tool_call_start') {
           streamingToolCall = true;
@@ -88,7 +90,6 @@ async function sendMessage() {
             message_idx: 0, // placeholder; server-assigned index is loaded on reload
             role: 'ai',
             content: event.content ?? streamingContent,
-            selected_segment_ids: [],
             created_at: new Date().toISOString(),
           };
           const toolMessages: ChatMessage[] = (event.tool_results ?? []).map((tr) => ({
@@ -98,7 +99,6 @@ async function sendMessage() {
             message_idx: 0, // placeholder; server-assigned index is loaded on reload
             role: 'tool',
             content: tr.review_card.chinese_text,
-            selected_segment_ids: [],
             created_at: new Date().toISOString(),
             review_card: tr.review_card,
           }));
@@ -115,6 +115,7 @@ async function sendMessage() {
     streaming = false;
     streamingContent = '';
     streamingToolCall = false;
+    onClearSelectedText?.();
   }
 }
 
@@ -221,6 +222,12 @@ async function rejectReviewCard(msg: ChatMessage) {
     </div>
     {#if errorMessage}
       <p class="chat-inline-error">{errorMessage}</p>
+    {/if}
+    {#if selectedText}
+      <div class="selection-chip">
+        <span class="selection-chip-text">{selectedText.length > 60 ? selectedText.slice(0, 60) + '…' : selectedText}</span>
+        <button class="selection-chip-dismiss" onclick={() => onClearSelectedText?.()}>✕</button>
+      </div>
     {/if}
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
     <div
@@ -399,5 +406,41 @@ async function rejectReviewCard(msg: ChatMessage) {
   .chat-clear {
     margin-top: var(--space-2);
     align-self: flex-start;
+  }
+
+  .selection-chip {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-1) var(--space-3);
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+    margin-bottom: var(--space-2);
+    flex-shrink: 0;
+  }
+
+  .selection-chip-text {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .selection-chip-dismiss {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    padding: 0 2px;
+    font-size: var(--text-xs);
+    flex-shrink: 0;
+    line-height: 1;
+  }
+
+  .selection-chip-dismiss:hover {
+    color: var(--text-primary);
   }
 </style>
