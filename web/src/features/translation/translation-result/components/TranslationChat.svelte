@@ -286,9 +286,12 @@ async function rejectReviewCard(msg: ChatMessage) {
   .chat-panel {
     display: flex;
     flex-direction: column;
-    height: 100vh;
-    position: sticky;
+    position: fixed;
     top: 0;
+    right: 0;
+    width: min(32rem, 100vw);
+    height: 100dvh;
+    z-index: var(--z-modal, 100);
     border-left: 1px solid var(--border);
     background: var(--surface);
     box-shadow: -4px 0 12px var(--shadow);
@@ -308,7 +311,7 @@ async function rejectReviewCard(msg: ChatMessage) {
 
   .chat-panel-title {
     margin: 0;
-    font-size: var(--text-lg);
+    font-size: var(--text-xl);
     font-weight: 600;
     color: var(--text-primary);
   }
@@ -329,10 +332,9 @@ async function rejectReviewCard(msg: ChatMessage) {
   /* Full-width on narrow screens */
   @media (max-width: 900px) {
     .chat-panel {
-      position: fixed;
       inset: 0;
       width: 100%;
-      height: 100%;
+      height: 100dvh;
     }
   }
 
@@ -356,7 +358,7 @@ async function rejectReviewCard(msg: ChatMessage) {
 
   .chat-status {
     color: var(--text-muted);
-    font-size: var(--text-sm);
+    font-size: var(--text-base);
     margin: 0;
     padding: var(--space-4);
   }
@@ -379,8 +381,8 @@ async function rejectReviewCard(msg: ChatMessage) {
   }
 
   .chat-bubble-ai {
-    background: var(--surface-2);
-    color: var(--text-primary);
+    background: var(--background-muted);
+    color: var(--text-secondary);
     border: 1px solid var(--border);
   }
 
@@ -400,7 +402,7 @@ async function rejectReviewCard(msg: ChatMessage) {
   }
 
   .chat-bubble-content {
-    font-size: var(--text-sm);
+    font-size: var(--text-base);
     line-height: 1.6;
     white-space: pre-wrap;
     word-break: break-word;

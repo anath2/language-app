@@ -24,39 +24,31 @@ function backToList() {
 }
 </script>
 
-
 {#if !auth.isAuthenticated && !auth.isLoading && router.route.page !== "login"}
+<main class="page-container">
   <Login returnUrl={window.location.pathname + window.location.search} />
+</main>
 {:else if auth.isAuthenticated || router.route.page === "login"}
   <NavBar />
-
-  {#if currentPage === "login"}
-    {#if router.route.page === "login"}
-      <Login returnUrl={router.route.returnUrl} />
+  <main class="page-container">
+    {#if currentPage === "login"}
+      {#if router.route.page === "login"}
+        <Login returnUrl={router.route.returnUrl} />
+      {/if}
+    {:else}
+      {#if currentPage === "home"}
+        <TranslateTextIndex />
+      {:else if currentPage === "translation"}
+        <TranslationResultIndex translationId={translationId} onBack={backToList} />
+      {:else if currentPage === "admin"}
+        <div class="page-narrow">
+          <Admin />
+        </div>
+      {/if}
     {/if}
-  {:else}
-
-    {#if currentPage === "home"}
-  <div class="page-container">
-    <TranslateTextIndex />
-  </div>
-
-{:else if currentPage === "translation"}
-  <div class="page-container">
-    <TranslationResultIndex translationId={translationId} onBack={backToList} />
-  </div>
-
-{:else if currentPage === "admin"}
-    <!-- Admin Page -->
-    <div class="page-container max-w-4xl">
-      <Admin />
-    </div>
-  {/if}
-
-  {/if}
+  </main>
 
 {/if}
-
 <style>
   .page-container {
     max-width: 1200px;
@@ -64,8 +56,9 @@ function backToList() {
     padding: 1.5rem;
   }
 
-  .page-container.max-w-4xl {
+  .page-narrow {
     max-width: 56rem;
+    margin: 0 auto;
   }
 
   @media (max-width: 640px) {
