@@ -1,10 +1,12 @@
 <script lang="ts">
 import { X } from '@lucide/svelte';
+import DOMPurify from 'dompurify';
+import { marked } from 'marked';
 import Button from '@/ui/Button.svelte';
 import Loader from '@/ui/Loader.svelte';
 import TextArea from '@/ui/TextArea.svelte';
 import { getJson, postJson, postJsonStream } from '@/lib/api';
-import type { ChatMessage, ChatReviewCard, ChatListResponse, ChatStreamEvent } from '@/features/translation/types';
+import type { ChatMessage, ChatListResponse, ChatStreamEvent } from '@/features/translation/types';
 
 const {
   translationId,
@@ -31,6 +33,11 @@ let listError = $state('');
 
 // Track per-message dedup state (message_id -> bool)
 let dedupMap = $state<Record<string, boolean>>({});
+
+function renderMarkdown(content: string): string {
+  const html = marked.parse(content, { gfm: true, breaks: true });
+  return DOMPurify.sanitize(typeof html === 'string' ? html : '');
+}
 
 $effect(() => {
   if (!open || !translationId) return;
@@ -210,7 +217,11 @@ async function rejectReviewCard(msg: ChatMessage) {
             {/if}
           {:else}
             <div class="chat-bubble chat-bubble-{msg.role}">
-              <div class="chat-bubble-content">{msg.content}</div>
+              {#if msg.role === 'ai'}
+                <div class="chat-bubble-content markdown">{@html renderMarkdown(msg.content)}</div>
+              {:else}
+                <div class="chat-bubble-content">{msg.content}</div>
+              {/if}
             </div>
           {/if}
         {/each}
@@ -225,7 +236,7 @@ async function rejectReviewCard(msg: ChatMessage) {
           </div>
         {:else if streamingContent}
           <div class="chat-bubble chat-bubble-ai chat-bubble-streaming">
-            <div class="chat-bubble-content">{streamingContent}</div>
+            <div class="chat-bubble-content markdown">{@html renderMarkdown(streamingContent)}</div>
           </div>
         {/if}
       {/if}
@@ -406,6 +417,53 @@ async function rejectReviewCard(msg: ChatMessage) {
     line-height: 1.6;
     white-space: pre-wrap;
     word-break: break-word;
+  }
+
+  .chat-bubble-content.markdown {
+    white-space: normal;
+  }
+
+  .chat-bubble-content.markdown :global(p),
+  .chat-bubble-content.markdown :global(ul),
+  .chat-bubble-content.markdown :global(ol),
+  .chat-bubble-content.markdown :global(pre),
+  .chat-bubble-content.markdown :global(blockquote) {
+    margin: 0.5rem 0;
+  }
+
+  .chat-bubble-content.markdown :global(ul),
+  .chat-bubble-content.markdown :global(ol) {
+    padding-left: 1.2rem;
+  }
+
+  .chat-bubble-content.markdown :global(code) {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+      "Courier New", monospace;
+    font-size: 0.9em;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.1rem 0.3rem;
+  }
+
+  .chat-bubble-content.markdown :global(pre) {
+    overflow-x: auto;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 0.75rem;
+  }
+
+  .chat-bubble-content.markdown :global(pre code) {
+    background: transparent;
+    border: 0;
+    padding: 0;
+    font-size: 0.85em;
+  }
+
+  .chat-bubble-content.markdown :global(a) {
+    color: var(--primary);
+    text-decoration: underline;
   }
 
   .review-card {
