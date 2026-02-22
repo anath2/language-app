@@ -460,15 +460,8 @@ async function onRecordLookup(headword: string, vocabItemId: string) {
   }
 
   .page-wrapper {
-    display: grid;
-    grid-template-columns: 1fr;
-    transition: grid-template-columns 0.25s ease;
     min-height: 100vh;
     align-items: start;
-  }
-
-  .page-wrapper.chat-open {
-    grid-template-columns: 2fr 1fr;
   }
 
   .page-content {
@@ -478,13 +471,6 @@ async function onRecordLookup(headword: string, vocabItemId: string) {
     min-width: 0;
     width: 100%;
     box-sizing: border-box;
-  }
-
-  /* On narrow screens: chat takes full width */
-  @media (max-width: 900px) {
-    .page-wrapper.chat-open {
-      grid-template-columns: 1fr;
-    }
   }
 
   .translation-layout {

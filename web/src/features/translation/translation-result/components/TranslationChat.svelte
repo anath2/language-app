@@ -1,10 +1,12 @@
 <script lang="ts">
 import { X } from '@lucide/svelte';
+import DOMPurify from 'dompurify';
+import { marked } from 'marked';
 import Button from '@/ui/Button.svelte';
 import Loader from '@/ui/Loader.svelte';
 import TextArea from '@/ui/TextArea.svelte';
 import { getJson, postJson, postJsonStream } from '@/lib/api';
-import type { ChatMessage, ChatReviewCard, ChatListResponse, ChatStreamEvent } from '@/features/translation/types';
+import type { ChatMessage, ChatListResponse, ChatStreamEvent } from '@/features/translation/types';
 
 const {
   translationId,
@@ -31,6 +33,11 @@ let listError = $state('');
 
 // Track per-message dedup state (message_id -> bool)
 let dedupMap = $state<Record<string, boolean>>({});
+
+function renderMarkdown(content: string): string {
+  const html = marked.parse(content, { gfm: true, breaks: true });
+  return DOMPurify.sanitize(typeof html === 'string' ? html : '');
+}
 
 $effect(() => {
   if (!open || !translationId) return;
@@ -210,7 +217,11 @@ async function rejectReviewCard(msg: ChatMessage) {
             {/if}
           {:else}
             <div class="chat-bubble chat-bubble-{msg.role}">
-              <div class="chat-bubble-content">{msg.content}</div>
+              {#if msg.role === 'ai'}
+                <div class="chat-bubble-content markdown">{@html renderMarkdown(msg.content)}</div>
+              {:else}
+                <div class="chat-bubble-content">{msg.content}</div>
+              {/if}
             </div>
           {/if}
         {/each}
@@ -225,7 +236,7 @@ async function rejectReviewCard(msg: ChatMessage) {
           </div>
         {:else if streamingContent}
           <div class="chat-bubble chat-bubble-ai chat-bubble-streaming">
-            <div class="chat-bubble-content">{streamingContent}</div>
+            <div class="chat-bubble-content markdown">{@html renderMarkdown(streamingContent)}</div>
           </div>
         {/if}
       {/if}
@@ -286,9 +297,12 @@ async function rejectReviewCard(msg: ChatMessage) {
   .chat-panel {
     display: flex;
     flex-direction: column;
-    height: 100vh;
-    position: sticky;
+    position: fixed;
     top: 0;
+    right: 0;
+    width: min(32rem, 100vw);
+    height: 100dvh;
+    z-index: var(--z-modal, 100);
     border-left: 1px solid var(--border);
     background: var(--surface);
     box-shadow: -4px 0 12px var(--shadow);
@@ -308,7 +322,7 @@ async function rejectReviewCard(msg: ChatMessage) {
 
   .chat-panel-title {
     margin: 0;
-    font-size: var(--text-lg);
+    font-size: var(--text-xl);
     font-weight: 600;
     color: var(--text-primary);
   }
@@ -329,10 +343,9 @@ async function rejectReviewCard(msg: ChatMessage) {
   /* Full-width on narrow screens */
   @media (max-width: 900px) {
     .chat-panel {
-      position: fixed;
       inset: 0;
       width: 100%;
-      height: 100%;
+      height: 100dvh;
     }
   }
 
@@ -356,7 +369,7 @@ async function rejectReviewCard(msg: ChatMessage) {
 
   .chat-status {
     color: var(--text-muted);
-    font-size: var(--text-sm);
+    font-size: var(--text-base);
     margin: 0;
     padding: var(--space-4);
   }
@@ -379,8 +392,8 @@ async function rejectReviewCard(msg: ChatMessage) {
   }
 
   .chat-bubble-ai {
-    background: var(--surface-2);
-    color: var(--text-primary);
+    background: var(--background-muted);
+    color: var(--text-secondary);
     border: 1px solid var(--border);
   }
 
@@ -400,10 +413,57 @@ async function rejectReviewCard(msg: ChatMessage) {
   }
 
   .chat-bubble-content {
-    font-size: var(--text-sm);
+    font-size: var(--text-base);
     line-height: 1.6;
     white-space: pre-wrap;
     word-break: break-word;
+  }
+
+  .chat-bubble-content.markdown {
+    white-space: normal;
+  }
+
+  .chat-bubble-content.markdown :global(p),
+  .chat-bubble-content.markdown :global(ul),
+  .chat-bubble-content.markdown :global(ol),
+  .chat-bubble-content.markdown :global(pre),
+  .chat-bubble-content.markdown :global(blockquote) {
+    margin: 0.5rem 0;
+  }
+
+  .chat-bubble-content.markdown :global(ul),
+  .chat-bubble-content.markdown :global(ol) {
+    padding-left: 1.2rem;
+  }
+
+  .chat-bubble-content.markdown :global(code) {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+      "Courier New", monospace;
+    font-size: 0.9em;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.1rem 0.3rem;
+  }
+
+  .chat-bubble-content.markdown :global(pre) {
+    overflow-x: auto;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 0.75rem;
+  }
+
+  .chat-bubble-content.markdown :global(pre code) {
+    background: transparent;
+    border: 0;
+    padding: 0;
+    font-size: 0.85em;
+  }
+
+  .chat-bubble-content.markdown :global(a) {
+    color: var(--primary);
+    text-decoration: underline;
   }
 
   .review-card {

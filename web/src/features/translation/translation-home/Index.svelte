@@ -6,7 +6,7 @@ import { translationStore } from '@/features/translation/stores/translationStore
 import { router } from '@/lib/router.svelte';
 
 $effect(() => {
-  void translationStore.loadTranslations();
+  void translationStore.loadTranslations(5);
 });
 
 async function handleSubmit(text: string) {

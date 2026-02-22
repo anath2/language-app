@@ -14,6 +14,7 @@ class TranslationStore {
   currentTranslation = $state<TranslationDetailResponse | null>(null);
   loadingState = $state<LoadingState>('idle');
   errorMessage = $state('');
+  private translationsListLimit = 20;
 
   private getCreatedTranslationId(data: CreateTranslationResponse): string | null {
     return data.translation_id ?? null;
@@ -41,9 +42,13 @@ class TranslationStore {
   /**
    * Load the list of translations
    */
-  async loadTranslations(limit: number = 20): Promise<void> {
+  async loadTranslations(limit?: number): Promise<void> {
+    const effectiveLimit = limit ?? this.translationsListLimit;
+    this.translationsListLimit = effectiveLimit;
     try {
-      const data = await getJson<ListTranslationsResponse>(`/api/translations?limit=${limit}`);
+      const data = await getJson<ListTranslationsResponse>(
+        `/api/translations?limit=${effectiveLimit}`
+      );
       this.translations = data.translations || [];
     } catch (error) {
       console.error('Failed to load translations:', error);
