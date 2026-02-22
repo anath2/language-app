@@ -20,6 +20,7 @@ import type {
 const { translationId, onBack }: { translationId: string | null; onBack: () => void } = $props();
 
 let chatPaneOpen = $state(false);
+let selectedText = $state('');
 let currentTranslationStatus = $state<string | null>(null);
 let currentFullTranslation = $state<string | null>(null);
 let currentTitle = $state('');
@@ -140,6 +141,11 @@ async function saveEditedSource() {
   } finally {
     isSavingSource = false;
   }
+}
+
+function handleTextSelection() {
+  const sel = window.getSelection()?.toString().trim() ?? '';
+  if (sel) selectedText = sel;
 }
 
 function clearDetailState() {
@@ -281,7 +287,8 @@ async function onRecordLookup(headword: string, vocabItemId: string) {
 }
 </script>
 
-<div class="page-container">
+<div class="page-wrapper" class:chat-open={chatPaneOpen}>
+  <div class="page-content">
   <div class="page-header">
     <Button variant="ghost" size="sm" onclick={onBack}>
       <ChevronLeft size={16} />
@@ -317,7 +324,8 @@ async function onRecordLookup(headword: string, vocabItemId: string) {
     {/if}
   </div>
 
-  <div class="translation-layout">
+  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+  <div class="translation-layout" class:chat-open={chatPaneOpen} role="region" onmouseup={handleTextSelection}>
     <div class="translation-left">
       <Card padding="5" important class="sticky-top">
         <div class="panel-header">
@@ -380,11 +388,14 @@ async function onRecordLookup(headword: string, vocabItemId: string) {
       {/if}
     </div>
   </div>
+  </div>
 
   <TranslationChat
     translationId={translationId}
     open={chatPaneOpen}
     onClose={() => (chatPaneOpen = false)}
+    {selectedText}
+    onClearSelectedText={() => { selectedText = ''; }}
   />
 </div>
 
@@ -448,10 +459,32 @@ async function onRecordLookup(headword: string, vocabItemId: string) {
     max-width: 400px;
   }
 
-  .page-container {
+  .page-wrapper {
+    display: grid;
+    grid-template-columns: 1fr;
+    transition: grid-template-columns 0.25s ease;
+    min-height: 100vh;
+    align-items: start;
+  }
+
+  .page-wrapper.chat-open {
+    grid-template-columns: 2fr 1fr;
+  }
+
+  .page-content {
     max-width: 1200px;
     margin: 0 auto;
     padding: 1.5rem;
+    min-width: 0;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* On narrow screens: chat takes full width */
+  @media (max-width: 900px) {
+    .page-wrapper.chat-open {
+      grid-template-columns: 1fr;
+    }
   }
 
   .translation-layout {
@@ -578,6 +611,17 @@ async function onRecordLookup(headword: string, vocabItemId: string) {
     top: 80px;
   }
 
+  /* Laptop: collapse inner 1fr 1fr to single column when chat is open */
+  @media (max-width: 1400px) {
+    .translation-layout.chat-open {
+      grid-template-columns: 1fr;
+    }
+
+    .translation-layout.chat-open :global(.sticky-top) {
+      position: static;
+    }
+  }
+
   @media (max-width: 960px) {
     .translation-layout {
       grid-template-columns: 1fr;
@@ -589,7 +633,7 @@ async function onRecordLookup(headword: string, vocabItemId: string) {
   }
 
   @media (max-width: 640px) {
-    .page-container {
+    .page-content {
       padding: 1rem;
     }
   }

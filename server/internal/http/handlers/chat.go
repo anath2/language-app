@@ -10,8 +10,8 @@ import (
 )
 
 type createChatMessageRequest struct {
-	Message            string   `json:"message"`
-	SelectedSegmentIDs []string `json:"selected_segment_ids"`
+	Message      string `json:"message"`
+	SelectedText string `json:"selected_text"`
 }
 
 type chatListResponse struct {
@@ -43,12 +43,6 @@ func CreateChatMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	selected, err := sharedTranslations.LoadSelectedSegmentsByIDs(translationID, req.SelectedSegmentIDs)
-	if err != nil {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": "One or more selected segments are invalid"})
-		return
-	}
-
 	thread, err := sharedTranslations.EnsureChatForTranslation(translationID)
 	if err != nil {
 		if err == translation.ErrNotFound {
@@ -59,7 +53,7 @@ func CreateChatMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userMsg, err := sharedTranslations.AppendChatMessage(translationID, translation.ChatRoleUser, req.Message, req.SelectedSegmentIDs)
+	userMsg, err := sharedTranslations.AppendChatMessage(translationID, translation.ChatRoleUser, req.Message, req.SelectedText)
 	if err != nil {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": err.Error()})
 		return
@@ -69,19 +63,6 @@ func CreateChatMessage(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		WriteJSON(w, http.StatusInternalServerError, map[string]string{"detail": err.Error()})
 		return
-	}
-
-	selectedContext := make([]intelligence.ChatSegmentContext, 0, len(selected))
-	for i, seg := range selected {
-		if i >= len(userMsg.SelectedSegmentIDs) {
-			break
-		}
-		selectedContext = append(selectedContext, intelligence.ChatSegmentContext{
-			ID:      userMsg.SelectedSegmentIDs[i],
-			Segment: seg.Segment,
-			Pinyin:  seg.Pinyin,
-			English: seg.English,
-		})
 	}
 
 	w.Header().Set("Content-Type", "text/event-stream")
@@ -106,8 +87,8 @@ func CreateChatMessage(w http.ResponseWriter, r *http.Request) {
 	result, err := chatProvider.ChatWithTranslationContext(r.Context(), intelligence.ChatWithTranslationRequest{
 		TranslationText: item.InputText,
 		UserMessage:     req.Message,
-		Selected:        selectedContext,
 		History:         history,
+		SelectedText:    req.SelectedText,
 	}, func(chunk string) error {
 		if strings.TrimSpace(chunk) == "" {
 			return nil
@@ -133,7 +114,7 @@ func CreateChatMessage(w http.ResponseWriter, r *http.Request) {
 
 	if len(result.ToolCalls) > 0 {
 		// One AI text message for the whole turn.
-		aiMsg, err := sharedTranslations.AppendChatMessage(translationID, translation.ChatRoleAI, "Here's a practice card for you:", nil)
+		aiMsg, err := sharedTranslations.AppendChatMessage(translationID, translation.ChatRoleAI, "Here's a practice card for you:", "")
 		if err != nil {
 			emitSSE(w, map[string]any{"type": "error", "message": err.Error()})
 			flusher.Flush()
@@ -150,7 +131,7 @@ func CreateChatMessage(w http.ResponseWriter, r *http.Request) {
 			pinyin, _ := tc.Arguments["pinyin"].(string)
 			english, _ := tc.Arguments["english"].(string)
 
-			toolMsg, err := sharedTranslations.AppendChatMessage(translationID, translation.ChatRoleTool, chineseText, nil)
+			toolMsg, err := sharedTranslations.AppendChatMessage(translationID, translation.ChatRoleTool, chineseText, "")
 			if err != nil {
 				emitSSE(w, map[string]any{"type": "error", "message": err.Error()})
 				flusher.Flush()
@@ -181,7 +162,7 @@ func CreateChatMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	aiMsg, err := sharedTranslations.AppendChatMessage(translationID, translation.ChatRoleAI, result.Content, nil)
+	aiMsg, err := sharedTranslations.AppendChatMessage(translationID, translation.ChatRoleAI, result.Content, "")
 	if err != nil {
 		emitSSE(w, map[string]any{"type": "error", "message": err.Error()})
 		flusher.Flush()

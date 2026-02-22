@@ -221,7 +221,7 @@ export interface VocabStatsResponse {
 // Translation chat API types
 export interface ChatCreateRequest {
   message: string;
-  selected_segment_ids?: string[];
+  selected_text?: string;
 }
 
 export interface ChatReviewCard {
@@ -238,7 +238,7 @@ export interface ChatMessage {
   message_idx: number;
   role: 'user' | 'ai' | 'tool';
   content: string;
-  selected_segment_ids: string[];
+  selected_text?: string;
   created_at: string;
   review_card?: ChatReviewCard;
 }

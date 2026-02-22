@@ -85,11 +85,9 @@ func TestTranslationChatSSELifecycleAndClear(t *testing.T) {
 		t.Fatalf("seed segments: %v", err)
 	}
 
-	segA := tr.ID + ":0:0"
-	segB := tr.ID + ":0:1"
 	createRes := doJSONRequest(t, router, http.MethodPost, "/api/translations/"+tr.ID+"/chat/new", map[string]any{
-		"message":              "Explain these segments",
-		"selected_segment_ids": []string{segA, segB},
+		"message":       "Explain this",
+		"selected_text": "人工智能",
 	}, sessionCookie)
 	if createRes.Code != http.StatusOK {
 		t.Fatalf("expected chat new 200, got %d body=%s", createRes.Code, createRes.Body.String())
@@ -145,51 +143,5 @@ func TestTranslationChatSSELifecycleAndClear(t *testing.T) {
 	decodeBodyJSON(t, listAfterClear, &listPayload)
 	if len(listPayload.Messages) != 0 {
 		t.Fatalf("expected no messages after clear, got %d", len(listPayload.Messages))
-	}
-}
-
-func TestTranslationChatSegmentValidationAndSingleThread(t *testing.T) {
-	cfg := newLocalConfig(t)
-	router := newRouterWithConfig(cfg)
-	store := overrideDepsWithMockProvider(t, cfg)
-	sessionCookie := loginSessionCookie(t, router, cfg.AppPassword)
-
-	tr, err := store.Create("你好世界", "text")
-	if err != nil {
-		t.Fatalf("create translation: %v", err)
-	}
-	if err := store.UpdateTranslationSegments(tr.ID, 0, []translation.SegmentResult{
-		{Segment: "你好", Pinyin: "ni hao", English: "hello"},
-	}); err != nil {
-		t.Fatalf("seed segments: %v", err)
-	}
-
-	badRes := doJSONRequest(t, router, http.MethodPost, "/api/translations/"+tr.ID+"/chat/new", map[string]any{
-		"message":              "invalid selection",
-		"selected_segment_ids": []string{"does-not-exist"},
-	}, sessionCookie)
-	if badRes.Code != http.StatusBadRequest {
-		t.Fatalf("expected bad request for invalid segment ids, got %d", badRes.Code)
-	}
-
-	listA := doJSONRequest(t, router, http.MethodGet, "/api/translations/"+tr.ID+"/chat/list", nil, sessionCookie)
-	listB := doJSONRequest(t, router, http.MethodGet, "/api/translations/"+tr.ID+"/chat/list", nil, sessionCookie)
-	if listA.Code != http.StatusOK || listB.Code != http.StatusOK {
-		t.Fatalf("expected list calls 200, got %d and %d", listA.Code, listB.Code)
-	}
-
-	var payloadA struct {
-		ChatID string `json:"chat_id"`
-	}
-	var payloadB struct {
-		ChatID string `json:"chat_id"`
-	}
-	decodeBodyJSON(t, listA, &payloadA)
-	decodeBodyJSON(t, listB, &payloadB)
-	if payloadA.ChatID == "" || payloadB.ChatID == "" {
-		t.Fatal("expected chat ids from list endpoints")
-	}
-	if payloadA.ChatID != payloadB.ChatID {
-		t.Fatalf("expected one chat per translation, got %q and %q", payloadA.ChatID, payloadB.ChatID)
 	}
 }

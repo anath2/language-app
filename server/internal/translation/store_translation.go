@@ -405,7 +405,7 @@ func (s *TranslationStore) EnsureChatForTranslation(translationID string) (ChatT
 	return ChatThread{}, fmt.Errorf("ensure chat: database remained locked")
 }
 
-func (s *TranslationStore) AppendChatMessage(translationID string, role string, content string, selectedSegmentIDs []string) (ChatMessage, error) {
+func (s *TranslationStore) AppendChatMessage(translationID string, role string, content string, selectedText string) (ChatMessage, error) {
 	role = strings.TrimSpace(strings.ToLower(role))
 	if role != ChatRoleUser && role != ChatRoleAI && role != ChatRoleTool {
 		return ChatMessage{}, errors.New("role must be user, ai, or tool")
@@ -414,23 +414,13 @@ func (s *TranslationStore) AppendChatMessage(translationID string, role string, 
 	if content == "" {
 		return ChatMessage{}, errors.New("content is required")
 	}
-	normalizedIDs := make([]string, 0, len(selectedSegmentIDs))
-	for _, raw := range selectedSegmentIDs {
-		id := strings.TrimSpace(raw)
-		if id == "" {
-			continue
-		}
-		normalizedIDs = append(normalizedIDs, id)
-	}
-	selectedPayload, err := json.Marshal(normalizedIDs)
-	if err != nil {
-		return ChatMessage{}, fmt.Errorf("marshal selected segment ids: %w", err)
-	}
 
 	for i := 0; i < 8; i++ {
-		msg, err := s.appendChatMessageOnce(translationID, role, content, string(selectedPayload))
+		msg, err := s.appendChatMessageOnce(translationID, role, content, selectedText)
 		if err == nil {
-			msg.SelectedSegmentIDs = normalizedIDs
+			if selectedText != "" {
+				msg.SelectedText = &selectedText
+			}
 			return msg, nil
 		}
 		if isDBLocked(err) {
@@ -470,73 +460,6 @@ func (s *TranslationStore) ClearChatMessages(translationID string) error {
 		return err
 	}
 	return fmt.Errorf("clear chat messages: database remained locked")
-}
-
-func (s *TranslationStore) LoadSelectedSegmentsByIDs(translationID string, segmentIDs []string) ([]SegmentResult, error) {
-	if len(segmentIDs) == 0 {
-		return []SegmentResult{}, nil
-	}
-	normalizedIDs := make([]string, 0, len(segmentIDs))
-	for _, raw := range segmentIDs {
-		id := strings.TrimSpace(raw)
-		if id == "" {
-			continue
-		}
-		normalizedIDs = append(normalizedIDs, id)
-	}
-	if len(normalizedIDs) == 0 {
-		return []SegmentResult{}, nil
-	}
-
-	uniqueIDs := make([]string, 0, len(normalizedIDs))
-	seen := make(map[string]struct{}, len(normalizedIDs))
-	for _, id := range normalizedIDs {
-		if _, ok := seen[id]; ok {
-			continue
-		}
-		seen[id] = struct{}{}
-		uniqueIDs = append(uniqueIDs, id)
-	}
-
-	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(uniqueIDs)), ",")
-	args := make([]any, 0, len(uniqueIDs)+1)
-	args = append(args, translationID)
-	for _, id := range uniqueIDs {
-		args = append(args, id)
-	}
-	query := fmt.Sprintf(
-		`SELECT id, segment_text, pinyin, english
-		 FROM translation_segments
-		 WHERE translation_id = ? AND id IN (%s)`,
-		placeholders,
-	)
-	rows, err := s.db.Query(query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("load selected segments: %w", err)
-	}
-	defer rows.Close()
-
-	byID := make(map[string]SegmentResult, len(uniqueIDs))
-	for rows.Next() {
-		var id string
-		var seg SegmentResult
-		if err := rows.Scan(&id, &seg.Segment, &seg.Pinyin, &seg.English); err != nil {
-			return nil, fmt.Errorf("scan selected segment: %w", err)
-		}
-		byID[id] = seg
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate selected segments: %w", err)
-	}
-
-	if len(byID) != len(uniqueIDs) {
-		return nil, ErrNotFound
-	}
-	out := make([]SegmentResult, 0, len(normalizedIDs))
-	for _, id := range normalizedIDs {
-		out = append(out, byID[id])
-	}
-	return out, nil
 }
 
 func (s *TranslationStore) ensureChatForTranslationOnce(translationID string) (ChatThread, error) {
@@ -588,7 +511,7 @@ func (s *TranslationStore) ensureChatForTranslationOnce(translationID string) (C
 	}, nil
 }
 
-func (s *TranslationStore) appendChatMessageOnce(translationID string, role string, content string, selectedSegmentIDsJSON string) (ChatMessage, error) {
+func (s *TranslationStore) appendChatMessageOnce(translationID string, role string, content string, selectedText string) (ChatMessage, error) {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return ChatMessage{}, fmt.Errorf("begin append chat message tx: %w", err)
@@ -642,7 +565,7 @@ func (s *TranslationStore) appendChatMessageOnce(translationID string, role stri
 	}
 	if _, err := tx.Exec(
 		`INSERT INTO translation_chat_messages
-		   (id, chat_id, translation_id, message_idx, role, content, selected_segment_ids_json, created_at)
+		   (id, chat_id, translation_id, message_idx, role, content, selected_text, created_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 		messageID,
 		thread.ID,
@@ -650,7 +573,7 @@ func (s *TranslationStore) appendChatMessageOnce(translationID string, role stri
 		nextIdx,
 		role,
 		content,
-		selectedSegmentIDsJSON,
+		sql.NullString{String: selectedText, Valid: selectedText != ""},
 		now,
 	); err != nil {
 		return ChatMessage{}, fmt.Errorf("insert chat message: %w", err)
@@ -683,7 +606,7 @@ func (s *TranslationStore) listChatMessagesOnce(translationID string) ([]ChatMes
 		return nil, err
 	}
 	rows, err := s.db.Query(
-		`SELECT id, message_idx, role, content, selected_segment_ids_json, created_at, review_card_json
+		`SELECT id, message_idx, role, content, selected_text, created_at, review_card_json
 		 FROM translation_chat_messages
 		 WHERE translation_id = ?
 		 ORDER BY message_idx ASC`,
@@ -697,18 +620,16 @@ func (s *TranslationStore) listChatMessagesOnce(translationID string) ([]ChatMes
 	out := make([]ChatMessage, 0)
 	for rows.Next() {
 		var msg ChatMessage
-		var selectedJSON string
+		var selectedText sql.NullString
 		var reviewCardJSON sql.NullString
-		if err := rows.Scan(&msg.ID, &msg.MessageIdx, &msg.Role, &msg.Content, &selectedJSON, &msg.CreatedAt, &reviewCardJSON); err != nil {
+		if err := rows.Scan(&msg.ID, &msg.MessageIdx, &msg.Role, &msg.Content, &selectedText, &msg.CreatedAt, &reviewCardJSON); err != nil {
 			return nil, fmt.Errorf("scan chat message: %w", err)
 		}
 		msg.ChatID = thread.ID
 		msg.TranslationID = translationID
-		var selected []string
-		if err := json.Unmarshal([]byte(selectedJSON), &selected); err != nil {
-			return nil, fmt.Errorf("decode selected segment ids: %w", err)
+		if selectedText.Valid {
+			msg.SelectedText = &selectedText.String
 		}
-		msg.SelectedSegmentIDs = selected
 		if reviewCardJSON.Valid {
 			var card ChatReviewCard
 			if err := json.Unmarshal([]byte(reviewCardJSON.String), &card); err != nil {

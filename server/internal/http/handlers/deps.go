@@ -17,10 +17,9 @@ type translationStore interface {
 	UpdateTitle(id string, title string) error
 	UpdateInputTextForReprocessing(id string, newText string) (map[int]string, error)
 	EnsureChatForTranslation(translationID string) (translation.ChatThread, error)
-	AppendChatMessage(translationID string, role string, content string, selectedSegmentIDs []string) (translation.ChatMessage, error)
+	AppendChatMessage(translationID string, role string, content string, selectedText string) (translation.ChatMessage, error)
 	ListChatMessages(translationID string) ([]translation.ChatMessage, error)
 	ClearChatMessages(translationID string) error
-	LoadSelectedSegmentsByIDs(translationID string, segmentIDs []string) ([]translation.SegmentResult, error)
 	SetReviewCard(messageID, chineseText, pinyin, english string) error
 	GetMessageReviewCard(messageID string) (*translation.ChatReviewCard, error)
 	AcceptMessageReviewCard(messageID string) error

@@ -74,14 +74,9 @@ func (p *Provider) ChatWithTranslationContext(ctx context.Context, req intellige
 		return intelligence.ChatResult{}, fmt.Errorf("translation text is required")
 	}
 
-	selectedJSON, err := json.Marshal(req.Selected)
-	if err != nil {
-		return intelligence.ChatResult{}, fmt.Errorf("marshal selected segments: %w", err)
-	}
-
 	systemPrompt := fmt.Sprintf(
 		`You are a Chinese language learning tutor responding in a chat context.
-Answer questions grounded in the following article and highlighted segments if available.
+Answer questions grounded in the following article and highlighted text if available.
 You will be provided a chat history of previous messages. Use the chat history for context only — respond solely to the most recent user message and do not re-answer prior messages.
 Make sure you answer the question in a concise manner. When answering questions in target language, always provide pinyin or english translation.
 When the user asks to:
@@ -92,12 +87,12 @@ When the user asks to:
 
 ## ARTICLE:
 %s
-## HIGHLIGHTED SEGMENTS:
-%s
 `,
 		translationText,
-		string(selectedJSON),
 	)
+	if req.SelectedText != "" {
+		systemPrompt += fmt.Sprintf("\n## SELECTED TEXT:\n<selected>%s</selected>\n", req.SelectedText)
+	}
 
 	messages := []map[string]string{
 		{"role": "system", "content": systemPrompt},
