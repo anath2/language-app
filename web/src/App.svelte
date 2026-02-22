@@ -6,6 +6,7 @@
 import NavBar from '@/ui/NavBar.svelte';
 import Admin from '@/features/admin/components/Admin.svelte';
 import Login from '@/features/auth/components/Login.svelte';
+import ProjectsIndex from '@/features/projects/Index.svelte';
 import { auth } from '@/features/auth/stores/authStore.svelte';
 import TranslateTextIndex from '@/features/translation/translation-home/Index.svelte';
 import TranslationResultIndex from '@/features/translation/translation-result/Index.svelte';
@@ -40,6 +41,8 @@ function backToList() {
         <TranslateTextIndex />
       {:else if currentPage === "translation"}
         <TranslationResultIndex translationId={translationId} onBack={backToList} />
+      {:else if currentPage === "vocab"}
+        <ProjectsIndex />
       {:else if currentPage === "admin"}
         <div class="page-narrow">
           <Admin />
