@@ -1,6 +1,6 @@
 <script lang="ts">
+import { X } from '@lucide/svelte';
 import Button from '@/ui/Button.svelte';
-import Sidepane from '@/ui/Sidepane.svelte';
 import Loader from '@/ui/Loader.svelte';
 import TextArea from '@/ui/TextArea.svelte';
 import { getJson, postJson, postJsonStream } from '@/lib/api';
@@ -165,8 +165,18 @@ async function rejectReviewCard(msg: ChatMessage) {
 }
 </script>
 
-<Sidepane title="Chat" {open} onClose={onClose} width="400px">
-  <div class="chat-layout">
+<svelte:window onkeydown={(e) => { if (e.key === 'Escape' && open) onClose(); }} />
+
+{#if open}
+  <div class="chat-panel">
+    <header class="chat-panel-header">
+      <h2 class="chat-panel-title">Chat</h2>
+      <Button variant="ghost" size="xs" iconOnly ariaLabel="Close panel" onclick={onClose}>
+        <X size={18} />
+      </Button>
+    </header>
+    <div class="chat-panel-content">
+    <div class="chat-layout">
     <div class="chat-messages" role="log" aria-live="polite">
       {#if listLoading}
         <p class="chat-status">Loading...</p>
@@ -267,10 +277,65 @@ async function rejectReviewCard(msg: ChatMessage) {
         Clear chat
       </Button>
     {/if}
+    </div>
+    </div>
   </div>
-</Sidepane>
+{/if}
 
 <style>
+  .chat-panel {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    position: sticky;
+    top: 0;
+    border-left: 1px solid var(--border);
+    background: var(--surface);
+    box-shadow: -4px 0 12px var(--shadow);
+    animation: chat-slide-in 0.25s ease;
+    overflow: hidden;
+  }
+
+  .chat-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    padding: var(--space-4) var(--space-5);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .chat-panel-title {
+    margin: 0;
+    font-size: var(--text-lg);
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .chat-panel-content {
+    flex: 1;
+    overflow: auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  @keyframes chat-slide-in {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+  }
+
+  /* Full-width on narrow screens */
+  @media (max-width: 900px) {
+    .chat-panel {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+  }
+
   .chat-layout {
     display: flex;
     flex-direction: column;
@@ -336,7 +401,7 @@ async function rejectReviewCard(msg: ChatMessage) {
 
   .chat-bubble-content {
     font-size: var(--text-sm);
-    line-height: 1.5;
+    line-height: 1.6;
     white-space: pre-wrap;
     word-break: break-word;
   }
