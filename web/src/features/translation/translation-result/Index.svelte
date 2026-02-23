@@ -2,9 +2,11 @@
 import { ChevronLeft, MessageCircle, Pencil } from '@lucide/svelte';
 import { getJson, postJson } from '@/lib/api';
 import { updateTranslationSource, updateTranslationTitle } from '@/features/translation/api';
+import { reviewStore } from '@/features/translation/stores/reviewStore.svelte';
 import Button from '@/ui/Button.svelte';
 import Card from '@/ui/Card.svelte';
 import { translationStore } from '@/features/translation/stores/translationStore.svelte';
+import { vocabStore } from '@/features/translation/stores/vocabStore.svelte';
 import TranslationResult from './components/TranslationResult.svelte';
 import TranslationChat from './components/TranslationChat.svelte';
 import type {
@@ -14,7 +16,6 @@ import type {
   SaveVocabResponse,
   SegmentResult,
   TranslationDetailResponse,
-  VocabSrsInfoListResponse,
 } from '@/features/translation/types';
 
 const { translationId, onBack }: { translationId: string | null; onBack: () => void } = $props();
@@ -163,32 +164,15 @@ function handleSegmentsChanged(results: SegmentResult[]) {
   void fetchAndApplySrsInfo(results);
 }
 
+async function refreshHeadwordSrsInfo(headword: string) {
+  savedVocabMap = await vocabStore.refreshHeadwordInMap(headword, savedVocabMap);
+}
+
 async function fetchAndApplySrsInfo(results: SegmentResult[]) {
   const headwords = [
     ...new Set(results.filter((s) => s.pinyin || s.english).map((s) => s.segment)),
   ];
-  if (headwords.length === 0) return;
-
-  try {
-    const params = new URLSearchParams();
-    params.set('headwords', headwords.join(','));
-    const data = await getJson<VocabSrsInfoListResponse>(
-      `/api/vocab/srs-info?${params.toString()}`
-    );
-    const nextMap = new Map<string, SavedVocabInfo>();
-    data.items.forEach((info) => {
-      const opacity = info.status === 'known' ? 0 : info.opacity;
-      nextMap.set(info.headword, {
-        vocabItemId: info.vocab_item_id,
-        opacity,
-        isStruggling: info.is_struggling,
-        status: info.status,
-      });
-    });
-    savedVocabMap = nextMap;
-  } catch (error) {
-    console.error('Failed to fetch SRS info:', error);
-  }
+  savedVocabMap = await vocabStore.fetchSrsInfoMap(headwords);
 }
 
 async function ensureSavedText() {
@@ -223,6 +207,8 @@ async function onSaveVocab(
       opacity: 1,
       isStruggling: false,
       status: 'learning',
+      intervalDays: 0,
+      nextDueAt: null,
     };
     savedVocabMap = new Map(savedVocabMap.set(headword, info));
     return info;
@@ -285,6 +271,18 @@ async function onRecordLookup(headword: string, vocabItemId: string) {
     console.error('Failed to record lookup:', error);
   }
 }
+
+async function onGradeReview(vocabItemId: string, grade: number) {
+  await reviewStore.submitGrade(vocabItemId, grade);
+
+  const matchingEntry = Array.from(savedVocabMap.entries()).find(
+    ([, info]) => info.vocabItemId === vocabItemId
+  );
+  if (!matchingEntry) return;
+
+  const [headword] = matchingEntry;
+  await refreshHeadwordSrsInfo(headword);
+}
 </script>
 
 <div class="page-wrapper" class:chat-open={chatPaneOpen}>
@@ -331,9 +329,11 @@ async function onRecordLookup(headword: string, vocabItemId: string) {
         <div class="panel-header">
           <span class="panel-label">Original Text</span>
           {#if currentTranslationStatus === 'completed' && !isEditingSource}
+            <span class="edit-label">
             <button class="edit-icon-btn" onclick={startEditSource} aria-label="Edit source text">
-              <Pencil size={14} />
+              <Pencil size={16} />
             </button>
+            </span>
           {/if}
         </div>
         {#if isEditingSource}
@@ -382,6 +382,7 @@ async function onRecordLookup(headword: string, vocabItemId: string) {
           {onMarkKnown}
           {onResumeLearning}
           {onRecordLookup}
+          {onGradeReview}
           onStreamComplete={handleStreamComplete}
           onSegmentsChanged={handleSegmentsChanged}
         />
