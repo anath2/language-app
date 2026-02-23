@@ -80,6 +80,8 @@ type vocabSRSInfoResponse struct {
 	Opacity      float64 `json:"opacity"`
 	IsStruggling bool    `json:"is_struggling"`
 	Status       string  `json:"status"`
+	IntervalDays float64 `json:"interval_days"`
+	NextDueAt    *string `json:"next_due_at"`
 }
 
 type vocabSRSInfoListResponse struct {
@@ -298,6 +300,8 @@ func GetVocabSRSInfo(w http.ResponseWriter, r *http.Request) {
 			Opacity:      it.Opacity,
 			IsStruggling: it.IsStruggling,
 			Status:       it.Status,
+			IntervalDays: it.IntervalDays,
+			NextDueAt:    it.NextDueAt,
 		})
 	}
 	WriteJSON(w, http.StatusOK, vocabSRSInfoListResponse{Items: resp})

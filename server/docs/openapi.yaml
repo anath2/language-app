@@ -1230,6 +1230,15 @@ components:
           type: boolean
         status:
           type: string
+        interval_days:
+          type: number
+          format: float
+          description: "Current SRS interval in days"
+        next_due_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: "Next due date for review, null if not yet scheduled"
 
     ReviewCard:
       type: object

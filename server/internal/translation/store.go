@@ -115,6 +115,8 @@ type VocabSRSInfo struct {
 	Opacity      float64
 	IsStruggling bool
 	Status       string
+	IntervalDays float64
+	NextDueAt    *string
 }
 
 type ReviewCard struct {

@@ -122,7 +122,7 @@ func (s *SRSStore) GetVocabSRSInfo(headwords []string) ([]VocabSRSInfo, error) {
 		args[i] = h
 	}
 	rows, err := s.db.Query(
-		fmt.Sprintf(`SELECT vi.id, vi.headword, vi.pinyin, vi.english, vi.status, ss.last_reviewed_at
+		fmt.Sprintf(`SELECT vi.id, vi.headword, vi.pinyin, vi.english, vi.status, ss.last_reviewed_at, ss.interval_days, ss.due_at
 			FROM vocab_items vi
 			LEFT JOIN srs_state ss ON vi.id = ss.vocab_item_id
 			WHERE vi.headword IN (%s)`, placeholders),
@@ -137,8 +137,16 @@ func (s *SRSStore) GetVocabSRSInfo(headwords []string) ([]VocabSRSInfo, error) {
 	for rows.Next() {
 		var info VocabSRSInfo
 		var lastReviewed sql.NullString
-		if err := rows.Scan(&info.VocabItemID, &info.Headword, &info.Pinyin, &info.English, &info.Status, &lastReviewed); err != nil {
+		var intervalDays sql.NullFloat64
+		var dueAt sql.NullString
+		if err := rows.Scan(&info.VocabItemID, &info.Headword, &info.Pinyin, &info.English, &info.Status, &lastReviewed, &intervalDays, &dueAt); err != nil {
 			return nil, fmt.Errorf("scan vocab srs info: %w", err)
+		}
+		if intervalDays.Valid {
+			info.IntervalDays = intervalDays.Float64
+		}
+		if dueAt.Valid {
+			info.NextDueAt = &dueAt.String
 		}
 		recentCount := 0
 		_ = s.db.QueryRow(
