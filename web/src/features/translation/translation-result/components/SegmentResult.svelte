@@ -57,10 +57,14 @@ function isHTMLElement(value: EventTarget | null): value is HTMLElement {
   return value instanceof HTMLElement;
 }
 
+function isSkippedSegment(segment: SegmentResult): boolean {
+  return !segment.pending && !segment.pinyin && !segment.english;
+}
+
 function getSegmentStyle(segment: SegmentResult) {
   const info = savedVocabMap.get(segment.segment);
   const baseColor = getPastelColor(segment.index || 0);
-  const isSkipped = !segment.pending && !segment.pinyin && !segment.english;
+  const isSkipped = isSkippedSegment(segment);
   const styles: string[] = [];
   if (info?.status === 'learning') {
     styles.push('--segment-color: var(--primary)');
@@ -76,7 +80,7 @@ function getSegmentStyle(segment: SegmentResult) {
 
 function getSegmentClasses(segment: SegmentResult) {
   const classes = ['segment'];
-  const isSkipped = !segment.pending && !segment.pinyin && !segment.english;
+  const isSkipped = isSkippedSegment(segment);
   if (segment.pending) classes.push('segment-pending');
   if (segment.pinyin || segment.english) {
     classes.push('segment-interactive');
@@ -95,7 +99,7 @@ function getSegmentClasses(segment: SegmentResult) {
 }
 
 async function handleSegmentHover(segment: SegmentResult, element: EventTarget | null) {
-  if (tooltipPinned) return;
+  if (tooltipPinned || isSkippedSegment(segment)) return;
   if (tooltipHideTimeout !== null) {
     window.clearTimeout(tooltipHideTimeout);
     tooltipHideTimeout = null;
@@ -152,6 +156,7 @@ function updateTooltipPosition() {
 }
 
 async function toggleSegmentPin(segment: SegmentResult, element: EventTarget | null) {
+  if (isSkippedSegment(segment)) return;
   if (tooltipPinned && tooltip.headword === segment.segment) {
     tooltipPinned = false;
     tooltipVisible = false;
