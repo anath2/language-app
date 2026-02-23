@@ -60,10 +60,14 @@ function isHTMLElement(value: EventTarget | null): value is HTMLElement {
 function getSegmentStyle(segment: SegmentResult) {
   const info = savedVocabMap.get(segment.segment);
   const baseColor = getPastelColor(segment.index || 0);
+  const isSkipped = !segment.pending && !segment.pinyin && !segment.english;
   const styles: string[] = [];
-  if (info) {
-    styles.push(`--segment-color: ${baseColor}`);
+  if (info?.status === 'learning') {
+    styles.push('--segment-color: var(--primary)');
+    styles.push('--segment-text-color: var(--surface)');
     styles.push(`--segment-opacity: ${info.opacity}`);
+  } else if (info?.status === 'known' || isSkipped) {
+    styles.push('background: transparent');
   } else if (!segment.pending && segment.pinyin) {
     styles.push(`background: ${baseColor}`);
   }
@@ -72,14 +76,20 @@ function getSegmentStyle(segment: SegmentResult) {
 
 function getSegmentClasses(segment: SegmentResult) {
   const classes = ['segment'];
+  const isSkipped = !segment.pending && !segment.pinyin && !segment.english;
   if (segment.pending) classes.push('segment-pending');
   if (segment.pinyin || segment.english) {
     classes.push('segment-interactive');
   }
   const info = savedVocabMap.get(segment.segment);
-  if (info) {
+  if (info?.status === 'learning') {
     classes.push('saved');
+    classes.push('status-learning');
     if (info.isStruggling) classes.push('struggling');
+  } else if (info?.status === 'known') {
+    classes.push('status-known');
+  } else if (isSkipped) {
+    classes.push('status-skipped');
   }
   return classes.join(' ');
 }
@@ -155,7 +165,7 @@ async function toggleSegmentPin(segment: SegmentResult, element: EventTarget | n
   await showTooltip(segment, element, true);
 
   const info = savedVocabMap.get(segment.segment);
-  if (info?.vocabItemId) {
+  if (info?.status === 'learning' && info.vocabItemId) {
     await onRecordLookup(segment.segment, info.vocabItemId);
   }
 }
@@ -349,7 +359,7 @@ async function resumeLearning() {
     border: 2px solid transparent;
     font-family: var(--font-chinese);
     font-size: var(--text-chinese);
-    color: var(--text-primary);
+    color: var(--surface);
     transition: all 0.15s ease;
   }
 
@@ -378,6 +388,7 @@ async function resumeLearning() {
   .segment.saved {
     position: relative;
     background: transparent !important;
+    isolation: isolate;
   }
 
   .segment.saved::before {
@@ -385,13 +396,23 @@ async function resumeLearning() {
     position: absolute;
     inset: 0;
     border-radius: inherit;
-    background: var(--segment-color, transparent);
+    background: var(--segment-color, var(--primary));
     opacity: var(--segment-opacity, 1);
     z-index: -1;
   }
 
   .segment.struggling {
     text-decoration: underline dotted var(--text-muted);
+  }
+
+  .segment.status-learning {
+    color: var(--segment-text-color, var(--surface));
+  }
+
+  .segment.status-known,
+  .segment.status-skipped {
+    background: transparent !important;
+    color: var(--text-primary) !important;
   }
 
   /* Tooltip */
