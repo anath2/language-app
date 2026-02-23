@@ -57,16 +57,20 @@ class ReviewStore {
     if (!this.queue[this.currentIndex]) return;
 
     try {
-      await postJson<ReviewAnswerResponse>('/api/review/answer', {
-        vocab_item_id: this.queue[this.currentIndex].vocab_item_id,
-        grade,
-      });
+      await this.submitGrade(this.queue[this.currentIndex].vocab_item_id, grade);
     } catch (error) {
       console.error('Failed to record grade:', error);
     }
 
     this.currentIndex += 1;
     this.isAnswerRevealed = false;
+  }
+
+  async submitGrade(vocabItemId: string, grade: number): Promise<void> {
+    await postJson<ReviewAnswerResponse>('/api/review/answer', {
+      vocab_item_id: vocabItemId,
+      grade,
+    });
   }
 }
 
