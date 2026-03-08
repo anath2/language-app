@@ -18,7 +18,7 @@ export async function translateBatch(
   translationId: string | null,
   sentenceIdx: number | null
 ): Promise<TranslateBatchResponse> {
-  return postJson('/api/segments/translate-batch', {
+  return postJson('/api/translations/segments/batch', {
     segments,
     context,
     translation_id: translationId,

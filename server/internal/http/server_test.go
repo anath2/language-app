@@ -111,7 +111,7 @@ func TestRouteContractWithAuthenticatedSession(t *testing.T) {
 		{name: "review queue", method: http.MethodGet, path: "/api/review/words/queue", status: http.StatusOK},
 		{name: "review answer", method: http.MethodPost, path: "/api/review/answer", status: http.StatusBadRequest},
 		{name: "review count", method: http.MethodGet, path: "/api/review/words/count", status: http.StatusOK},
-		{name: "translate batch", method: http.MethodPost, path: "/api/segments/translate-batch", status: http.StatusBadRequest},
+		{name: "translate batch", method: http.MethodPost, path: "/api/translations/segments/batch", status: http.StatusBadRequest},
 		{name: "export progress", method: http.MethodGet, path: "/api/admin/progress/export", status: http.StatusOK},
 		{name: "import progress", method: http.MethodPost, path: "/api/admin/progress/import", status: http.StatusBadRequest},
 		{name: "get profile", method: http.MethodGet, path: "/api/admin/profile", status: http.StatusOK},
@@ -391,7 +391,7 @@ func TestCoreAPIPersistenceFlow(t *testing.T) {
 	translateBatchPayload, _ := json.Marshal(map[string]any{
 		"segments": []string{"你", "好"},
 	})
-	translateBatchReq := httptest.NewRequest(http.MethodPost, "/api/segments/translate-batch", bytes.NewReader(translateBatchPayload))
+	translateBatchReq := httptest.NewRequest(http.MethodPost, "/api/translations/segments/batch", bytes.NewReader(translateBatchPayload))
 	translateBatchReq.Header.Set("Cookie", sessionCookie)
 	translateBatchReq.Header.Set("Content-Type", "application/json")
 	translateBatchRes := httptest.NewRecorder()

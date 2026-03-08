@@ -846,9 +846,9 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
-  /api/segments/translate-batch:
+  /api/translations/segments/batch:
     post:
-      tags: [segments]
+      tags: [translations]
       summary: Translate a batch of segments
       operationId: translateBatch
       requestBody:

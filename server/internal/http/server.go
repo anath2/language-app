@@ -20,6 +20,7 @@ import (
 )
 
 func NewRouter(cfg config.Config) stdhttp.Handler {
+	// Run migrations
 	if cfg.MigrationsDir != "" {
 		if err := migrations.RunUp(cfg.TranslationDBPath, cfg.MigrationsDir); err != nil {
 			log.Printf("failed to run migrations: %v", err)
@@ -30,6 +31,7 @@ func NewRouter(cfg config.Config) stdhttp.Handler {
 		}
 	}
 
+	// Initialize translation store
 	db, err := translation.NewDB(cfg.TranslationDBPath)
 	if err != nil {
 		log.Printf("failed to initialize translation store: %v", err)
@@ -79,7 +81,10 @@ func NewRouter(cfg config.Config) stdhttp.Handler {
 
 	routes.RegisterAuthRoutes(r, cfg, sessionManager)
 	routes.RegisterTranslationRoutes(r)
-	routes.RegisterAPIRoutes(r)
+	routes.RegisterTextRoutes(r)
+	routes.RegisterEventRoutes(r)
+	routes.RegisterVocabRoutes(r)
+	routes.RegisterReviewRoutes(r)
 	routes.RegisterAdminRoutes(r)
 
 	return r
