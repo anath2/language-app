@@ -1000,7 +1000,7 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
-  /api/extract-text:
+  /api/ocr/extract-text:
     post:
       tags: [ocr]
       summary: Extract text from an image via OCR
