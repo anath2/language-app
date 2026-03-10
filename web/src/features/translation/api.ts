@@ -1,5 +1,5 @@
-import { patchJson, postJson } from '../../lib/api';
-import type { TranslateBatchResponse } from './types';
+import { patchJson, postJson, postJsonForm } from '../../lib/api';
+import type { ExtractTextResponse, TranslateBatchResponse } from './types';
 
 export async function updateTranslationSource(
   id: string,
@@ -24,4 +24,8 @@ export async function translateBatch(
     translation_id: translationId,
     sentence_idx: sentenceIdx,
   });
+}
+
+export async function extractText(formData: FormData): Promise<ExtractTextResponse> {
+	return postJsonForm('/api/ocr/extract-text', formData);
 }
