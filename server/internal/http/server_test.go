@@ -116,7 +116,7 @@ func TestRouteContractWithAuthenticatedSession(t *testing.T) {
 		{name: "import progress", method: http.MethodPost, path: "/api/admin/progress/import", status: http.StatusBadRequest},
 		{name: "get profile", method: http.MethodGet, path: "/api/admin/profile", status: http.StatusOK},
 		{name: "update profile", method: http.MethodPost, path: "/api/admin/profile", status: http.StatusBadRequest},
-		{name: "extract text no file", method: http.MethodPost, path: "/api/extract-text", status: http.StatusBadRequest},
+		{name: "extract text no file", method: http.MethodPost, path: "/api/ocr/extract-text", status: http.StatusBadRequest},
 	}
 
 	for _, tc := range tests {
@@ -446,13 +446,13 @@ func TestAdminAndOCRContracts(t *testing.T) {
 	_, _ = part.Write([]byte("fake-image-bytes"))
 	_ = writer.Close()
 
-	ocrReq := httptest.NewRequest(http.MethodPost, "/api/extract-text", &body)
+	ocrReq := httptest.NewRequest(http.MethodPost, "/api/ocr/extract-text", &body)
 	ocrReq.Header.Set("Cookie", sessionCookie)
 	ocrReq.Header.Set("Content-Type", writer.FormDataContentType())
 	ocrRes := httptest.NewRecorder()
 	router.ServeHTTP(ocrRes, ocrReq)
 	if ocrRes.Code != http.StatusOK {
-		t.Fatalf("expected extract-text status 200, got %d", ocrRes.Code)
+		t.Fatalf("expected ocr extract-text status 200, got %d", ocrRes.Code)
 	}
 }
 

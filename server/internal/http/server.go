@@ -76,9 +76,8 @@ func NewRouter(cfg config.Config) stdhttp.Handler {
 	sessionManager := middleware.NewSessionManager(cfg)
 	r.Use(middleware.Auth(cfg, sessionManager))
 
-	r.Get("/health", handlers.Health)
-	r.Post("/api/extract-text", handlers.ExtractText)
-
+	routes.RegisterHealthRoutes(r)
+	routes.RegisterOCRRoutes(r)
 	routes.RegisterAuthRoutes(r, cfg, sessionManager)
 	routes.RegisterTranslationRoutes(r)
 	routes.RegisterTextRoutes(r)
