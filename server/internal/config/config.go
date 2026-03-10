@@ -98,27 +98,19 @@ func Load() (Config, error) {
 	}, nil
 }
 
-func detectRepoRoot() (string, error) {
+func getRepoRoot() (string, error) {
 	wd, err := os.Getwd()
 	if err != nil {
 		return "", fmt.Errorf("get working directory: %w", err)
 	}
 
-	if filepath.Base(wd) == "server" {
-		return filepath.Dir(wd), nil
-	}
-
 	serverDir := filepath.Join(wd, "server")
+
 	if _, err := os.Stat(serverDir); err == nil {
 		return wd, nil
 	}
 
-	parent := filepath.Dir(wd)
-	if filepath.Base(parent) == "server" {
-		return filepath.Dir(parent), nil
-	}
-
-	return "", fmt.Errorf("could not detect repository root from working directory %q", wd)
+	return "", fmt.Error("must run from project root (working directory is %q)", wd)
 }
 
 func envOrDefault(key string, fallback string) string {
