@@ -71,7 +71,7 @@ func Load() (Config, error) {
 		addr = ":8080"
 	}
 
-	repoRoot, err := detectRepoRoot()
+	repoRoot, err := getRepoRoot()
 	if err != nil {
 		return Config{}, err
 	}
@@ -110,7 +110,7 @@ func getRepoRoot() (string, error) {
 		return wd, nil
 	}
 
-	return "", fmt.Error("must run from project root (working directory is %q)", wd)
+	return "", fmt.Errorf("must run from project root (working directory is %q)", wd)
 }
 
 func envOrDefault(key string, fallback string) string {
