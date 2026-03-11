@@ -1,6 +1,7 @@
 package http
 
 import (
+	"fmt"
 	"log"
 	stdhttp "net/http"
 	"time"
@@ -20,26 +21,41 @@ import (
 )
 
 func NewRouter(cfg config.Config) stdhttp.Handler {
-	// Run migrations
-	if cfg.MigrationsDir != "" {
-		if err := migrations.RunUp(cfg.TranslationDBPath, cfg.MigrationsDir); err != nil {
-			log.Printf("failed to run migrations: %v", err)
-			return stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
-				w.WriteHeader(stdhttp.StatusInternalServerError)
-				_, _ = w.Write([]byte("Server initialization error"))
-			})
-		}
+	if err := runMigrations(cfg); err != nil {
+		return initializationErrorHandler(err)
 	}
 
-	// Initialize translation store
+	if err := initDependencies(cfg); err != nil {
+		return initializationErrorHandler(err)
+	}
+
+	r := chi.NewRouter()
+	sessionManager := middleware.NewSessionManager(cfg)
+
+	addMiddleware(r, cfg, sessionManager)
+	registerRoutes(r, cfg, sessionManager)
+
+	return r
+}
+
+func runMigrations(cfg config.Config) error {
+	if cfg.MigrationsDir == "" {
+		return nil
+	}
+
+	if err := migrations.RunUp(cfg.TranslationDBPath, cfg.MigrationsDir); err != nil {
+		return fmt.Errorf("run migrations: %w", err)
+	}
+
+	return nil
+}
+
+func initDependencies(cfg config.Config) error {
 	db, err := translation.NewDB(cfg.TranslationDBPath)
 	if err != nil {
-		log.Printf("failed to initialize translation store: %v", err)
-		return stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
-			w.WriteHeader(stdhttp.StatusInternalServerError)
-			_, _ = w.Write([]byte("Server initialization error"))
-		})
+		return fmt.Errorf("initialize translation store: %w", err)
 	}
+
 	translationStore := translation.NewTranslationStore(db)
 	textEventStore := translation.NewTextEventStore(db)
 	srsStore := translation.NewSRSStore(db)
@@ -47,11 +63,7 @@ func NewRouter(cfg config.Config) stdhttp.Handler {
 
 	translationProv, err := iltrans.NewDSPyProvider(cfg)
 	if err != nil {
-		log.Printf("failed to initialize translation provider: %v", err)
-		return stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
-			w.WriteHeader(stdhttp.StatusInternalServerError)
-			_, _ = w.Write([]byte("Server initialization error"))
-		})
+		return fmt.Errorf("initialize translation provider: %w", err)
 	}
 	chatProv := ilchat.New(cfg)
 
@@ -59,8 +71,10 @@ func NewRouter(cfg config.Config) stdhttp.Handler {
 	handlers.ConfigureDependencies(translationStore, textEventStore, srsStore, profileStore, manager, translationProv, chatProv)
 	manager.ResumeRestartableJobs()
 
-	r := chi.NewRouter()
+	return nil
+}
 
+func addMiddleware(r chi.Router, cfg config.Config, sessionManager *middleware.SessionManager) {
 	r.Use(chimiddleware.RequestID)
 	r.Use(chimiddleware.RealIP)
 	r.Use(chimiddleware.Logger)
@@ -73,9 +87,10 @@ func NewRouter(cfg config.Config) stdhttp.Handler {
 		AllowCredentials: true,
 	}))
 
-	sessionManager := middleware.NewSessionManager(cfg)
 	r.Use(middleware.Auth(cfg, sessionManager))
+}
 
+func registerRoutes(r chi.Router, cfg config.Config, sessionManager *middleware.SessionManager) {
 	routes.RegisterHealthRoutes(r)
 	routes.RegisterOCRRoutes(r)
 	routes.RegisterAuthRoutes(r, cfg, sessionManager)
@@ -85,8 +100,15 @@ func NewRouter(cfg config.Config) stdhttp.Handler {
 	routes.RegisterVocabRoutes(r)
 	routes.RegisterReviewRoutes(r)
 	routes.RegisterAdminRoutes(r)
+}
 
-	return r
+func initializationErrorHandler(err error) stdhttp.Handler {
+	log.Printf("server initialization failed: %v", err)
+
+	return stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+		w.WriteHeader(stdhttp.StatusInternalServerError)
+		_, _ = w.Write([]byte("Server initialization error"))
+	})
 }
 
 func ListenAndServe(addr string, cfg config.Config) error {
