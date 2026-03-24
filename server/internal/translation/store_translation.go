@@ -53,9 +53,9 @@ func (s *TranslationStore) Create(inputText string, sourceType string) (Translat
 	if _, err := tx.Exec(
 		`INSERT INTO translations (
 		    id, created_at, updated_at, status, translation_type, source_type, input_text,
-		    full_translation, error_message, metadata_json, text_id, progress, total, title
+		    full_translation, error_message, metadata_json, progress, total, title
 		 )
-		 VALUES (?, ?, ?, ?, 'translation', ?, ?, NULL, NULL, '{}', NULL, 0, 0, ?)`,
+		 VALUES (?, ?, ?, ?, 'translation', ?, ?, NULL, NULL, '{}', 0, 0, ?)`,
 		tr.ID,
 		tr.CreatedAt,
 		tr.CreatedAt,

@@ -58,13 +58,12 @@ func overrideDepsWithMockProvider(t *testing.T, cfg config.Config) *translation.
 		t.Fatalf("new db for override deps: %v", err)
 	}
 	translationStore := translation.NewTranslationStore(db)
-	textEventStore := translation.NewTextEventStore(db)
 	srsStore := translation.NewSRSStore(db)
 	profileStore := translation.NewProfileStore(db)
 	transProv := mockTranslationProvider{}
 	chatProv := mockChatProvider{}
 	manager := queue.NewManager(translationStore, transProv)
-	handlers.ConfigureDependencies(translationStore, textEventStore, srsStore, profileStore, manager, transProv, chatProv)
+	handlers.ConfigureDependencies(translationStore, srsStore, profileStore, manager, transProv, chatProv)
 	return translationStore
 }
 

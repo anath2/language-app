@@ -90,15 +90,6 @@ type ChatMessage struct {
 	ReviewCard    *ChatReviewCard `json:"review_card,omitempty"`
 }
 
-type TextRecord struct {
-	ID             string
-	CreatedAt      string
-	SourceType     string
-	RawText        string
-	NormalizedText string
-	Metadata       map[string]any
-}
-
 type VocabRecord struct {
 	ID       string
 	Headword string
@@ -169,10 +160,6 @@ type SRSStore struct {
 	db *sql.DB
 }
 
-type TextEventStore struct {
-	db *sql.DB
-}
-
 type ProfileStore struct {
 	db *sql.DB
 }
@@ -183,10 +170,6 @@ func NewTranslationStore(db *DB) *TranslationStore {
 
 func NewSRSStore(db *DB) *SRSStore {
 	return &SRSStore{db: db.Conn}
-}
-
-func NewTextEventStore(db *DB) *TextEventStore {
-	return &TextEventStore{db: db.Conn}
 }
 
 func NewProfileStore(db *DB) *ProfileStore {

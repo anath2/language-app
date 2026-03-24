@@ -70,7 +70,7 @@ class VocabStore {
     headword: string,
     pinyin: string,
     english: string,
-    textId: string | null,
+    translationId: string | null,
     snippet: string
   ): Promise<SavedVocabInfo | null> {
     try {
@@ -78,7 +78,7 @@ class VocabStore {
         headword,
         pinyin,
         english,
-        text_id: textId,
+        translation_id: translationId,
         snippet,
         status: 'learning',
       });

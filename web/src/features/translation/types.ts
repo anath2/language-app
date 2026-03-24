@@ -163,10 +163,6 @@ export interface DueCountResponse {
   due_count: number;
 }
 
-export interface CreateTextResponse {
-  id: string;
-}
-
 export interface ExtractTextResponse {
   text: string;
 }

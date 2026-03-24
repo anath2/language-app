@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func (s *SRSStore) SaveVocabItem(headword string, pinyin string, english string, textID *string, segmentID *string, snippet *string, status string) (string, error) {
+func (s *SRSStore) SaveVocabItem(headword string, pinyin string, english string, translationID *string, snippet *string, status string) (string, error) {
 	if strings.TrimSpace(headword) == "" {
 		return "", errors.New("headword is required")
 	}
@@ -35,28 +35,25 @@ func (s *SRSStore) SaveVocabItem(headword string, pinyin string, english string,
 	).Scan(&resolvedID); err != nil {
 		return "", fmt.Errorf("resolve vocab item id: %w", err)
 	}
-	if _, err := s.db.Exec(`UPDATE vocab_items SET updated_at = ? WHERE id = ?`, now, resolvedID); err != nil {
-		return "", fmt.Errorf("touch vocab item: %w", err)
-	}
-	occID, _ := newID()
-	var textIDVal any
-	var segmentIDVal any
+	var translationIDVal any
 	var snippetVal string
-	if textID != nil {
-		textIDVal = *textID
-	}
-	if segmentID != nil {
-		segmentIDVal = *segmentID
+	if translationID != nil {
+		translationIDVal = *translationID
 	}
 	if snippet != nil {
 		snippetVal = *snippet
 	}
 	if _, err := s.db.Exec(
-		`INSERT INTO vocab_occurrences (id, vocab_item_id, text_id, segment_id, snippet, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?)`,
-		occID, resolvedID, textIDVal, segmentIDVal, snippetVal, now,
+		`UPDATE vocab_items
+		 SET updated_at = ?,
+		     last_seen_translation_id = COALESCE(?, last_seen_translation_id),
+		     last_seen_snippet = CASE WHEN ? = '' THEN last_seen_snippet ELSE ? END,
+		     last_seen_at = ?,
+		     seen_count = seen_count + 1
+		 WHERE id = ?`,
+		now, translationIDVal, snippetVal, snippetVal, now, resolvedID,
 	); err != nil {
-		return "", fmt.Errorf("insert vocab occurrence: %w", err)
+		return "", fmt.Errorf("update vocab item context: %w", err)
 	}
 	if _, err := s.db.Exec(
 		`INSERT OR IGNORE INTO srs_state (vocab_item_id, due_at, interval_days, ease, reps, lapses, last_reviewed_at)
@@ -203,14 +200,9 @@ func (s *SRSStore) GetReviewQueue(limit int) ([]ReviewCard, error) {
 		if err := rows.Scan(&card.VocabItemID, &card.Headword, &card.Pinyin, &card.English); err != nil {
 			return nil, fmt.Errorf("scan review card: %w", err)
 		}
-		snippetRows, err := s.db.Query(`SELECT snippet FROM vocab_occurrences WHERE vocab_item_id = ? AND snippet != '' ORDER BY created_at DESC LIMIT 3`, card.VocabItemID)
-		if err == nil {
-			for snippetRows.Next() {
-				var snip string
-				_ = snippetRows.Scan(&snip)
-				card.Snippets = append(card.Snippets, snip)
-			}
-			_ = snippetRows.Close()
+		var snippet sql.NullString
+		if err := s.db.QueryRow(`SELECT last_seen_snippet FROM vocab_items WHERE id = ?`, card.VocabItemID).Scan(&snippet); err == nil && snippet.Valid && snippet.String != "" {
+			card.Snippets = []string{snippet.String}
 		}
 		out = append(out, card)
 	}
@@ -319,7 +311,7 @@ func (s *SRSStore) ExportProgressJSON() (string, error) {
 		key   string
 	}
 	dumps := []tableDump{
-		{query: "SELECT id, headword, pinyin, english, type, status, created_at, updated_at FROM vocab_items ORDER BY created_at", key: "vocab_items"},
+		{query: "SELECT id, headword, pinyin, english, type, status, created_at, updated_at, last_seen_translation_id, last_seen_snippet, last_seen_at, seen_count FROM vocab_items ORDER BY created_at", key: "vocab_items"},
 		{query: "SELECT vocab_item_id, due_at, interval_days, ease, reps, lapses, last_reviewed_at FROM srs_state", key: "srs_state"},
 		{query: "SELECT id, vocab_item_id, looked_up_at FROM vocab_lookups ORDER BY looked_up_at", key: "vocab_lookups"},
 		{query: "SELECT id, character_item_id, word_item_id, created_at FROM character_word_links ORDER BY created_at", key: "character_word_links"},
@@ -408,7 +400,6 @@ func (s *SRSStore) ImportProgressJSON(input string) (map[string]int, error) {
 		"DELETE FROM character_word_links",
 		"DELETE FROM vocab_lookups",
 		"DELETE FROM srs_state",
-		"DELETE FROM vocab_occurrences",
 		"DELETE FROM vocab_items",
 	} {
 		if _, err := tx.Exec(stmt); err != nil {
@@ -420,8 +411,20 @@ func (s *SRSStore) ImportProgressJSON(input string) (map[string]int, error) {
 		if itemType == "" {
 			itemType = "word"
 		}
-		_, err := tx.Exec(`INSERT INTO vocab_items (id, headword, pinyin, english, type, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-			toString(item["id"]), toString(item["headword"]), toString(item["pinyin"]), toString(item["english"]), itemType, toString(item["status"]), toString(item["created_at"]), toString(item["updated_at"]))
+		_, err := tx.Exec(`INSERT INTO vocab_items (id, headword, pinyin, english, type, status, created_at, updated_at, last_seen_translation_id, last_seen_snippet, last_seen_at, seen_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			toString(item["id"]),
+			toString(item["headword"]),
+			toString(item["pinyin"]),
+			toString(item["english"]),
+			itemType,
+			toString(item["status"]),
+			toString(item["created_at"]),
+			toString(item["updated_at"]),
+			nullableString(item["last_seen_translation_id"]),
+			toString(item["last_seen_snippet"]),
+			nullableString(item["last_seen_at"]),
+			toInt(item["seen_count"]),
+		)
 		if err != nil {
 			return nil, err
 		}
