@@ -25,13 +25,12 @@ go test ./tests/integration -v -args -upstream
 ## Architecture
 
 ### Backend
-- DSPy pipeline components: `Segmenter`, `Translator`, `OCRExtractor`, and `Pipeline` (sync and async execution).
-- API pattern: JSON endpoints for API consumers and HTML fragment endpoints for HTMX.
-- Streaming: `/translate-stream` for SSE progress updates.
-- Pipeline uses lazy initialization with a lock via `get_pipeline()` for thread safety.
-- Persistence uses SQLite in `app/persistence/` with migrations; DB defaults to `app/data/language_app.db` and can be overridden by `LANGUAGE_APP_DB_PATH`.
-- SRS system (`app/persistence/srs.py`) implements SM-2 with status transitions and opacity values.
-- CC-CEDICT dictionary (`app/cedict.py`) loads at startup to support translation context.
+- Go backend uses route groups under `/api/*` with SSE translation/chat streaming.
+- Core persistence is SQLite in `server/internal/translation/` with Goose migrations in `server/migrations/`.
+- Active translation model: `translations`, `translation_jobs`, `translation_sentences`, `translation_segments`, `translation_chats`, `translation_chat_messages`.
+- Active vocab model: `vocab_items`, `srs_state`, `vocab_lookups`, `character_word_links`.
+- Vocab context is denormalized on `vocab_items` (`last_seen_translation_id`, `last_seen_snippet`, `last_seen_at`, `seen_count`) rather than a separate occurrences table.
+- `texts`, `events`, legacy `segments`, and `vocab_occurrences` are no longer part of the active data model.
 
 ### Frontend
 - Frontend workspace lives in `web/` with Svelte + Vite tooling.
