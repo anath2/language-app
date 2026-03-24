@@ -26,14 +26,8 @@ type translationStore interface {
 	RejectMessageReviewCard(messageID string) error
 }
 
-type textEventStore interface {
-	CreateText(rawText string, sourceType string, metadata map[string]any) (translation.TextRecord, error)
-	GetText(textID string) (translation.TextRecord, bool)
-	CreateEvent(eventType string, textID *string, segmentID *string, payload map[string]any) (string, error)
-}
-
 type srsStore interface {
-	SaveVocabItem(headword string, pinyin string, english string, textID *string, segmentID *string, snippet *string, status string) (string, error)
+	SaveVocabItem(headword string, pinyin string, english string, translationID *string, snippet *string, status string) (string, error)
 	UpdateVocabStatus(vocabItemID string, status string) error
 	RecordLookup(vocabItemID string) (translation.VocabSRSInfo, bool)
 	GetVocabSRSInfo(headwords []string) ([]translation.VocabSRSInfo, error)
@@ -55,7 +49,6 @@ type profileStore interface {
 }
 
 var sharedTranslations translationStore
-var sharedTextEvents textEventStore
 var sharedSRS srsStore
 var sharedProfile profileStore
 var sharedQueue *queue.Manager
@@ -64,7 +57,6 @@ var chatProvider intelligence.ChatProvider
 
 func ConfigureDependencies(
 	ts translationStore,
-	te textEventStore,
 	ss srsStore,
 	ps profileStore,
 	manager *queue.Manager,
@@ -72,7 +64,6 @@ func ConfigureDependencies(
 	cp intelligence.ChatProvider,
 ) {
 	sharedTranslations = ts
-	sharedTextEvents = te
 	sharedSRS = ss
 	sharedProfile = ps
 	sharedQueue = manager
@@ -81,7 +72,7 @@ func ConfigureDependencies(
 }
 
 func validateDependencies() error {
-	if sharedTranslations == nil || sharedTextEvents == nil || sharedSRS == nil || sharedProfile == nil || sharedQueue == nil || translationProvider == nil || chatProvider == nil {
+	if sharedTranslations == nil || sharedSRS == nil || sharedProfile == nil || sharedQueue == nil || translationProvider == nil || chatProvider == nil {
 		return errors.New("application dependencies are not configured")
 	}
 	return nil

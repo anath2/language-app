@@ -9,44 +9,13 @@ import (
 	"github.com/anath2/language-app/internal/translation"
 )
 
-type createTextRequest struct {
-	RawText    string         `json:"raw_text"`
-	SourceType string         `json:"source_type"`
-	Metadata   map[string]any `json:"metadata"`
-}
-
-type createTextResponse struct {
-	ID string `json:"id"`
-}
-
-type textResponse struct {
-	ID             string         `json:"id"`
-	CreatedAt      string         `json:"created_at"`
-	SourceType     string         `json:"source_type"`
-	RawText        string         `json:"raw_text"`
-	NormalizedText string         `json:"normalized_text"`
-	Metadata       map[string]any `json:"metadata"`
-}
-
-type createEventRequest struct {
-	EventType string         `json:"event_type"`
-	TextID    *string        `json:"text_id"`
-	SegmentID *string        `json:"segment_id"`
-	Payload   map[string]any `json:"payload"`
-}
-
-type createEventResponse struct {
-	ID string `json:"id"`
-}
-
 type saveVocabRequest struct {
-	Headword  string  `json:"headword"`
-	Pinyin    string  `json:"pinyin"`
-	English   string  `json:"english"`
-	TextID    *string `json:"text_id"`
-	SegmentID *string `json:"segment_id"`
-	Snippet   *string `json:"snippet"`
-	Status    string  `json:"status"`
+	Headword      string  `json:"headword"`
+	Pinyin        string  `json:"pinyin"`
+	English       string  `json:"english"`
+	TranslationID *string `json:"translation_id"`
+	Snippet       *string `json:"snippet"`
+	Status        string  `json:"status"`
 }
 
 type saveVocabResponse struct {
@@ -154,63 +123,6 @@ type translateBatchResponse struct {
 	Translations []translationResult `json:"translations"`
 }
 
-func CreateText(w http.ResponseWriter, r *http.Request) {
-	if err := validateDependencies(); err != nil {
-		WriteJSON(w, http.StatusInternalServerError, map[string]string{"detail": err.Error()})
-		return
-	}
-	var req createTextRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": "Invalid JSON payload"})
-		return
-	}
-	rec, err := sharedTextEvents.CreateText(req.RawText, req.SourceType, req.Metadata)
-	if err != nil {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": err.Error()})
-		return
-	}
-	WriteJSON(w, http.StatusOK, createTextResponse{ID: rec.ID})
-}
-
-func GetText(w http.ResponseWriter, r *http.Request) {
-	if err := validateDependencies(); err != nil {
-		WriteJSON(w, http.StatusInternalServerError, map[string]string{"detail": err.Error()})
-		return
-	}
-	textID := pathParam(r, "text_id")
-	rec, ok := sharedTextEvents.GetText(textID)
-	if !ok {
-		WriteJSON(w, http.StatusNotFound, map[string]string{"detail": "Not found"})
-		return
-	}
-	WriteJSON(w, http.StatusOK, textResponse{
-		ID:             rec.ID,
-		CreatedAt:      rec.CreatedAt,
-		SourceType:     rec.SourceType,
-		RawText:        rec.RawText,
-		NormalizedText: rec.NormalizedText,
-		Metadata:       rec.Metadata,
-	})
-}
-
-func CreateEvent(w http.ResponseWriter, r *http.Request) {
-	if err := validateDependencies(); err != nil {
-		WriteJSON(w, http.StatusInternalServerError, map[string]string{"detail": err.Error()})
-		return
-	}
-	var req createEventRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": "Invalid JSON payload"})
-		return
-	}
-	id, err := sharedTextEvents.CreateEvent(req.EventType, req.TextID, req.SegmentID, req.Payload)
-	if err != nil {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": err.Error()})
-		return
-	}
-	WriteJSON(w, http.StatusOK, createEventResponse{ID: id})
-}
-
 func SaveVocab(w http.ResponseWriter, r *http.Request) {
 	if err := validateDependencies(); err != nil {
 		WriteJSON(w, http.StatusInternalServerError, map[string]string{"detail": err.Error()})
@@ -221,7 +133,7 @@ func SaveVocab(w http.ResponseWriter, r *http.Request) {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": "Invalid JSON payload"})
 		return
 	}
-	id, err := sharedSRS.SaveVocabItem(req.Headword, req.Pinyin, req.English, req.TextID, req.SegmentID, req.Snippet, req.Status)
+	id, err := sharedSRS.SaveVocabItem(req.Headword, req.Pinyin, req.English, req.TranslationID, req.Snippet, req.Status)
 	if err != nil {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": err.Error()})
 		return
