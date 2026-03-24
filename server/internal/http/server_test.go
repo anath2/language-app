@@ -101,9 +101,6 @@ func TestRouteContractWithAuthenticatedSession(t *testing.T) {
 		{name: "get translation", method: http.MethodGet, path: "/api/translations/123", status: http.StatusNotFound},
 		{name: "translation status", method: http.MethodGet, path: "/api/translations/123/status", status: http.StatusNotFound},
 		{name: "delete translation", method: http.MethodDelete, path: "/api/translations/123", status: http.StatusNotFound},
-		{name: "create text", method: http.MethodPost, path: "/api/texts", status: http.StatusBadRequest},
-		{name: "get text", method: http.MethodGet, path: "/api/texts/123", status: http.StatusNotFound},
-		{name: "create event", method: http.MethodPost, path: "/api/events", status: http.StatusBadRequest},
 		{name: "save vocab", method: http.MethodPost, path: "/api/vocab/save", status: http.StatusBadRequest},
 		{name: "update vocab status", method: http.MethodPost, path: "/api/vocab/status", status: http.StatusBadRequest},
 		{name: "lookup vocab", method: http.MethodPost, path: "/api/vocab/lookup", status: http.StatusBadRequest},
@@ -320,40 +317,31 @@ func TestCoreAPIPersistenceFlow(t *testing.T) {
 	router := httprouter.NewRouter(cfg)
 	sessionCookie := loginAndGetSessionCookie(t, router, cfg.AppPassword)
 
-	textPayload, _ := json.Marshal(map[string]any{
-		"raw_text":    "你好世界",
+	createTranslationPayload, _ := json.Marshal(map[string]any{
+		"input_text":  "你好世界",
 		"source_type": "text",
-		"metadata":    map[string]any{"source": "test"},
 	})
-	createTextReq := httptest.NewRequest(http.MethodPost, "/api/texts", bytes.NewReader(textPayload))
-	createTextReq.Header.Set("Cookie", sessionCookie)
-	createTextReq.Header.Set("Content-Type", "application/json")
-	createTextRes := httptest.NewRecorder()
-	router.ServeHTTP(createTextRes, createTextReq)
-	if createTextRes.Code != http.StatusOK {
-		t.Fatalf("expected create text status 200, got %d", createTextRes.Code)
+	createTranslationReq := httptest.NewRequest(http.MethodPost, "/api/translations", bytes.NewReader(createTranslationPayload))
+	createTranslationReq.Header.Set("Cookie", sessionCookie)
+	createTranslationReq.Header.Set("Content-Type", "application/json")
+	createTranslationRes := httptest.NewRecorder()
+	router.ServeHTTP(createTranslationRes, createTranslationReq)
+	if createTranslationRes.Code != http.StatusOK {
+		t.Fatalf("expected create translation status 200, got %d", createTranslationRes.Code)
 	}
-	var createTextOut struct {
-		ID string `json:"id"`
+	var createTranslationOut struct {
+		TranslationID string `json:"translation_id"`
 	}
-	if err := json.NewDecoder(createTextRes.Body).Decode(&createTextOut); err != nil || createTextOut.ID == "" {
-		t.Fatalf("expected text id, err=%v", err)
-	}
-
-	getTextReq := httptest.NewRequest(http.MethodGet, "/api/texts/"+createTextOut.ID, nil)
-	getTextReq.Header.Set("Cookie", sessionCookie)
-	getTextRes := httptest.NewRecorder()
-	router.ServeHTTP(getTextRes, getTextReq)
-	if getTextRes.Code != http.StatusOK {
-		t.Fatalf("expected get text status 200, got %d", getTextRes.Code)
+	if err := json.NewDecoder(createTranslationRes.Body).Decode(&createTranslationOut); err != nil || createTranslationOut.TranslationID == "" {
+		t.Fatalf("expected translation id, err=%v", err)
 	}
 
 	saveVocabPayload, _ := json.Marshal(map[string]any{
-		"headword": "你好",
-		"pinyin":   "ni hao",
-		"english":  "hello",
-		"text_id":  createTextOut.ID,
-		"status":   "learning",
+		"headword":       "你好",
+		"pinyin":         "ni hao",
+		"english":        "hello",
+		"translation_id": createTranslationOut.TranslationID,
+		"status":         "learning",
 	})
 	saveVocabReq := httptest.NewRequest(http.MethodPost, "/api/vocab/save", bytes.NewReader(saveVocabPayload))
 	saveVocabReq.Header.Set("Cookie", sessionCookie)
@@ -487,7 +475,7 @@ func TestAuthBehaviorParity(t *testing.T) {
 	router := httprouter.NewRouter(cfg)
 
 	t.Run("api unauthenticated", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/texts/1", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/translations/1", nil)
 		req.Header.Set("Accept", "application/json")
 		res := httptest.NewRecorder()
 

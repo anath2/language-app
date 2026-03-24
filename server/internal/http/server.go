@@ -57,7 +57,6 @@ func initDependencies(cfg config.Config) error {
 	}
 
 	translationStore := translation.NewTranslationStore(db)
-	textEventStore := translation.NewTextEventStore(db)
 	srsStore := translation.NewSRSStore(db)
 	profileStore := translation.NewProfileStore(db)
 
@@ -68,7 +67,7 @@ func initDependencies(cfg config.Config) error {
 	chatProv := ilchat.New(cfg)
 
 	manager := queue.NewManager(translationStore, translationProv)
-	handlers.ConfigureDependencies(translationStore, textEventStore, srsStore, profileStore, manager, translationProv, chatProv)
+	handlers.ConfigureDependencies(translationStore, srsStore, profileStore, manager, translationProv, chatProv)
 	manager.ResumeRestartableJobs()
 
 	return nil
@@ -95,8 +94,6 @@ func registerRoutes(r chi.Router, cfg config.Config, sessionManager *middleware.
 	routes.RegisterOCRRoutes(r)
 	routes.RegisterAuthRoutes(r, cfg, sessionManager)
 	routes.RegisterTranslationRoutes(r)
-	routes.RegisterTextRoutes(r)
-	routes.RegisterEventRoutes(r)
 	routes.RegisterVocabRoutes(r)
 	routes.RegisterReviewRoutes(r)
 	routes.RegisterAdminRoutes(r)
