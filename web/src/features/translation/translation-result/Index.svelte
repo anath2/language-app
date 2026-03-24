@@ -10,7 +10,6 @@ import { vocabStore } from '@/features/translation/stores/vocabStore.svelte';
 import TranslationResult from './components/TranslationResult.svelte';
 import TranslationChat from './components/TranslationChat.svelte';
 import type {
-  CreateTextResponse,
   RecordLookupResponse,
   SavedVocabInfo,
   SaveVocabResponse,
@@ -36,7 +35,6 @@ let editedSourceText = $state('');
 let isSavingSource = $state(false);
 let editSourceNotice = $state('');
 
-let currentTextId = $state<string | null>(null);
 let currentRawText = $state('');
 let savedVocabMap = $state<Map<string, SavedVocabInfo>>(new Map());
 
@@ -61,7 +59,6 @@ async function loadTranslationFromRoute(id: string) {
   try {
     const detail = await getJson<TranslationDetailResponse>(`/api/translations/${id}`);
     currentRawText = detail.input_text;
-    currentTextId = null;
     currentFullTranslation = detail.full_translation || null;
     currentTranslationStatus = detail.status;
     currentTitle = detail.title || '';
@@ -175,30 +172,17 @@ async function fetchAndApplySrsInfo(results: SegmentResult[]) {
   savedVocabMap = await vocabStore.fetchSrsInfoMap(headwords);
 }
 
-async function ensureSavedText() {
-  if (currentTextId || !currentRawText) return currentTextId;
-
-  const data = await postJson<CreateTextResponse>('/api/texts', {
-    raw_text: currentRawText,
-    source_type: 'text',
-    metadata: {},
-  });
-  currentTextId = data.id;
-  return currentTextId;
-}
-
 async function onSaveVocab(
   headword: string,
   pinyin: string,
   english: string
 ): Promise<SavedVocabInfo | null> {
   try {
-    await ensureSavedText();
     const data = await postJson<SaveVocabResponse>('/api/vocab/save', {
       headword,
       pinyin,
       english,
-      text_id: currentTextId,
+      translation_id: translationId,
       snippet: currentRawText,
       status: 'learning',
     });
