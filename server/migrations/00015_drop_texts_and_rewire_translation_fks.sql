@@ -44,8 +44,9 @@ CREATE TABLE translation_sentences (
 );
 
 INSERT INTO translation_sentences (id, translation_id, sentence_idx, indent, separator, content_hash)
-SELECT id, translation_id, sentence_idx, indent, separator, content_hash
-FROM translation_sentences_old;
+SELECT s.id, s.translation_id, s.sentence_idx, s.indent, s.separator, s.content_hash
+FROM translation_sentences_old s
+JOIN translations t ON t.id = s.translation_id;
 
 CREATE TABLE translation_segments (
   id TEXT PRIMARY KEY,
@@ -60,8 +61,9 @@ CREATE TABLE translation_segments (
 );
 
 INSERT INTO translation_segments (id, translation_id, sentence_idx, seg_idx, segment_text, pinyin, english, created_at)
-SELECT id, translation_id, sentence_idx, seg_idx, segment_text, pinyin, english, created_at
-FROM translation_segments_old;
+SELECT s.id, s.translation_id, s.sentence_idx, s.seg_idx, s.segment_text, s.pinyin, s.english, s.created_at
+FROM translation_segments_old s
+JOIN translations t ON t.id = s.translation_id;
 
 CREATE TABLE translation_jobs (
   translation_id TEXT PRIMARY KEY,
@@ -75,8 +77,9 @@ CREATE TABLE translation_jobs (
 );
 
 INSERT INTO translation_jobs (translation_id, state, attempts, lease_until, last_error, created_at, updated_at)
-SELECT translation_id, state, attempts, lease_until, last_error, created_at, updated_at
-FROM translation_jobs_old;
+SELECT j.translation_id, j.state, j.attempts, j.lease_until, j.last_error, j.created_at, j.updated_at
+FROM translation_jobs_old j
+JOIN translations t ON t.id = j.translation_id;
 
 CREATE TABLE translation_chats (
   id TEXT PRIMARY KEY,
@@ -87,8 +90,9 @@ CREATE TABLE translation_chats (
 );
 
 INSERT INTO translation_chats (id, translation_id, created_at, updated_at)
-SELECT id, translation_id, created_at, updated_at
-FROM translation_chats_old;
+SELECT c.id, c.translation_id, c.created_at, c.updated_at
+FROM translation_chats_old c
+JOIN translations t ON t.id = c.translation_id;
 
 CREATE TABLE translation_chat_messages (
   id TEXT PRIMARY KEY,
@@ -107,8 +111,10 @@ CREATE TABLE translation_chat_messages (
 INSERT INTO translation_chat_messages (
   id, chat_id, translation_id, message_idx, role, content, selected_text, created_at, review_card_json
 )
-SELECT id, chat_id, translation_id, message_idx, role, content, selected_text, created_at, review_card_json
-FROM translation_chat_messages_old;
+SELECT m.id, m.chat_id, m.translation_id, m.message_idx, m.role, m.content, m.selected_text, m.created_at, m.review_card_json
+FROM translation_chat_messages_old m
+JOIN translation_chats c ON c.id = m.chat_id
+JOIN translations t ON t.id = m.translation_id AND t.id = c.translation_id;
 
 DROP TABLE translation_chat_messages_old;
 DROP TABLE translation_chats_old;
