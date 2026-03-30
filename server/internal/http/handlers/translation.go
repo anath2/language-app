@@ -70,6 +70,7 @@ func CreateTranslation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	item, err := translations.Create(req.InputText, req.SourceType)
 	if err != nil {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": err.Error()})
 		return
@@ -80,6 +81,8 @@ func CreateTranslation(w http.ResponseWriter, r *http.Request) {
 		Status:        item.Status,
 	})
 
+	jobQueue.Submit(item.ID)
+	jobQueue.StartProcessing(item.ID)
 }
 
 func ListTranslations(w http.ResponseWriter, r *http.Request) {
@@ -93,6 +96,7 @@ func ListTranslations(w http.ResponseWriter, r *http.Request) {
 	offset := parseIntDefault(query.Get("offset"), 0)
 	status := strings.TrimSpace(query.Get("status"))
 
+	items, total, err := translations.List(limit, offset, status)
 	if err != nil {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": err.Error()})
 		return
@@ -126,6 +130,7 @@ func GetTranslation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	translationID := pathParam(r, "translation_id")
+	item, ok := translations.Get(translationID)
 	if !ok {
 		WriteJSON(w, http.StatusNotFound, map[string]string{"detail": "Translation not found"})
 		return
@@ -151,7 +156,7 @@ func GetTranslationStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	translationID := pathParam(r, "translation_id")
-	item, ok := sharedTranslations.Get(translationID)
+	item, ok := translations.Get(translationID)
 	if !ok {
 		WriteJSON(w, http.StatusNotFound, map[string]string{"detail": "Translation not found"})
 		return
@@ -198,7 +203,7 @@ func UpdateTranslation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if hasTitle {
-		if err := sharedTranslations.UpdateTitle(translationID, req.Title); err != nil {
+		if err := translations.UpdateTitle(translationID, req.Title); err != nil {
 			if errors.Is(err, translation.ErrNotFound) {
 				WriteJSON(w, http.StatusNotFound, map[string]string{"detail": "Translation not found"})
 				return
@@ -213,7 +218,7 @@ func UpdateTranslation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sentencesToProcess, err := sharedTranslations.UpdateInputTextForReprocessing(translationID, req.InputText)
+	sentencesToProcess, err := translations.UpdateInputTextForReprocessing(translationID, req.InputText)
 	if err != nil {
 		if errors.Is(err, translation.ErrNotFound) {
 			WriteJSON(w, http.StatusNotFound, map[string]string{"detail": "Translation not found"})
@@ -231,8 +236,8 @@ func UpdateTranslation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sharedQueue.Submit(translationID)
-	sharedQueue.StartReprocessing(translationID, sentencesToProcess)
+	jobQueue.Submit(translationID)
+	jobQueue.StartReprocessing(translationID, sentencesToProcess)
 
 	WriteJSON(w, http.StatusOK, updateTranslationResponse{
 		Status:           "pending",
@@ -247,11 +252,11 @@ func DeleteTranslation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	translationID := pathParam(r, "translation_id")
-	if !sharedTranslations.Delete(translationID) {
+	if !translations.Delete(translationID) {
 		WriteJSON(w, http.StatusNotFound, map[string]string{"detail": "Translation not found"})
 		return
 	}
-	sharedQueue.CleanupProgress(translationID)
+	jobQueue.CleanupProgress(translationID)
 
 	WriteJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
@@ -274,7 +279,7 @@ func TranslationStream(w http.ResponseWriter, r *http.Request) {
 	}
 
 	translationID := pathParam(r, "translation_id")
-	item, exists := sharedTranslations.Get(translationID)
+	item, exists := translations.Get(translationID)
 	if !exists {
 		emitSSE(w, map[string]any{"type": "error", "message": "Translation not found"})
 		flusher.Flush()
@@ -289,11 +294,11 @@ func TranslationStream(w http.ResponseWriter, r *http.Request) {
 
 	if item.Status == "completed" {
 		replayCompletedStream(w, flusher, item)
-		sharedQueue.CleanupProgress(translationID)
+		jobQueue.CleanupProgress(translationID)
 		return
 	}
 
-	sharedQueue.StartProcessing(translationID)
+	jobQueue.StartProcessing(translationID)
 	streamLiveProgress(r.Context(), w, flusher, translationID)
 }
 
@@ -309,7 +314,7 @@ func streamLiveProgress(ctx context.Context, w http.ResponseWriter, flusher http
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			item, exists := sharedTranslations.Get(translationID)
+			item, exists := translations.Get(translationID)
 			if !exists {
 				emitSSE(w, map[string]any{"type": "error", "message": "Translation not found"})
 				flusher.Flush()
@@ -319,11 +324,11 @@ func streamLiveProgress(ctx context.Context, w http.ResponseWriter, flusher http
 			if item.Status == "failed" {
 				emitSSE(w, map[string]any{"type": "error", "message": derefOr(item.ErrorMessage, "Translation failed")})
 				flusher.Flush()
-				sharedQueue.CleanupProgress(translationID)
+				jobQueue.CleanupProgress(translationID)
 				return
 			}
 
-			progress, ok := sharedQueue.GetProgress(translationID)
+			progress, ok := jobQueue.GetProgress(translationID)
 			if !ok {
 				continue
 			}
@@ -359,14 +364,14 @@ func streamLiveProgress(ctx context.Context, w http.ResponseWriter, flusher http
 			lastProgress = len(progress.Results)
 
 			if progress.Status == "completed" || item.Status == "completed" {
-				fresh, _ := sharedTranslations.Get(translationID)
+				fresh, _ := translations.Get(translationID)
 				emitSSE(w, map[string]any{
 					"type":            "complete",
 					"sentences":       fresh.Sentences,
 					"fullTranslation": fresh.FullTranslation,
 				})
 				flusher.Flush()
-				sharedQueue.CleanupProgress(translationID)
+				jobQueue.CleanupProgress(translationID)
 				return
 			}
 		}
