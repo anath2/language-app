@@ -70,7 +70,6 @@ func CreateTranslation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	item, err := sharedTranslations.Create(req.InputText, req.SourceType)
 	if err != nil {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": err.Error()})
 		return
@@ -81,8 +80,6 @@ func CreateTranslation(w http.ResponseWriter, r *http.Request) {
 		Status:        item.Status,
 	})
 
-	sharedQueue.Submit(item.ID)
-	sharedQueue.StartProcessing(item.ID)
 }
 
 func ListTranslations(w http.ResponseWriter, r *http.Request) {
@@ -96,7 +93,6 @@ func ListTranslations(w http.ResponseWriter, r *http.Request) {
 	offset := parseIntDefault(query.Get("offset"), 0)
 	status := strings.TrimSpace(query.Get("status"))
 
-	items, total, err := sharedTranslations.List(limit, offset, status)
 	if err != nil {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": err.Error()})
 		return
@@ -130,7 +126,6 @@ func GetTranslation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	translationID := pathParam(r, "translation_id")
-	item, ok := sharedTranslations.Get(translationID)
 	if !ok {
 		WriteJSON(w, http.StatusNotFound, map[string]string{"detail": "Translation not found"})
 		return

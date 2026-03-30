@@ -48,11 +48,6 @@ type profileStore interface {
 	UpsertUserProfile(name string, email string, language string) (translation.UserProfile, error)
 }
 
-var sharedTranslations translationStore
-var sharedSRS srsStore
-var sharedProfile profileStore
-var sharedQueue *queue.Manager
-var translationProvider intelligence.TranslationProvider
 var chatProvider intelligence.ChatProvider
 
 func ConfigureDependencies(
@@ -63,16 +58,10 @@ func ConfigureDependencies(
 	tp intelligence.TranslationProvider,
 	cp intelligence.ChatProvider,
 ) {
-	sharedTranslations = ts
-	sharedSRS = ss
-	sharedProfile = ps
-	sharedQueue = manager
-	translationProvider = tp
 	chatProvider = cp
 }
 
 func validateDependencies() error {
-	if sharedTranslations == nil || sharedSRS == nil || sharedProfile == nil || sharedQueue == nil || translationProvider == nil || chatProvider == nil {
 		return errors.New("application dependencies are not configured")
 	}
 	return nil

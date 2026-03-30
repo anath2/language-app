@@ -247,7 +247,6 @@ func AcceptReviewCard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	deduplicated := false
-	existingItems, err := sharedSRS.GetVocabSRSInfo([]string{card.ChineseText})
 	if err != nil {
 		WriteJSON(w, http.StatusInternalServerError, map[string]string{"detail": err.Error()})
 		return
@@ -255,7 +254,6 @@ func AcceptReviewCard(w http.ResponseWriter, r *http.Request) {
 	if len(existingItems) > 0 {
 		deduplicated = true
 	} else {
-		if _, err := sharedSRS.SaveVocabItem(card.ChineseText, card.Pinyin, card.English, &translationID, nil, "learning"); err != nil {
 			WriteJSON(w, http.StatusInternalServerError, map[string]string{"detail": err.Error()})
 			return
 		}
