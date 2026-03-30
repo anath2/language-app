@@ -156,6 +156,10 @@ type TranslationStore struct {
 	db *sql.DB
 }
 
+type ChatStore struct {
+	db *sql.DB
+}
+
 type SRSStore struct {
 	db *sql.DB
 }
@@ -166,6 +170,10 @@ type ProfileStore struct {
 
 func NewTranslationStore(db *DB) *TranslationStore {
 	return &TranslationStore{db: db.Conn}
+}
+
+func NewChatStore(db *DB) *ChatStore {
+	return &ChatStore{db: db.Conn}
 }
 
 func NewSRSStore(db *DB) *SRSStore {

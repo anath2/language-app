@@ -19,7 +19,6 @@ type translationStore interface {
 }
 
 type chatStore interface {
-	Get(id string) (translation.Translation, bool)
 	EnsureChatForTranslation(translationID string) (translation.ChatThread, error)
 	AppendChatMessage(translationID string, role string, content string, selectedText string) (translation.ChatMessage, error)
 	ListChatMessages(translationID string) ([]translation.ChatMessage, error)

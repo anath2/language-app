@@ -57,6 +57,7 @@ func initDependencies(cfg config.Config) error {
 	}
 
 	translationStore := translation.NewTranslationStore(db)
+	chatStore := translation.NewChatStore(db)
 	srsStore := translation.NewSRSStore(db)
 	profileStore := translation.NewProfileStore(db)
 
@@ -67,7 +68,7 @@ func initDependencies(cfg config.Config) error {
 	chatProv := ilchat.New(cfg)
 
 	manager := queue.NewManager(translationStore, translationProv)
-	handlers.ConfigureDependencies(translationStore, srsStore, profileStore, manager, translationProv, chatProv)
+	handlers.ConfigureDependencies(translationStore, chatStore, srsStore, profileStore, manager, translationProv, chatProv)
 	manager.ResumeRestartableJobs()
 
 	return nil

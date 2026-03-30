@@ -26,7 +26,7 @@ func CreateChatMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	translationID := pathParam(r, "translation_id")
-	item, exists := chats.Get(translationID)
+	item, exists := translations.Get(translationID)
 	if !exists {
 		WriteJSON(w, http.StatusNotFound, map[string]string{"detail": "Translation not found"})
 		return
