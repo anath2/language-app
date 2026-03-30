@@ -26,7 +26,7 @@ func CreateChatMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	translationID := pathParam(r, "translation_id")
-	item, exists := sharedTranslations.Get(translationID)
+	item, exists := chats.Get(translationID)
 	if !exists {
 		WriteJSON(w, http.StatusNotFound, map[string]string{"detail": "Translation not found"})
 		return
@@ -43,7 +43,7 @@ func CreateChatMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	thread, err := sharedTranslations.EnsureChatForTranslation(translationID)
+	thread, err := chats.EnsureChatForTranslation(translationID)
 	if err != nil {
 		if err == translation.ErrNotFound {
 			WriteJSON(w, http.StatusNotFound, map[string]string{"detail": "Translation not found"})
@@ -53,13 +53,13 @@ func CreateChatMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userMsg, err := sharedTranslations.AppendChatMessage(translationID, translation.ChatRoleUser, req.Message, req.SelectedText)
+	userMsg, err := chats.AppendChatMessage(translationID, translation.ChatRoleUser, req.Message, req.SelectedText)
 	if err != nil {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": err.Error()})
 		return
 	}
 
-	history, err := sharedTranslations.ListChatMessages(translationID)
+	history, err := chats.ListChatMessages(translationID)
 	if err != nil {
 		WriteJSON(w, http.StatusInternalServerError, map[string]string{"detail": err.Error()})
 		return
@@ -114,7 +114,7 @@ func CreateChatMessage(w http.ResponseWriter, r *http.Request) {
 
 	if len(result.ToolCalls) > 0 {
 		// One AI text message for the whole turn.
-		aiMsg, err := sharedTranslations.AppendChatMessage(translationID, translation.ChatRoleAI, "Here's a practice card for you:", "")
+		aiMsg, err := chats.AppendChatMessage(translationID, translation.ChatRoleAI, "Here's a practice card for you:", "")
 		if err != nil {
 			emitSSE(w, map[string]any{"type": "error", "message": err.Error()})
 			flusher.Flush()
@@ -131,13 +131,13 @@ func CreateChatMessage(w http.ResponseWriter, r *http.Request) {
 			pinyin, _ := tc.Arguments["pinyin"].(string)
 			english, _ := tc.Arguments["english"].(string)
 
-			toolMsg, err := sharedTranslations.AppendChatMessage(translationID, translation.ChatRoleTool, chineseText, "")
+			toolMsg, err := chats.AppendChatMessage(translationID, translation.ChatRoleTool, chineseText, "")
 			if err != nil {
 				emitSSE(w, map[string]any{"type": "error", "message": err.Error()})
 				flusher.Flush()
 				return
 			}
-			if err := sharedTranslations.SetReviewCard(toolMsg.ID, chineseText, pinyin, english); err != nil {
+			if err := chats.SetReviewCard(toolMsg.ID, chineseText, pinyin, english); err != nil {
 				emitSSE(w, map[string]any{"type": "error", "message": err.Error()})
 				flusher.Flush()
 				return
@@ -162,7 +162,7 @@ func CreateChatMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	aiMsg, err := sharedTranslations.AppendChatMessage(translationID, translation.ChatRoleAI, result.Content, "")
+	aiMsg, err := chats.AppendChatMessage(translationID, translation.ChatRoleAI, result.Content, "")
 	if err != nil {
 		emitSSE(w, map[string]any{"type": "error", "message": err.Error()})
 		flusher.Flush()
@@ -183,7 +183,7 @@ func ListChatMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	translationID := pathParam(r, "translation_id")
-	thread, err := sharedTranslations.EnsureChatForTranslation(translationID)
+	thread, err := chats.EnsureChatForTranslation(translationID)
 	if err != nil {
 		if err == translation.ErrNotFound {
 			WriteJSON(w, http.StatusNotFound, map[string]string{"detail": "Translation not found"})
@@ -192,7 +192,7 @@ func ListChatMessages(w http.ResponseWriter, r *http.Request) {
 		WriteJSON(w, http.StatusInternalServerError, map[string]string{"detail": err.Error()})
 		return
 	}
-	items, err := sharedTranslations.ListChatMessages(translationID)
+	items, err := chats.ListChatMessages(translationID)
 	if err != nil {
 		WriteJSON(w, http.StatusInternalServerError, map[string]string{"detail": err.Error()})
 		return
@@ -209,7 +209,7 @@ func ClearChatMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	translationID := pathParam(r, "translation_id")
-	if err := sharedTranslations.ClearChatMessages(translationID); err != nil {
+	if err := chats.ClearChatMessages(translationID); err != nil {
 		if err == translation.ErrNotFound {
 			WriteJSON(w, http.StatusNotFound, map[string]string{"detail": "Translation not found"})
 			return
@@ -228,7 +228,7 @@ func AcceptReviewCard(w http.ResponseWriter, r *http.Request) {
 	translationID := pathParam(r, "translation_id")
 	messageID := pathParam(r, "message_id")
 
-	card, err := sharedTranslations.GetMessageReviewCard(messageID)
+	card, err := chats.GetMessageReviewCard(messageID)
 	if err != nil {
 		if err == translation.ErrNotFound {
 			WriteJSON(w, http.StatusNotFound, map[string]string{"detail": "Message not found"})
@@ -247,6 +247,7 @@ func AcceptReviewCard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	deduplicated := false
+	existingItems, err := srs.GetVocabSRSInfo([]string{card.ChineseText})
 	if err != nil {
 		WriteJSON(w, http.StatusInternalServerError, map[string]string{"detail": err.Error()})
 		return
@@ -254,12 +255,13 @@ func AcceptReviewCard(w http.ResponseWriter, r *http.Request) {
 	if len(existingItems) > 0 {
 		deduplicated = true
 	} else {
+		if _, err := srs.SaveVocabItem(card.ChineseText, card.Pinyin, card.English, &translationID, nil, "learning"); err != nil {
 			WriteJSON(w, http.StatusInternalServerError, map[string]string{"detail": err.Error()})
 			return
 		}
 	}
 
-	if err := sharedTranslations.AcceptMessageReviewCard(messageID); err != nil {
+	if err := chats.AcceptMessageReviewCard(messageID); err != nil {
 		WriteJSON(w, http.StatusInternalServerError, map[string]string{"detail": err.Error()})
 		return
 	}
@@ -274,7 +276,7 @@ func RejectReviewCard(w http.ResponseWriter, r *http.Request) {
 	}
 	messageID := pathParam(r, "message_id")
 
-	card, err := sharedTranslations.GetMessageReviewCard(messageID)
+	card, err := chats.GetMessageReviewCard(messageID)
 	if err != nil {
 		if err == translation.ErrNotFound {
 			WriteJSON(w, http.StatusNotFound, map[string]string{"detail": "Message not found"})
@@ -292,7 +294,7 @@ func RejectReviewCard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := sharedTranslations.RejectMessageReviewCard(messageID); err != nil {
+	if err := chats.RejectMessageReviewCard(messageID); err != nil {
 		WriteJSON(w, http.StatusInternalServerError, map[string]string{"detail": err.Error()})
 		return
 	}

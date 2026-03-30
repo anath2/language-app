@@ -133,10 +133,12 @@ func SaveVocab(w http.ResponseWriter, r *http.Request) {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": "Invalid JSON payload"})
 		return
 	}
+	id, err := srs.SaveVocabItem(req.Headword, req.Pinyin, req.English, req.TranslationID, req.Snippet, req.Status)
 	if err != nil {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": err.Error()})
 		return
 	}
+	_ = srs.ExtractAndLinkCharacters(id, req.Headword, transProvider.LookupCharacter)
 	WriteJSON(w, http.StatusOK, saveVocabResponse{VocabItemID: id})
 }
 
@@ -150,6 +152,7 @@ func UpdateVocabStatus(w http.ResponseWriter, r *http.Request) {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": "Invalid JSON payload"})
 		return
 	}
+	err := srs.UpdateVocabStatus(req.VocabItemID, req.Status)
 	if err != nil {
 		if err == translation.ErrNotFound {
 			WriteJSON(w, http.StatusNotFound, map[string]string{"detail": "Vocab item not found"})
@@ -171,6 +174,7 @@ func RecordLookup(w http.ResponseWriter, r *http.Request) {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": "Invalid JSON payload"})
 		return
 	}
+	info, ok := srs.RecordLookup(req.VocabItemID)
 	if !ok {
 		WriteJSON(w, http.StatusNotFound, map[string]string{"detail": "Vocab item not found"})
 		return
@@ -193,6 +197,7 @@ func GetVocabSRSInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	parts := strings.Split(headwords, ",")
+	items, err := srs.GetVocabSRSInfo(parts)
 	if err != nil {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": err.Error()})
 		return
@@ -220,6 +225,7 @@ func GetReviewQueue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	limit := parseIntDefault(r.URL.Query().Get("limit"), 10)
+	cards, err := srs.GetReviewQueue(limit)
 	if err != nil {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": err.Error()})
 		return
@@ -272,6 +278,7 @@ func GetReviewCount(w http.ResponseWriter, r *http.Request) {
 		WriteJSON(w, http.StatusInternalServerError, map[string]string{"detail": err.Error()})
 		return
 	}
+	WriteJSON(w, http.StatusOK, dueCountResponse{DueCount: srs.GetDueCount()})
 }
 
 func GetCharacterReviewQueue(w http.ResponseWriter, r *http.Request) {
@@ -280,6 +287,7 @@ func GetCharacterReviewQueue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	limit := parseIntDefault(r.URL.Query().Get("limit"), 10)
+	cards, err := srs.GetCharacterReviewQueue(limit)
 	if err != nil {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": err.Error()})
 		return
@@ -305,6 +313,7 @@ func GetCharacterReviewQueue(w http.ResponseWriter, r *http.Request) {
 	}
 	WriteJSON(w, http.StatusOK, characterReviewQueueResponse{
 		Cards:    respCards,
+		DueCount: srs.GetCharacterDueCount(),
 	})
 }
 
@@ -313,6 +322,7 @@ func GetCharacterReviewCount(w http.ResponseWriter, r *http.Request) {
 		WriteJSON(w, http.StatusInternalServerError, map[string]string{"detail": err.Error()})
 		return
 	}
+	WriteJSON(w, http.StatusOK, dueCountResponse{DueCount: srs.GetCharacterDueCount()})
 }
 
 func TranslateBatch(w http.ResponseWriter, r *http.Request) {
@@ -325,8 +335,8 @@ func TranslateBatch(w http.ResponseWriter, r *http.Request) {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": "Invalid JSON payload"})
 		return
 	}
-	translations := make([]translationResult, 0, len(req.Segments))
-	segmentResults, err := translationProvider.TranslateSegments(context.Background(), req.Segments, derefOr(req.Context, ""))
+	results := make([]translationResult, 0, len(req.Segments))
+	segmentResults, err := transProvider.TranslateSegments(context.Background(), req.Segments, derefOr(req.Context, ""))
 	if err != nil {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": err.Error()})
 		return
@@ -338,13 +348,14 @@ func TranslateBatch(w http.ResponseWriter, r *http.Request) {
 			Pinyin:  translated.Pinyin,
 			English: translated.English,
 		}
-		translations = append(translations, item)
+		results = append(results, item)
 		storeSegments = append(storeSegments, translated)
 	}
 	if req.TranslationID != nil && req.SentenceIdx != nil {
+		if err := translations.UpdateTranslationSegments(*req.TranslationID, *req.SentenceIdx, storeSegments); err != nil {
 			WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": err.Error()})
 			return
 		}
 	}
-	WriteJSON(w, http.StatusOK, translateBatchResponse{Translations: translations})
+	WriteJSON(w, http.StatusOK, translateBatchResponse{Translations: results})
 }
