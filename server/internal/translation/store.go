@@ -53,6 +53,7 @@ const (
 	ChatRoleTool = "tool" // tool result message; one per tool call, owns review_card_json
 )
 
+// / ProgressSnapshot is a snapshot of the translation progress at a given moment.
 type ProgressSnapshot struct {
 	Status  string
 	Current int

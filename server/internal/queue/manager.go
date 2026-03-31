@@ -119,13 +119,16 @@ func (m *Manager) StartProcessing(translationID string) {
 			return
 		}
 
-		// Generate full translation before segmentation (non-fatal).
-		if fullTranslation, err := m.provider.TranslateFull(ctx, item.InputText); err != nil {
-			log.Printf("full translation failed (non-fatal): id=%s err=%v", translationID, err)
-		} else if fullTranslation != "" {
-			if err := m.store.SetFullTranslation(translationID, fullTranslation); err != nil {
-				log.Printf("set full translation failed (non-fatal): id=%s err=%v", translationID, err)
-			}
+		fullTranslation, err := m.provider.TranslateFull(ctx, item.InputText)
+		if err != nil {
+			_ = m.store.Fail(translationID, "Failed to generate full translation: "+err.Error())
+			m.removeRunning(translationID)
+			return
+		}
+		if err := m.store.SetFullTranslation(translationID, fullTranslation); err != nil {
+			_ = m.store.Fail(translationID, "Failed to store full translation: "+err.Error())
+			m.removeRunning(translationID)
+			return
 		}
 
 		queued, err := m.segmentInputBySentence(ctx, sentences)
@@ -171,7 +174,7 @@ func (m *Manager) StartProcessing(translationID string) {
 }
 
 // StartReprocessing processes only the sentences in sentencesToProcess (sentenceIdx → sentence text).
-// It does not call TranslateFull — the existing full translation is preserved.
+// It regenerates the full translation and re-segments only the changed sentences.
 func (m *Manager) StartReprocessing(translationID string, sentencesToProcess map[int]string) {
 	if len(sentencesToProcess) == 0 {
 		return
@@ -202,13 +205,16 @@ func (m *Manager) StartReprocessing(translationID string, sentencesToProcess map
 			return
 		}
 
-		// Generate new full translation (non-fatal).
-		if fullTranslation, err := m.provider.TranslateFull(ctx, item.InputText); err != nil {
-			log.Printf("full translation failed (non-fatal): id=%s err=%v", translationID, err)
-		} else if fullTranslation != "" {
-			if err := m.store.SetFullTranslation(translationID, fullTranslation); err != nil {
-				log.Printf("set full translation failed (non-fatal): id=%s err=%v", translationID, err)
-			}
+		fullTranslation, err := m.provider.TranslateFull(ctx, item.InputText)
+		if err != nil {
+			_ = m.store.Fail(translationID, "Failed to generate full translation: "+err.Error())
+			m.removeRunning(translationID)
+			return
+		}
+		if err := m.store.SetFullTranslation(translationID, fullTranslation); err != nil {
+			_ = m.store.Fail(translationID, "Failed to store full translation: "+err.Error())
+			m.removeRunning(translationID)
+			return
 		}
 
 		// Pre-segment all changed sentences to get the total count.

@@ -256,32 +256,17 @@ func (s *TranslationStore) SetFullTranslation(id string, fullTranslation string)
 }
 
 func (s *TranslationStore) Complete(id string) error {
-	rows, err := s.db.Query(
-		`SELECT english FROM translation_segments
-		 WHERE translation_id = ?
-		 ORDER BY sentence_idx ASC, seg_idx ASC`,
-		id,
-	)
-	if err != nil {
-		return fmt.Errorf("query english segments: %w", err)
-	}
-	defer rows.Close()
-
-	parts := make([]string, 0)
-	for rows.Next() {
-		var english string
-		if err := rows.Scan(&english); err != nil {
-			return fmt.Errorf("scan english segment: %w", err)
+	var fullTranslation sql.NullString
+	if err := s.db.QueryRow(`SELECT full_translation FROM translations WHERE id = ?`, id).Scan(&fullTranslation); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
 		}
-		if english != "" {
-			parts = append(parts, english)
-		}
+		return fmt.Errorf("check full translation: %w", err)
 	}
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("iterate english segments: %w", err)
+	if !fullTranslation.Valid || fullTranslation.String == "" {
+		return fmt.Errorf("complete translation: full_translation is not set")
 	}
 
-	full := strings.Join(parts, " ")
 	tx, err := s.db.Begin()
 	if err != nil {
 		return fmt.Errorf("begin complete tx: %w", err)
@@ -292,10 +277,8 @@ func (s *TranslationStore) Complete(id string) error {
 		`UPDATE translations
 		 SET status = 'completed',
 		     progress = total,
-		     full_translation = CASE WHEN full_translation IS NULL OR full_translation = '' THEN ? ELSE full_translation END,
 		     error_message = NULL
 		 WHERE id = ?`,
-		full,
 		id,
 	)
 	if err != nil {
