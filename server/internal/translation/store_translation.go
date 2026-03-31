@@ -240,6 +240,9 @@ func (s *TranslationStore) AddProgressSegment(id string, result SegmentResult, s
 }
 
 func (s *TranslationStore) SetFullTranslation(id string, fullTranslation string) error {
+	if fullTranslation == "" {
+		return fmt.Errorf("full_translation must not be empty")
+	}
 	res, err := s.db.Exec(
 		`UPDATE translations SET full_translation = ? WHERE id = ?`,
 		fullTranslation,

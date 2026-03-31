@@ -205,16 +205,19 @@ func (m *Manager) StartReprocessing(translationID string, sentencesToProcess map
 			return
 		}
 
-		fullTranslation, err := m.provider.TranslateFull(ctx, item.InputText)
-		if err != nil {
-			_ = m.store.Fail(translationID, "Failed to generate full translation: "+err.Error())
-			m.removeRunning(translationID)
-			return
-		}
-		if err := m.store.SetFullTranslation(translationID, fullTranslation); err != nil {
-			_ = m.store.Fail(translationID, "Failed to store full translation: "+err.Error())
-			m.removeRunning(translationID)
-			return
+		// Reuse existing full translation if set; only generate if absent.
+		if item.FullTranslation == nil || *item.FullTranslation == "" {
+			fullTranslation, err := m.provider.TranslateFull(ctx, item.InputText)
+			if err != nil {
+				_ = m.store.Fail(translationID, "Failed to generate full translation: "+err.Error())
+				m.removeRunning(translationID)
+				return
+			}
+			if err := m.store.SetFullTranslation(translationID, fullTranslation); err != nil {
+				_ = m.store.Fail(translationID, "Failed to store full translation: "+err.Error())
+				m.removeRunning(translationID)
+				return
+			}
 		}
 
 		// Pre-segment all changed sentences to get the total count.
