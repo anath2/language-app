@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -104,23 +103,6 @@ type characterReviewCardResponse struct {
 type characterReviewQueueResponse struct {
 	Cards    []characterReviewCardResponse `json:"cards"`
 	DueCount int                           `json:"due_count"`
-}
-
-type translateBatchRequest struct {
-	Segments      []string `json:"segments"`
-	Context       *string  `json:"context"`
-	TranslationID *string  `json:"translation_id"`
-	SentenceIdx   *int     `json:"sentence_idx"`
-}
-
-type translationResult struct {
-	Segment string `json:"segment"`
-	Pinyin  string `json:"pinyin"`
-	English string `json:"english"`
-}
-
-type translateBatchResponse struct {
-	Translations []translationResult `json:"translations"`
 }
 
 func SaveVocab(w http.ResponseWriter, r *http.Request) {
@@ -323,39 +305,4 @@ func GetCharacterReviewCount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	WriteJSON(w, http.StatusOK, dueCountResponse{DueCount: srs.GetCharacterDueCount()})
-}
-
-func TranslateBatch(w http.ResponseWriter, r *http.Request) {
-	if err := validateDependencies(); err != nil {
-		WriteJSON(w, http.StatusInternalServerError, map[string]string{"detail": err.Error()})
-		return
-	}
-	var req translateBatchRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": "Invalid JSON payload"})
-		return
-	}
-	results := make([]translationResult, 0, len(req.Segments))
-	segmentResults, err := transProvider.TranslateSegments(context.Background(), req.Segments, derefOr(req.Context, ""))
-	if err != nil {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": err.Error()})
-		return
-	}
-	storeSegments := make([]translation.SegmentResult, 0, len(segmentResults))
-	for _, translated := range segmentResults {
-		item := translationResult{
-			Segment: translated.Segment,
-			Pinyin:  translated.Pinyin,
-			English: translated.English,
-		}
-		results = append(results, item)
-		storeSegments = append(storeSegments, translated)
-	}
-	if req.TranslationID != nil && req.SentenceIdx != nil {
-		if err := translations.UpdateTranslationSegments(*req.TranslationID, *req.SentenceIdx, storeSegments); err != nil {
-			WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": err.Error()})
-			return
-		}
-	}
-	WriteJSON(w, http.StatusOK, translateBatchResponse{Translations: results})
 }
