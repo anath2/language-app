@@ -45,35 +45,45 @@ func (s *TranslationStore) RenewLease(translationID string, d time.Duration) err
 
 ### Renewal Goroutine — Placement
 
-Placed at the top of the anonymous goroutine body in **both** `StartProcessing` and `StartReprocessing`, immediately before any slow work. The lease is claimed before the goroutine is launched; renewal starts as soon as the goroutine begins.
+`runJob` is expanded to encompass the full job pipeline — `TranslateFull`, `segmentInputBySentence`, `SetProcessing`, and the segment loop — so that all work for a job lives inside one function. The renewal goroutine is placed at the top of `runJob`, before any slow work begins. This is the natural home for renewal: it covers the entire job lifetime from the first LLM call to `Complete()`.
 
-**`StartProcessing`** uses `go func(item translation.Translation) { ... }(item)`:
+The anonymous goroutine in `StartProcessing` becomes thin: claim the job, launch `go runJob(...)`. Same for `StartReprocessing`.
+
+**`runJob` renewal goroutine** (top of function, before `TranslateFull`):
 
 ```go
-go func(item translation.Translation) {
-    renewCtx, cancelRenew := context.WithCancel(context.Background())
+func (m *Manager) runJob(ctx context.Context, translationID string, item translation.Translation) {
+    defer m.removeRunning(translationID)
+
+    renewCtx, cancelRenew := context.WithCancel(ctx)
     defer cancelRenew()
     go func() {
         ticker := time.NewTicker(leaseRenewalInterval)
         defer ticker.Stop()
+        consecutiveFailures := 0
         for {
             select {
             case <-ticker.C:
-                _ = m.store.RenewLease(translationID, jobLeaseDuration)
+                if err := m.store.RenewLease(translationID, jobLeaseDuration); err != nil {
+                    consecutiveFailures++
+                    // TODO: if consecutiveFailures exceeds a threshold (e.g. 3), fail the job
+                    // to avoid a zombie worker holding a claim it can no longer renew.
+                } else {
+                    consecutiveFailures = 0
+                }
             case <-renewCtx.Done():
                 return
             }
         }
     }()
-    // TranslateFull, segmentInputBySentence, runJob ...
-}(item)
+
+    // TranslateFull, segmentInputBySentence, SetProcessing, segment loop, Complete ...
+}
 ```
 
-**`StartReprocessing`** uses `go func() { ... }()` (no parameters; `translationID` is captured from the enclosing scope). The renewal snippet is identical in structure; only the outer goroutine signature differs.
+**`StartReprocessing`**: same renewal pattern at the top of the goroutine body. `StartReprocessing`'s goroutine uses `go func() { ... }()` (no parameters; `translationID` captured from enclosing scope).
 
-`defer cancelRenew()` fires on all exit paths (normal completion, any error return). There is a brief window between `ClaimTranslationJob` (called before the goroutine launches) and goroutine start where no renewal is running; this is acceptable given the 5-minute lease.
-
-`runJob`'s signature and implementation are unchanged.
+`defer cancelRenew()` fires on all exit paths. There is a brief window between `ClaimTranslationJob` (called before the goroutine launches) and goroutine start; this is acceptable given the 5-minute lease.
 
 ### Background Scanner
 
@@ -104,12 +114,13 @@ Server startup:
 
 POST /api/translations → StartProcessing(id):
   ClaimTranslationJob(id, 5min)
-  go func(item):
+  go runJob(ctx, translationID, item):
     defer cancelRenew()
-    go renewalLoop                          ← ticks every 100s until goroutine exits
+    go renewalLoop                          ← ticks every 100s until runJob exits
     TranslateFull (LLM call)
     segmentInputBySentence (LLM call)
-    runJob → segment loop → Complete()
+    SetProcessing
+    segment loop → Complete()
 
 Background scanner tick (every 30s):
   ListRestartableTranslationIDs()
