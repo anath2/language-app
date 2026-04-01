@@ -114,65 +114,7 @@ func (m *Manager) StartProcessing(translationID string) {
 	}
 
 	go func(item translation.Translation) {
-		ctx := context.Background()
-		sentences := splitInputSentences(item.InputText)
-		if len(sentences) == 0 {
-			_ = m.store.Fail(translationID, "No sentences found for segmentation")
-			m.removeRunning(translationID)
-			return
-		}
-
-		fullTranslation, err := m.provider.TranslateFull(ctx, item.InputText)
-		if err != nil {
-			_ = m.store.Fail(translationID, "Failed to generate full translation: "+err.Error())
-			m.removeRunning(translationID)
-			return
-		}
-		if err := m.store.SetFullTranslation(translationID, fullTranslation); err != nil {
-			_ = m.store.Fail(translationID, "Failed to store full translation: "+err.Error())
-			m.removeRunning(translationID)
-			return
-		}
-
-		queued, err := m.segmentInputBySentence(ctx, sentences)
-		if err != nil {
-			msg := err.Error()
-			if len(msg) > 200 {
-				msg = msg[:200] + "..."
-			}
-			_ = m.store.Fail(translationID, "Failed to segment: "+msg)
-			m.removeRunning(translationID)
-			return
-		}
-		total := len(queued)
-		if total == 0 {
-			_ = m.store.Fail(translationID, "No translatable segments found")
-			m.removeRunning(translationID)
-			return
-		}
-
-		startIndex := item.Progress
-		if item.Status == "pending" {
-			startIndex = 0
-			sentenceInits := make([]translation.SentenceInit, len(sentences))
-			for i, s := range sentences {
-				sentenceInits[i] = translation.SentenceInit{Indent: s.Indent, Separator: s.Separator}
-			}
-			if err := m.store.SetProcessing(translationID, total, sentenceInits); err != nil {
-				m.removeRunning(translationID)
-				return
-			}
-		}
-
-		if startIndex >= len(queued) {
-			if err := m.store.Complete(translationID); err != nil {
-				_ = m.store.Fail(translationID, "Failed to complete translation")
-			}
-			m.removeRunning(translationID)
-			return
-		}
-
-		m.runJob(ctx, translationID, queued, startIndex)
+		m.runJob(context.Background(), translationID, item)
 	}(item)
 }
 
@@ -325,11 +267,88 @@ func (m *Manager) CleanupProgress(translationID string) {
 	_ = translationID
 }
 
-func (m *Manager) runJob(ctx context.Context, translationID string, segments []queuedSegment, startIndex int) {
+func (m *Manager) runJob(ctx context.Context, translationID string, item translation.Translation) {
 	defer m.removeRunning(translationID)
 
-	for idx := startIndex; idx < len(segments); idx++ {
-		work := segments[idx]
+	// Renewal goroutine: extends the lease every leaseRenewalInterval.
+	// Cancelled automatically when runJob returns via defer cancelRenew() —
+	// no per-return cancelRenew() call is needed anywhere in this function.
+	renewCtx, cancelRenew := context.WithCancel(ctx)
+	defer cancelRenew()
+	go func() {
+		ticker := time.NewTicker(leaseRenewalInterval)
+		defer ticker.Stop()
+		consecutiveFailures := 0
+		for {
+			select {
+			case <-ticker.C:
+				if err := m.store.RenewLease(translationID, jobLeaseDuration); err != nil {
+					consecutiveFailures++
+					// TODO: if consecutiveFailures exceeds a threshold (e.g. 3),
+					// fail the job to avoid a zombie worker holding a claim it can no longer renew.
+					log.Printf("lease renewal failed for %s (consecutive failures: %d): %v",
+						translationID, consecutiveFailures, err)
+				} else {
+					consecutiveFailures = 0
+				}
+			case <-renewCtx.Done():
+				return
+			}
+		}
+	}()
+
+	sentences := splitInputSentences(item.InputText)
+	if len(sentences) == 0 {
+		_ = m.store.Fail(translationID, "No sentences found for segmentation")
+		return
+	}
+
+	fullTranslation, err := m.provider.TranslateFull(ctx, item.InputText)
+	if err != nil {
+		_ = m.store.Fail(translationID, "Failed to generate full translation: "+err.Error())
+		return
+	}
+	if err := m.store.SetFullTranslation(translationID, fullTranslation); err != nil {
+		_ = m.store.Fail(translationID, "Failed to store full translation: "+err.Error())
+		return
+	}
+
+	queued, err := m.segmentInputBySentence(ctx, sentences)
+	if err != nil {
+		msg := err.Error()
+		if len(msg) > 200 {
+			msg = msg[:200] + "..."
+		}
+		_ = m.store.Fail(translationID, "Failed to segment: "+msg)
+		return
+	}
+	total := len(queued)
+	if total == 0 {
+		_ = m.store.Fail(translationID, "No translatable segments found")
+		return
+	}
+
+	startIndex := item.Progress
+	if item.Status == "pending" {
+		startIndex = 0
+		sentenceInits := make([]translation.SentenceInit, len(sentences))
+		for i, s := range sentences {
+			sentenceInits[i] = translation.SentenceInit{Indent: s.Indent, Separator: s.Separator}
+		}
+		if err := m.store.SetProcessing(translationID, total, sentenceInits); err != nil {
+			return
+		}
+	}
+
+	if startIndex >= len(queued) {
+		if err := m.store.Complete(translationID); err != nil {
+			_ = m.store.Fail(translationID, "Failed to complete translation")
+		}
+		return
+	}
+
+	for idx := startIndex; idx < len(queued); idx++ {
+		work := queued[idx]
 		translated, err := m.provider.TranslateSegments(ctx, []string{work.Segment}, work.SentenceText)
 		if err != nil || len(translated) == 0 {
 			_ = m.store.Fail(translationID, "Failed to translate segments")
@@ -340,13 +359,11 @@ func (m *Manager) runJob(ctx context.Context, translationID string, segments []q
 			_ = m.store.Fail(translationID, "Failed to update translation progress")
 			return
 		}
-
 		time.Sleep(15 * time.Millisecond)
 	}
 
 	if err := m.store.Complete(translationID); err != nil {
 		_ = m.store.Fail(translationID, "Failed to complete translation")
-		return
 	}
 }
 
