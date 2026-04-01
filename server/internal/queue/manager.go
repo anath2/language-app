@@ -90,6 +90,27 @@ func (m *Manager) ResumeRestartableJobs() {
 	}
 }
 
+// StartBackgroundScanner periodically scans for jobs with expired leases and
+// re-queues them via ResumeRestartableJobs. The in-memory running map prevents
+// double-processing jobs that are still active.
+//
+// Pass context.Background() for a process-lifetime scanner (killed when the
+// process exits). Use a cancellable context for graceful shutdown.
+func (m *Manager) StartBackgroundScanner(ctx context.Context) {
+	go func() {
+		ticker := time.NewTicker(expiredLeaseScanInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				m.ResumeRestartableJobs()
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+}
+
 func (m *Manager) StartProcessing(translationID string) {
 	item, ok := m.store.Get(translationID)
 	if !ok {

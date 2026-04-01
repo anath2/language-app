@@ -353,3 +353,83 @@ func TestReprocessingGeneratesFullTranslationWhenAbsent(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 }
+
+func TestScannerRecoversStaleLeasedJob(t *testing.T) {
+	tmp := t.TempDir()
+	dbPath := filepath.Join(tmp, "translations.db")
+	if err := migrations.RunUp(dbPath, filepath.Join("..", "..", "migrations")); err != nil {
+		t.Fatalf("run migrations: %v", err)
+	}
+	store := newTranslationStoreForTest(t, dbPath)
+
+	item, err := store.Create("你好世界", "text")
+	if err != nil {
+		t.Fatalf("create translation: %v", err)
+	}
+
+	// Simulate a job claimed by a crashed worker: leased with an already-expired lease.
+	claimed, err := store.ClaimTranslationJob(item.ID, 1*time.Millisecond)
+	if err != nil || !claimed {
+		t.Fatalf("claim job: err=%v claimed=%v", err, claimed)
+	}
+	time.Sleep(5 * time.Millisecond) // ensure lease has expired
+
+	manager := NewManager(store, &mockProvider{})
+	manager.ResumeRestartableJobs()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		tr, ok := store.Get(item.ID)
+		if ok && tr.Status == "completed" {
+			return
+		}
+		if time.Now().After(deadline) {
+			tr, _ = store.Get(item.ID)
+			t.Fatalf("timed out waiting for stale job recovery; status=%q", tr.Status)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+func TestScannerDoesNotDoubleProcessActiveJob(t *testing.T) {
+	tmp := t.TempDir()
+	dbPath := filepath.Join(tmp, "translations.db")
+	if err := migrations.RunUp(dbPath, filepath.Join("..", "..", "migrations")); err != nil {
+		t.Fatalf("run migrations: %v", err)
+	}
+	store := newTranslationStoreForTest(t, dbPath)
+	manager := NewManager(store, &mockProvider{})
+
+	item, err := store.Create("你好世界", "text")
+	if err != nil {
+		t.Fatalf("create translation: %v", err)
+	}
+
+	manager.StartProcessing(item.ID)
+
+	// While the job is in-flight, fire a scanner tick.
+	// StartProcessing checks m.running and returns early — no second claim.
+	manager.ResumeRestartableJobs()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		tr, ok := store.Get(item.ID)
+		if ok && tr.Status == "completed" {
+			attempts, err := store.GetJobAttempts(item.ID)
+			if err != nil {
+				t.Fatalf("get job attempts: %v", err)
+			}
+			if attempts != 1 {
+				t.Fatalf("expected attempts=1, got %d (job was claimed more than once)", attempts)
+			}
+			return
+		}
+		if ok && tr.Status == "failed" {
+			t.Fatalf("job failed: %v", tr.ErrorMessage)
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("timed out")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
