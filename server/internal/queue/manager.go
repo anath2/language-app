@@ -336,6 +336,7 @@ func (m *Manager) runJob(ctx context.Context, translationID string, item transla
 			sentenceInits[i] = translation.SentenceInit{Indent: s.Indent, Separator: s.Separator}
 		}
 		if err := m.store.SetProcessing(translationID, total, sentenceInits); err != nil {
+			_ = m.store.Fail(translationID, "Failed to initialise processing state: "+err.Error())
 			return
 		}
 	}
