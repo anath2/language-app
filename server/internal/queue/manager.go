@@ -39,6 +39,7 @@ type translationStore interface {
 	ListRestartableTranslationIDs() ([]string, error)
 	Get(id string) (translation.Translation, bool)
 	ClaimTranslationJob(translationID string, leaseDuration time.Duration) (bool, error)
+	RenewLease(translationID string, d time.Duration) error
 	Fail(id string, message string) error
 	SetFullTranslation(id string, fullTranslation string) error
 	SetProcessing(id string, total int, sentences []translation.SentenceInit) error
@@ -61,7 +62,9 @@ type sentenceInfo struct {
 	Separator string
 }
 
-const jobLeaseDuration = 30 * time.Second
+const jobLeaseDuration = 5 * time.Minute
+const leaseRenewalInterval = 100 * time.Second    // renew at ~1/3 of jobLeaseDuration
+const expiredLeaseScanInterval = 30 * time.Second // how often the scanner polls for expired leases
 
 func NewManager(store translationStore, provider intelligence.TranslationProvider) *Manager {
 	return &Manager{
