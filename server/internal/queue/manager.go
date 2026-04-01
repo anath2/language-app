@@ -142,6 +142,31 @@ func (m *Manager) StartReprocessing(translationID string, sentencesToProcess map
 	go func() {
 		ctx := context.Background()
 
+		// Renewal goroutine: same pattern as runJob.
+		// defer cancelRenew() handles all exit paths — no per-return call needed.
+		renewCtx, cancelRenew := context.WithCancel(ctx)
+		defer cancelRenew()
+		go func() {
+			ticker := time.NewTicker(leaseRenewalInterval)
+			defer ticker.Stop()
+			consecutiveFailures := 0
+			for {
+				select {
+				case <-ticker.C:
+					if err := m.store.RenewLease(translationID, jobLeaseDuration); err != nil {
+						consecutiveFailures++
+						// TODO: fail job if consecutiveFailures exceeds threshold.
+						log.Printf("lease renewal failed for %s (consecutive failures: %d): %v",
+							translationID, consecutiveFailures, err)
+					} else {
+						consecutiveFailures = 0
+					}
+				case <-renewCtx.Done():
+					return
+				}
+			}
+		}()
+
 		// Load the full input text for generating the full translation.
 		item, ok := m.store.Get(translationID)
 		if !ok {
