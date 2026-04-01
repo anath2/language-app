@@ -89,7 +89,6 @@ func TestQueueProgressLifecycle(t *testing.T) {
 		t.Fatalf("create translation: %v", err)
 	}
 
-	manager.Submit(item.ID)
 	manager.StartProcessing(item.ID)
 
 	deadline := time.Now().Add(2 * time.Second)
@@ -125,10 +124,6 @@ func TestQueueProgressLifecycle(t *testing.T) {
 		t.Fatal("expected full translation to be set")
 	}
 
-	manager.CleanupProgress(item.ID)
-	if progress, ok := manager.GetProgress(item.ID); !ok || progress.Status != "completed" {
-		t.Fatal("expected persisted completed progress after cleanup")
-	}
 }
 
 func TestQueueProgressSurvivesManagerRestart(t *testing.T) {

@@ -74,11 +74,6 @@ func NewManager(store translationStore, provider intelligence.TranslationProvide
 	}
 }
 
-func (m *Manager) Submit(translationID string) {
-	// Progress is persisted in the database; no in-memory state is required.
-	_ = translationID
-}
-
 func (m *Manager) ResumeRestartableJobs() {
 	ids, err := m.store.ListRestartableTranslationIDs()
 	if err != nil {
@@ -299,11 +294,6 @@ func (m *Manager) GetProgress(translationID string) (Progress, bool) {
 		})
 	}
 	return progress, true
-}
-
-func (m *Manager) CleanupProgress(translationID string) {
-	// Persisted progress should remain queryable after stream disconnect/restart.
-	_ = translationID
 }
 
 func (m *Manager) runJob(ctx context.Context, translationID string, item translation.Translation) {

@@ -133,7 +133,6 @@ func CreateTranslation(w http.ResponseWriter, r *http.Request) {
 		Status:        item.Status,
 	})
 
-	jobQueue.Submit(item.ID)
 	jobQueue.StartProcessing(item.ID)
 }
 
@@ -288,7 +287,6 @@ func UpdateTranslation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jobQueue.Submit(translationID)
 	jobQueue.StartReprocessing(translationID, sentencesToProcess)
 
 	WriteJSON(w, http.StatusOK, updateTranslationResponse{
@@ -308,8 +306,6 @@ func DeleteTranslation(w http.ResponseWriter, r *http.Request) {
 		WriteJSON(w, http.StatusNotFound, map[string]string{"detail": "Translation not found"})
 		return
 	}
-	jobQueue.CleanupProgress(translationID)
-
 	WriteJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
@@ -346,7 +342,6 @@ func TranslationStream(w http.ResponseWriter, r *http.Request) {
 
 	if item.Status == "completed" {
 		replayCompletedStream(w, flusher, item)
-		jobQueue.CleanupProgress(translationID)
 		return
 	}
 
@@ -376,7 +371,6 @@ func streamLiveProgress(ctx context.Context, w http.ResponseWriter, flusher http
 			if item.Status == "failed" {
 				emitSSE(w, map[string]any{"type": "error", "message": derefOr(item.ErrorMessage, "Translation failed")})
 				flusher.Flush()
-				jobQueue.CleanupProgress(translationID)
 				return
 			}
 
@@ -423,7 +417,6 @@ func streamLiveProgress(ctx context.Context, w http.ResponseWriter, flusher http
 					"fullTranslation": fresh.FullTranslation,
 				})
 				flusher.Flush()
-				jobQueue.CleanupProgress(translationID)
 				return
 			}
 		}
