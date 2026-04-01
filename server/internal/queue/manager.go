@@ -162,6 +162,7 @@ func (m *Manager) StartReprocessing(translationID string, sentencesToProcess map
 
 	go func() {
 		ctx := context.Background()
+		defer m.removeRunning(translationID)
 
 		// Renewal goroutine: same pattern as runJob.
 		// defer cancelRenew() handles all exit paths — no per-return call needed.
@@ -192,7 +193,6 @@ func (m *Manager) StartReprocessing(translationID string, sentencesToProcess map
 		item, ok := m.store.Get(translationID)
 		if !ok {
 			_ = m.store.Fail(translationID, "Translation not found during reprocessing")
-			m.removeRunning(translationID)
 			return
 		}
 
@@ -201,12 +201,10 @@ func (m *Manager) StartReprocessing(translationID string, sentencesToProcess map
 			fullTranslation, err := m.provider.TranslateFull(ctx, item.InputText)
 			if err != nil {
 				_ = m.store.Fail(translationID, "Failed to generate full translation: "+err.Error())
-				m.removeRunning(translationID)
 				return
 			}
 			if err := m.store.SetFullTranslation(translationID, fullTranslation); err != nil {
 				_ = m.store.Fail(translationID, "Failed to store full translation: "+err.Error())
-				m.removeRunning(translationID)
 				return
 			}
 		}
@@ -237,7 +235,6 @@ func (m *Manager) StartReprocessing(translationID string, sentencesToProcess map
 			segments, err := m.provider.Segment(ctx, sentence)
 			if err != nil {
 				_ = m.store.Fail(translationID, "Failed to segment during reprocessing: "+err.Error())
-				m.removeRunning(translationID)
 				return
 			}
 			for _, seg := range segments {
@@ -254,7 +251,6 @@ func (m *Manager) StartReprocessing(translationID string, sentencesToProcess map
 		}
 
 		if err := m.store.SetReprocessing(translationID, len(allWork)); err != nil {
-			m.removeRunning(translationID)
 			return
 		}
 
@@ -264,13 +260,11 @@ func (m *Manager) StartReprocessing(translationID string, sentencesToProcess map
 			translated, err := m.provider.TranslateSegments(ctx, []string{work.segment}, work.sentenceText)
 			if err != nil || len(translated) == 0 {
 				_ = m.store.Fail(translationID, "Failed to translate segment during reprocessing")
-				m.removeRunning(translationID)
 				return
 			}
 			segIdx := localSegIdx[work.sentenceIdx]
 			if err := m.store.AddReprocessedSegment(translationID, translated[0], work.sentenceIdx, segIdx); err != nil {
 				_ = m.store.Fail(translationID, "Failed to store reprocessed segment")
-				m.removeRunning(translationID)
 				return
 			}
 			localSegIdx[work.sentenceIdx]++
@@ -280,7 +274,6 @@ func (m *Manager) StartReprocessing(translationID string, sentencesToProcess map
 		if err := m.store.Complete(translationID); err != nil {
 			_ = m.store.Fail(translationID, "Failed to complete reprocessed translation")
 		}
-		m.removeRunning(translationID)
 	}()
 }
 
