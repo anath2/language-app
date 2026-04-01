@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"fmt"
 	"log"
 	stdhttp "net/http"
@@ -70,6 +71,7 @@ func initDependencies(cfg config.Config) error {
 	manager := queue.NewManager(translationStore, translationProv)
 	handlers.ConfigureDependencies(translationStore, chatStore, srsStore, profileStore, manager, translationProv, chatProv)
 	manager.ResumeRestartableJobs()
+	manager.StartBackgroundScanner(context.Background())
 
 	return nil
 }
