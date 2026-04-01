@@ -78,8 +78,9 @@ func (s *TranslationStore) ClaimTranslationJob(translationID string, leaseDurati
 // retry loop — unlike ClaimTranslationJob, a missed renewal is harmless because
 // the 5-minute lease provides ample headroom; the next tick retries.
 func (s *TranslationStore) RenewLease(translationID string, d time.Duration) error {
-	leaseUntil := time.Now().UTC().Add(d).Format(time.RFC3339Nano)
-	updatedAt := time.Now().UTC().Format(time.RFC3339Nano)
+	now := time.Now().UTC()
+	leaseUntil := now.Add(d).Format(time.RFC3339Nano)
+	updatedAt := now.Format(time.RFC3339Nano)
 	_, err := s.db.Exec(
 		`UPDATE translation_jobs
 		 SET lease_until = ?, updated_at = ?
