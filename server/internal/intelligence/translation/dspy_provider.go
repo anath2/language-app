@@ -170,30 +170,26 @@ func parseBatchTranslations(v any) []batchTranslation {
 	if v == nil {
 		return nil
 	}
-	var raw string
+	// WithStructuredOutput returns the field as a string or []any.
+	var raw []byte
 	switch t := v.(type) {
 	case string:
-		raw = t
+		raw = []byte(t)
 	case []any:
 		b, err := json.Marshal(t)
 		if err != nil {
 			return nil
 		}
-		raw = string(b)
+		raw = b
 	default:
-		raw = normalizeJSONLikePayload(strings.TrimSpace(toString(v)))
-	}
-	raw = normalizeJSONLikePayload(strings.TrimSpace(raw))
-	if raw == "" {
-		return nil
+		b, err := json.Marshal(v)
+		if err != nil {
+			return nil
+		}
+		raw = b
 	}
 	var translations []batchTranslation
-	if err := json.Unmarshal([]byte(raw), &translations); err != nil {
-		if arr := extractJSONArray(raw); len(arr) > 0 {
-			b, _ := json.Marshal(arr)
-			_ = json.Unmarshal(b, &translations)
-		}
-	}
+	_ = json.Unmarshal(raw, &translations)
 	return translations
 }
 
@@ -239,9 +235,6 @@ func (p *DSPyProvider) TranslateSegments(ctx context.Context, segments []string,
 	}
 
 	translations := parseBatchTranslations(res["translations_json"])
-	if len(translations) == 0 {
-		translations = parseBatchTranslations(res["response"])
-	}
 
 	for i, cs := range cjkSegments {
 		result := store.SegmentResult{Segment: cs.segment}
