@@ -47,11 +47,12 @@ func verifySchema(db *sql.DB) error {
 		"translation_jobs",
 		"translation_chats",
 		"translation_chat_messages",
-		"vocab_items",
+		"saved_segments",
+		"saved_characters",
+		"character_segment_links",
 		"srs_state",
 		"vocab_lookups",
 		"user_profile",
-		"character_word_links",
 	}
 	for _, table := range requiredTables {
 		var exists int

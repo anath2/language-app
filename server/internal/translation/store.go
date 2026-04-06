@@ -96,7 +96,7 @@ type ChatMessage struct {
 	ReviewCard    *ChatReviewCard `json:"review_card,omitempty"`
 }
 
-type VocabRecord struct {
+type SegmentRecord struct {
 	ID       string
 	Headword string
 	Pinyin   string
@@ -104,8 +104,8 @@ type VocabRecord struct {
 	Status   string
 }
 
-type VocabSRSInfo struct {
-	VocabItemID  string
+type SegmentSRSInfo struct {
+	SegmentID    string
 	Headword     string
 	Pinyin       string
 	English      string
@@ -116,34 +116,35 @@ type VocabSRSInfo struct {
 	NextDueAt    *string
 }
 
-type ReviewCard struct {
-	VocabItemID string
-	Headword    string
-	Pinyin      string
-	English     string
-	Snippets    []string
+type SegmentReviewCard struct {
+	SegmentID string
+	Headword  string
+	Pinyin    string
+	English   string
+	Snippets  []string
 }
 
 type ReviewAnswerResult struct {
-	VocabItemID  string
+	SegmentID    *string
+	CharacterID  *string
 	NextDueAt    *string
 	IntervalDays float64
 	RemainingDue int
 }
 
 type CharacterReviewCard struct {
-	VocabItemID  string
-	Character    string
-	Pinyin       string
-	English      string
-	ExampleWords []CharacterExampleWord
+	CharacterID     string
+	Character       string
+	Pinyin          string
+	English         string
+	ExampleSegments []CharacterExampleSegment
 }
 
-type CharacterExampleWord struct {
-	VocabItemID string
-	Headword    string
-	Pinyin      string
-	English     string
+type CharacterExampleSegment struct {
+	SegmentID          string
+	Segment            string
+	SegmentPinyin      string
+	SegmentTranslation string
 }
 
 type UserProfile struct {
