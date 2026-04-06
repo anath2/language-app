@@ -249,21 +249,38 @@ func (m *Manager) StartReprocessing(translationID string, sentencesToProcess map
 			return
 		}
 
-		// Translate each segment and store with explicit (sentenceIdx, localSegIdx).
-		localSegIdx := make(map[int]int) // per-sentence counter
+		// Group by sentence for batched translation.
+		type reprocessBatch struct {
+			sentenceIdx  int
+			sentenceText string
+			segments     []string
+		}
+		batchMap := make(map[int]*reprocessBatch)
 		for _, work := range allWork {
-			translated, err := m.provider.TranslateSegments(ctx, []string{work.segment}, work.sentenceText)
+			b, ok := batchMap[work.sentenceIdx]
+			if !ok {
+				b = &reprocessBatch{sentenceIdx: work.sentenceIdx, sentenceText: work.sentenceText}
+				batchMap[work.sentenceIdx] = b
+			}
+			b.segments = append(b.segments, work.segment)
+		}
+
+		for _, sentenceIdx := range orderedIdxs {
+			b, ok := batchMap[sentenceIdx]
+			if !ok {
+				continue
+			}
+			translated, err := m.provider.TranslateSegments(ctx, b.segments, b.sentenceText, item.InputText)
 			if err != nil || len(translated) == 0 {
 				_ = m.store.Fail(translationID, "Failed to translate segment during reprocessing")
 				return
 			}
-			segIdx := localSegIdx[work.sentenceIdx]
-			if err := m.store.AddReprocessedSegment(translationID, translated[0], work.sentenceIdx, segIdx); err != nil {
-				_ = m.store.Fail(translationID, "Failed to store reprocessed segment")
-				return
+			for segIdx, result := range translated {
+				if err := m.store.AddReprocessedSegment(translationID, result, sentenceIdx, segIdx); err != nil {
+					_ = m.store.Fail(translationID, "Failed to store reprocessed segment")
+					return
+				}
 			}
-			localSegIdx[work.sentenceIdx]++
-			time.Sleep(15 * time.Millisecond)
 		}
 
 		if err := m.store.Complete(translationID); err != nil {
@@ -377,19 +394,44 @@ func (m *Manager) runJob(ctx context.Context, translationID string, item transla
 		return
 	}
 
+	// Group queued segments by sentence index for batched translation.
+	type sentenceBatch struct {
+		sentenceIdx  int
+		sentenceText string
+		segments     []string
+	}
+
+	var batches []sentenceBatch
+	var currentBatch *sentenceBatch
 	for idx := startIndex; idx < len(queued); idx++ {
 		work := queued[idx]
-		translated, err := m.provider.TranslateSegments(ctx, []string{work.Segment}, work.SentenceText)
+		if currentBatch == nil || currentBatch.sentenceIdx != work.SentenceIndex {
+			if currentBatch != nil {
+				batches = append(batches, *currentBatch)
+			}
+			currentBatch = &sentenceBatch{
+				sentenceIdx:  work.SentenceIndex,
+				sentenceText: work.SentenceText,
+			}
+		}
+		currentBatch.segments = append(currentBatch.segments, work.Segment)
+	}
+	if currentBatch != nil {
+		batches = append(batches, *currentBatch)
+	}
+
+	for _, batch := range batches {
+		translated, err := m.provider.TranslateSegments(ctx, batch.segments, batch.sentenceText, item.InputText)
 		if err != nil || len(translated) == 0 {
 			_ = m.store.Fail(translationID, "Failed to translate segments")
 			return
 		}
-		segmentResult := translated[0]
-		if _, _, err := m.store.AddProgressSegment(translationID, segmentResult, work.SentenceIndex); err != nil {
-			_ = m.store.Fail(translationID, "Failed to update translation progress")
-			return
+		for _, segmentResult := range translated {
+			if _, _, err := m.store.AddProgressSegment(translationID, segmentResult, batch.sentenceIdx); err != nil {
+				_ = m.store.Fail(translationID, "Failed to update translation progress")
+				return
+			}
 		}
-		time.Sleep(15 * time.Millisecond)
 	}
 
 	if err := m.store.Complete(translationID); err != nil {

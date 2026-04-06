@@ -32,7 +32,7 @@ func TestLoadFromDotenvThenValidate(t *testing.T) {
 	withChdir(t, repoRoot)
 
 	envPath := filepath.Join(repoRoot, ".env")
-	envContent := "APP_PASSWORD=testpass\nAPP_SECRET_KEY=testsecret\nOPENAI_API_KEY=oa-key\nOPENAI_TRANSLATION_MODEL=openai/gpt-4o-mini\nOPENAI_CHAT_MODEL=openai/gpt-4o-mini\nSECURE_COOKIES=false\nCEDICT_PATH=custom/cedict_ts.u8\n"
+	envContent := "APP_PASSWORD=testpass\nAPP_SECRET_KEY=testsecret\nOPENAI_API_KEY=oa-key\nOPENAI_TRANSLATION_MODEL=openai/gpt-4o-mini\nOPENAI_CHAT_MODEL=openai/gpt-4o-mini\nSECURE_COOKIES=false\n"
 	if err := os.WriteFile(envPath, []byte(envContent), 0o644); err != nil {
 		t.Fatalf("write .env: %v", err)
 	}
@@ -63,31 +63,6 @@ func TestLoadFromDotenvThenValidate(t *testing.T) {
 	}
 	if cfg.SecureCookies {
 		t.Fatal("expected secure cookies false from dotenv")
-	}
-	if cfg.CedictPath != "custom/cedict_ts.u8" {
-		t.Fatalf("unexpected CEDICT_PATH: %q", cfg.CedictPath)
-	}
-}
-
-func TestLoadCedictPathAliases(t *testing.T) {
-	repoRoot := createTempRepoRoot(t)
-	withChdir(t, repoRoot)
-
-	t.Setenv("APP_PASSWORD", "pw")
-	t.Setenv("APP_SECRET_KEY", "secret")
-	t.Setenv("OPENAI_API_KEY", "oa-key")
-	t.Setenv("OPENAI_TRANSLATION_MODEL", "openai/gpt-4o-mini")
-	t.Setenv("OPENAI_CHAT_MODEL", "openai/gpt-4o-mini")
-	t.Setenv("CEDICT_PATH", "")
-	t.Setenv("CEDIT_PATH", "alias/cedit_path.u8")
-	t.Setenv("CCEDICT_PATH", "")
-
-	cfg, err := Load()
-	if err != nil {
-		t.Fatalf("load config: %v", err)
-	}
-	if cfg.CedictPath != "alias/cedit_path.u8" {
-		t.Fatalf("unexpected cedit alias path: %q", cfg.CedictPath)
 	}
 }
 

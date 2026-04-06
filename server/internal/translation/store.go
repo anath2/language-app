@@ -21,6 +21,11 @@ type Translation struct {
 	Total           int
 }
 
+type CharTranslation struct {
+	Char   string
+	Pinyin string
+}
+
 type SegmentResult struct {
 	Segment string `json:"segment"`
 	Pinyin  string `json:"pinyin"`

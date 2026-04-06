@@ -473,9 +473,8 @@ func isCJKIdeograph(r rune) bool {
 		(r >= 0x30000 && r <= 0x323AF)
 }
 
-func (s *SRSStore) ExtractAndLinkCharacters(vocabItemID string, headword string, cedictLookup func(string) (string, string, bool)) error {
+func (s *SRSStore) ExtractAndLinkCharacters(vocabItemID string, headword string, charData []CharTranslation) error {
 	runes := []rune(headword)
-	// Skip single-character words — the word IS the character.
 	cjkCount := 0
 	for _, r := range runes {
 		if isCJKIdeograph(r) {
@@ -486,29 +485,30 @@ func (s *SRSStore) ExtractAndLinkCharacters(vocabItemID string, headword string,
 		return nil
 	}
 
+	charPinyinMap := make(map[string]string, len(charData))
+	for _, cd := range charData {
+		charPinyinMap[cd.Char] = cd.Pinyin
+	}
+
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	seen := make(map[rune]bool)
+	seen := make(map[string]bool)
 	for _, r := range runes {
-		if !isCJKIdeograph(r) || seen[r] {
+		if !isCJKIdeograph(r) {
 			continue
 		}
-		seen[r] = true
 		char := string(r)
-
-		pinyin, english := "", ""
-		if cedictLookup != nil {
-			p, e, found := cedictLookup(char)
-			if found {
-				pinyin = p
-				english = e
-			}
+		pinyin := charPinyinMap[char]
+		dedupKey := char + "|" + pinyin
+		if seen[dedupKey] {
+			continue
 		}
+		seen[dedupKey] = true
 
 		charID, _ := newID()
 		_, _ = s.db.Exec(
 			`INSERT OR IGNORE INTO vocab_items (id, headword, pinyin, english, type, status, created_at, updated_at)
-			 VALUES (?, ?, ?, ?, 'character', 'learning', ?, ?)`,
-			charID, char, pinyin, english, now, now,
+			 VALUES (?, ?, ?, '', 'character', 'learning', ?, ?)`,
+			charID, char, pinyin, now, now,
 		)
 
 		var resolvedCharID string

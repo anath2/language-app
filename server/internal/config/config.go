@@ -19,7 +19,6 @@ type Config struct {
 	SecureCookies          bool
 	MigrationsDir          string
 	TranslationDBPath      string
-	CedictPath             string
 	OpenAIAPIKey           string
 	OpenAITranslationModel string
 	OpenAIChatModel        string
@@ -89,7 +88,6 @@ func Load() (Config, error) {
 		SecureCookies:          secureCookies,
 		MigrationsDir:          envOrDefault("LANGUAGE_APP_MIGRATIONS_DIR", filepath.Join(repoRoot, "server", "migrations")),
 		TranslationDBPath:      envOrDefault("LANGUAGE_APP_DB_PATH", filepath.Join(repoRoot, "server", "data", "language_app.db")),
-		CedictPath:             envFirstOrDefault([]string{"CEDICT_PATH", "CEDIT_PATH", "CCEDICT_PATH"}, filepath.Join(repoRoot, "server", "data", "cedict_ts.u8")),
 		OpenAIAPIKey:           openAIAPIKey,
 		OpenAITranslationModel: openAITranslationModel,
 		OpenAIChatModel:        openAIChatModel,

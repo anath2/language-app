@@ -16,9 +16,8 @@ type ChatWithTranslationRequest struct {
 // TranslationProvider defines the translation intelligence contract.
 type TranslationProvider interface {
 	Segment(ctx context.Context, text string) ([]string, error)
-	TranslateSegments(ctx context.Context, segments []string, sentenceContext string) ([]translation.SegmentResult, error)
+	TranslateSegments(ctx context.Context, segments []string, sentence string, fullText string) ([]translation.SegmentResult, error)
 	TranslateFull(ctx context.Context, text string) (string, error)
-	LookupCharacter(char string) (pinyin string, english string, found bool)
 }
 
 type ToolCallResult struct {

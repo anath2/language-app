@@ -86,7 +86,7 @@ func TranslateBatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	results := make([]translationResult, 0, len(req.Segments))
-	segmentResults, err := transProvider.TranslateSegments(context.Background(), req.Segments, derefOr(req.Context, ""))
+	segmentResults, err := transProvider.TranslateSegments(context.Background(), req.Segments, derefOr(req.Context, ""), derefOr(req.Context, ""))
 	if err != nil {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": err.Error()})
 		return

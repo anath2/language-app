@@ -120,7 +120,7 @@ func SaveVocab(w http.ResponseWriter, r *http.Request) {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": err.Error()})
 		return
 	}
-	_ = srs.ExtractAndLinkCharacters(id, req.Headword, transProvider.LookupCharacter)
+	_ = srs.ExtractAndLinkCharacters(id, req.Headword, nil)
 	WriteJSON(w, http.StatusOK, saveVocabResponse{VocabItemID: id})
 }
 
