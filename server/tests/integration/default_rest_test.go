@@ -70,15 +70,15 @@ func TestCoreJSONPersistenceFlow(t *testing.T) {
 		t.Fatalf("expected save vocab 200, got %d", saveVocab.Code)
 	}
 	var vocabResp struct {
-		VocabItemID string `json:"vocab_item_id"`
+		SegmentID string `json:"segment_id"`
 	}
 	decodeBodyJSON(t, saveVocab, &vocabResp)
-	if vocabResp.VocabItemID == "" {
-		t.Fatal("expected vocab_item_id in save vocab response")
+	if vocabResp.SegmentID == "" {
+		t.Fatal("expected segment_id in save vocab response")
 	}
 
 	lookup := doJSONRequest(t, router, http.MethodPost, "/api/vocab/lookup", map[string]any{
-		"vocab_item_id": vocabResp.VocabItemID,
+		"segment_id": vocabResp.SegmentID,
 	}, sessionCookie)
 	if lookup.Code != http.StatusOK {
 		t.Fatalf("expected vocab lookup 200, got %d", lookup.Code)

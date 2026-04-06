@@ -352,13 +352,13 @@ func TestCoreAPIPersistenceFlow(t *testing.T) {
 		t.Fatalf("expected save vocab status 200, got %d", saveVocabRes.Code)
 	}
 	var saveVocabOut struct {
-		VocabItemID string `json:"vocab_item_id"`
+		SegmentID string `json:"segment_id"`
 	}
-	if err := json.NewDecoder(saveVocabRes.Body).Decode(&saveVocabOut); err != nil || saveVocabOut.VocabItemID == "" {
-		t.Fatalf("expected vocab_item_id, err=%v", err)
+	if err := json.NewDecoder(saveVocabRes.Body).Decode(&saveVocabOut); err != nil || saveVocabOut.SegmentID == "" {
+		t.Fatalf("expected segment_id, err=%v", err)
 	}
 
-	lookupPayload, _ := json.Marshal(map[string]any{"vocab_item_id": saveVocabOut.VocabItemID})
+	lookupPayload, _ := json.Marshal(map[string]any{"segment_id": saveVocabOut.SegmentID})
 	lookupReq := httptest.NewRequest(http.MethodPost, "/api/vocab/lookup", bytes.NewReader(lookupPayload))
 	lookupReq.Header.Set("Cookie", sessionCookie)
 	lookupReq.Header.Set("Content-Type", "application/json")
