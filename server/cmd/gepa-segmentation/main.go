@@ -13,10 +13,11 @@ import (
 )
 
 func main() {
-	datasetPath := flag.String("dataset", segmentation.DefaultCSVPath, "CSV dataset path (sentence-level)")
+	datasetPath := flag.String("dataset", segmentation.DefaultCSVPath, "CSV dataset path (paragraph-level)")
 	artifactsDir := flag.String("artifacts-dir", segmentation.DefaultArtifactsDir, "output directory for GEPA artifacts")
-	modelOverride := flag.String("model", "", "override model id (defaults to OPENAI_MODEL)")
-	maxUnits := flag.Int("max-units", 20, "max sentence units to use during each seed run")
+	modelOverride := flag.String("model", "", "override model id (defaults to OPENAI_TRANSLATION_MODEL)")
+	judgeModel := flag.String("judge-model", "", "model for judge LLM (defaults to worker model)")
+	maxUnits := flag.Int("max-units", 20, "max paragraph units to use during each seed run")
 	trainRatio := flag.Float64("train-ratio", 0.7, "train split ratio (rest used for holdout evaluation)")
 	seeds := flag.Int("seeds", 3, "number of optimization seeds")
 	baseSeed := flag.Int("base-seed", 101, "starting seed value")
@@ -39,14 +40,24 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to load dataset %q: %v", *datasetPath, err)
 	}
-	log.Printf("loaded sentence dataset: rows=%d path=%s", len(corpus), *datasetPath)
+	log.Printf("loaded paragraph dataset: rows=%d path=%s", len(corpus), *datasetPath)
 
-	llm, err := segmentation.NewSegmentationLLM(cfg, cfg.OpenAITranslationModel)
+	workerLLM, err := segmentation.NewSegmentationLLM(cfg, cfg.OpenAITranslationModel)
 	if err != nil {
-		log.Fatalf("failed to initialize segmentation llm: %v", err)
+		log.Fatalf("failed to initialize worker llm: %v", err)
 	}
-	core.SetDefaultLLM(llm)
-	core.GlobalConfig.TeacherLLM = llm
+	core.SetDefaultLLM(workerLLM)
+	core.GlobalConfig.TeacherLLM = workerLLM
+
+	// Judge LLM defaults to worker model unless overridden.
+	judgeModelID := cfg.OpenAITranslationModel
+	if override := strings.TrimSpace(*judgeModel); override != "" {
+		judgeModelID = override
+	}
+	judgeLLM, err := segmentation.NewSegmentationLLM(cfg, judgeModelID)
+	if err != nil {
+		log.Fatalf("failed to initialize judge llm: %v", err)
+	}
 
 	gepaCfg := segmentation.ModerateFastGEPAConfig()
 	gepaCfg.PopulationSize = *population
@@ -54,7 +65,8 @@ func main() {
 	gepaCfg.EvaluationBatchSize = *evalBatch
 	runs, summary, decision, err := segmentation.RunMultiSeedOptimization(
 		context.Background(),
-		llm,
+		workerLLM,
+		judgeLLM,
 		cfg.OpenAITranslationModel,
 		corpus,
 		*datasetPath,

@@ -11,9 +11,11 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/XiaoConstantine/dspy-go/pkg/core"
 	"github.com/XiaoConstantine/dspy-go/pkg/datasets"
@@ -24,26 +26,25 @@ import (
 )
 
 const (
-	SegmentationLLMTimeout   = 3 * time.Minute
-	DefaultCSVPath           = "data/jepa/sentences_20.csv"
-	DefaultArtifactsDir      = "data/jepa"
-	DefaultReportPath        = DefaultArtifactsDir + "/gepa_segmentation_results_2026-02-14.md"
-	DefaultInstructionPath   = DefaultArtifactsDir + "/compiled_instruction.txt"
-	DefaultMetadataPath      = DefaultArtifactsDir + "/compile_metadata.json"
-	DefaultDecisionPath      = DefaultArtifactsDir + "/promotion_decision.json"
-	DefaultRunsPath          = DefaultArtifactsDir + "/multi_seed_runs.json"
-	DefaultSummaryPath       = DefaultArtifactsDir + "/multi_seed_summary.json"
-	HardenedInstruction      = "Segment the Chinese input into an ordered JSON array of contiguous chunks that exactly reconstruct the original text when concatenated. Preserve every character in order, including Chinese/ASCII punctuation, symbols, and line breaks. Do not drop, normalize, paraphrase, or insert characters. Keep common multi-character words together when appropriate (for example, 人工智能, 图书馆, 看书, 为时未晚). Return only the segments array."
-	minCSVRowFieldCount      = 3
-	csvHeaderID              = "id"
-	csvHeaderSentence        = "sentence"
-	csvHeaderExpectedSegJSON = "expected_segments_json"
+	SegmentationLLMTimeout = 3 * time.Minute
+	DefaultCSVPath         = "data/jepa/paragraphs.csv"
+	DefaultArtifactsDir    = "data/jepa"
+	DefaultReportPath      = DefaultArtifactsDir + "/gepa_segmentation_results_2026-02-14.md"
+	DefaultInstructionPath = DefaultArtifactsDir + "/compiled_instruction.txt"
+	DefaultMetadataPath    = DefaultArtifactsDir + "/compile_metadata.json"
+	DefaultDecisionPath    = DefaultArtifactsDir + "/promotion_decision.json"
+	DefaultRunsPath        = DefaultArtifactsDir + "/multi_seed_runs.json"
+	DefaultSummaryPath     = DefaultArtifactsDir + "/multi_seed_summary.json"
+	HardenedInstruction    = "Segment the Chinese input into an ordered JSON array of contiguous chunks that exactly reconstruct the original text when concatenated. Preserve every character in order, including Chinese/ASCII punctuation, symbols, and line breaks. Do not drop, normalize, paraphrase, or insert characters. Keep common multi-character words together when appropriate (for example, 人工智能, 图书馆, 看书, 为时未晚). Return only the segments array."
+	csvHeaderID            = "id"
+	csvHeaderParagraph     = "paragraph"
+
+	defaultTranslateInstruction = "Given an array of Chinese word segments from a sentence, produce the pinyin (with tone marks) and a concise English translation for each segment. Use the sentence and full text for context to select the correct reading and meaning. Return a JSON array of objects with \"pinyin\" and \"english\" fields, in the same order as the input segments."
 )
 
 type Case struct {
-	Name     string
-	Text     string
-	Expected []string
+	Name      string
+	Paragraph string
 }
 
 type EvalSummary struct {
@@ -123,6 +124,10 @@ func (s *stickyPredict) Clone() core.Module {
 	return s
 }
 
+// ---------------------------------------------------------------------------
+// Dataset loading
+// ---------------------------------------------------------------------------
+
 func LoadDefaultCases() ([]Case, error) {
 	candidates := []string{
 		DefaultCSVPath,
@@ -165,33 +170,23 @@ func LoadCasesFromCSV(path string) ([]Case, error) {
 	cases := make([]Case, 0, len(rows)-1)
 	for i, row := range rows[1:] {
 		rowNum := i + 2
-		if len(row) < minCSVRowFieldCount {
-			return nil, fmt.Errorf("csv row %d has %d fields, expected at least %d", rowNum, len(row), minCSVRowFieldCount)
+		if len(row) < 2 {
+			return nil, fmt.Errorf("csv row %d has %d fields, expected at least 2", rowNum, len(row))
 		}
 
 		name := strings.TrimSpace(row[colIdx[csvHeaderID]])
-		text := strings.TrimSpace(row[colIdx[csvHeaderSentence]])
-		rawExpected := strings.TrimSpace(row[colIdx[csvHeaderExpectedSegJSON]])
+		paragraph := strings.TrimSpace(row[colIdx[csvHeaderParagraph]])
 
 		if name == "" {
 			return nil, fmt.Errorf("csv row %d has empty id", rowNum)
 		}
-		if text == "" {
-			return nil, fmt.Errorf("csv row %d has empty sentence", rowNum)
-		}
-
-		var expected []string
-		if err := json.Unmarshal([]byte(rawExpected), &expected); err != nil {
-			return nil, fmt.Errorf("csv row %d invalid expected_segments_json: %w", rowNum, err)
-		}
-		if len(expected) == 0 {
-			return nil, fmt.Errorf("csv row %d has empty expected_segments_json", rowNum)
+		if paragraph == "" {
+			continue // skip rows with empty paragraph
 		}
 
 		cases = append(cases, Case{
-			Name:     name,
-			Text:     text,
-			Expected: expected,
+			Name:      name,
+			Paragraph: paragraph,
 		})
 	}
 
@@ -203,7 +198,7 @@ func csvColumnIndices(header []string) (map[string]int, error) {
 	for i, col := range header {
 		indices[strings.TrimSpace(strings.ToLower(col))] = i
 	}
-	required := []string{csvHeaderID, csvHeaderSentence, csvHeaderExpectedSegJSON}
+	required := []string{csvHeaderID, csvHeaderParagraph}
 	for _, k := range required {
 		if _, ok := indices[k]; !ok {
 			return nil, fmt.Errorf("csv header missing required column %q", k)
@@ -211,6 +206,10 @@ func csvColumnIndices(header []string) (map[string]int, error) {
 	}
 	return indices, nil
 }
+
+// ---------------------------------------------------------------------------
+// GEPA configs
+// ---------------------------------------------------------------------------
 
 func QuickBudgetGEPAConfig() *optimizers.GEPAConfig {
 	cfg := optimizers.DefaultGEPAConfig()
@@ -253,13 +252,17 @@ func BuildConstrainedInstruction(segmentationPreference string) string {
 	}, " ")
 }
 
+// ---------------------------------------------------------------------------
+// Dataset splitting
+// ---------------------------------------------------------------------------
+
 func SplitCasesDeterministic(cases []Case, trainRatio float64, seed int, maxUnits int) ([]Case, []Case) {
 	if trainRatio <= 0 || trainRatio >= 1 {
 		trainRatio = 0.7
 	}
 	normalized := make([]Case, 0, len(cases))
 	for _, c := range cases {
-		if strings.TrimSpace(c.Text) != "" && len(c.Expected) > 0 {
+		if strings.TrimSpace(c.Paragraph) != "" {
 			normalized = append(normalized, c)
 		}
 	}
@@ -310,6 +313,10 @@ func seedMix(seed int) uint64 {
 	return (s * 1099511628211) ^ 1469598103934665603
 }
 
+// ---------------------------------------------------------------------------
+// LLM initialisation
+// ---------------------------------------------------------------------------
+
 func NewSegmentationLLM(cfg config.Config, modelID string) (core.LLM, error) {
 	llms.EnsureFactory()
 	baseURL, path, err := normalizeOpenAIEndpoint(cfg.OpenAIBaseURL)
@@ -329,60 +336,336 @@ func NewSegmentationLLM(cfg config.Config, modelID string) (core.LLM, error) {
 	return openAILLM, nil
 }
 
-func NewGEPASegmentationProgram(llm core.LLM, instruction string) core.Program {
-	mod := &stickyPredict{Predict: modules.NewPredict(buildSegmentSignature(instruction)).WithStructuredOutput()}
-	mod.SetLLM(llm)
-	return core.Program{
-		Modules: map[string]core.Module{"segmenter": mod},
-		Forward: func(ctx context.Context, inputs map[string]interface{}) (map[string]interface{}, error) {
-			text, _ := inputs["text"].(string)
-			text = strings.TrimSpace(text)
-			start := time.Now()
-			callCtx, cancel := context.WithTimeout(ctx, 40*time.Second)
-			defer cancel()
+// ---------------------------------------------------------------------------
+// Sentence splitting (mirrors production splitInputSentences)
+// ---------------------------------------------------------------------------
 
-			res, err := mod.Process(callCtx, map[string]any{"text": text})
-			if err != nil {
-				return nil, err
+func splitParagraphSentences(text string) []string {
+	var out []string
+	var current strings.Builder
+	for len(text) > 0 {
+		r, size := utf8.DecodeRuneInString(text)
+		text = text[size:]
+		if isSentenceEnd(r) {
+			current.WriteRune(r)
+			s := strings.TrimSpace(current.String())
+			if s != "" {
+				out = append(out, s)
+			}
+			current.Reset()
+			continue
+		}
+		if r == '\n' || r == '\r' {
+			s := strings.TrimSpace(current.String())
+			if s != "" {
+				out = append(out, s)
+			}
+			current.Reset()
+			continue
+		}
+		current.WriteRune(r)
+	}
+	s := strings.TrimSpace(current.String())
+	if s != "" {
+		out = append(out, s)
+	}
+	return out
+}
+
+func isSentenceEnd(r rune) bool {
+	return r == '。' || r == '！' || r == '？' || r == '!' || r == '?'
+}
+
+// ---------------------------------------------------------------------------
+// Local copies of helpers from intelligence/translation (not importable from scripts)
+// ---------------------------------------------------------------------------
+
+func isCJKIdeograph(r rune) bool {
+	return (r >= 0x4E00 && r <= 0x9FFF) ||
+		(r >= 0x3400 && r <= 0x4DBF) ||
+		(r >= 0x20000 && r <= 0x2A6DF) ||
+		(r >= 0x2A700 && r <= 0x2CEAF) ||
+		(r >= 0x2CEB0 && r <= 0x2EBEF) ||
+		(r >= 0x30000 && r <= 0x323AF)
+}
+
+var chinesePunctuation = `，。！？；：""''（）【】《》、…—`
+
+func shouldSkipSegment(segment string) bool {
+	if strings.TrimSpace(segment) == "" {
+		return true
+	}
+	hasCJK := false
+	for _, r := range segment {
+		if isCJKIdeograph(r) {
+			hasCJK = true
+			continue
+		}
+		if unicode.IsSpace(r) {
+			continue
+		}
+		if r <= unicode.MaxASCII && !unicode.IsLetter(r) {
+			continue
+		}
+		if strings.ContainsRune(chinesePunctuation, r) {
+			continue
+		}
+		if unicode.In(r, unicode.Nd, unicode.No, unicode.Po, unicode.Ps, unicode.Pe, unicode.Pd, unicode.Pc, unicode.Sk, unicode.Sm, unicode.So) {
+			continue
+		}
+	}
+	return !hasCJK
+}
+
+// ---------------------------------------------------------------------------
+// Full pipeline program: segment + translate per sentence
+// ---------------------------------------------------------------------------
+
+func buildSegmentSignature(instruction string) core.Signature {
+	return core.NewSignature(
+		[]core.InputField{{Field: core.NewField("text", core.WithDescription("Chinese sentence to segment"))}},
+		[]core.OutputField{{Field: core.NewField("segments", core.WithDescription("Array of segmented words in order"))}},
+	).WithInstruction(instruction)
+}
+
+func buildTranslateSignature(instruction string) core.Signature {
+	return core.NewSignature(
+		[]core.InputField{
+			{Field: core.NewField("segments_json", core.WithDescription("JSON array of Chinese segments to translate"))},
+			{Field: core.NewField("sentence", core.WithDescription("The sentence containing the segments"))},
+			{Field: core.NewField("full_text", core.WithDescription("The complete input text for broader context"))},
+		},
+		[]core.OutputField{
+			{Field: core.NewField("translations_json", core.WithDescription("JSON array of {pinyin, english} objects in same order as input segments"))},
+		},
+	).WithInstruction(instruction)
+}
+
+func NewFullPipelineProgram(workerLLM core.LLM, segmentInstruction, translateInstruction string) core.Program {
+	segMod := &stickyPredict{Predict: modules.NewPredict(buildSegmentSignature(segmentInstruction)).WithStructuredOutput()}
+	segMod.SetLLM(workerLLM)
+
+	transMod := &stickyPredict{Predict: modules.NewPredict(buildTranslateSignature(translateInstruction)).WithStructuredOutput()}
+	transMod.SetLLM(workerLLM)
+
+	return core.Program{
+		Modules: map[string]core.Module{"segmenter": segMod, "translator": transMod},
+		Forward: func(ctx context.Context, inputs map[string]interface{}) (map[string]interface{}, error) {
+			paragraph, _ := inputs["paragraph"].(string)
+			paragraph = strings.TrimSpace(paragraph)
+			start := time.Now()
+
+			sentences := splitParagraphSentences(paragraph)
+			if len(sentences) == 0 {
+				sentences = []string{paragraph}
+			}
+
+			type sentenceTranslation struct {
+				Sentence     string                   `json:"sentence"`
+				Segments     []string                 `json:"segments"`
+				Translations []map[string]interface{} `json:"translations"`
 			}
 
 			parseFailed := false
-			segments := parseSegments(res["segments"])
-			if len(segments) == 0 {
-				segments = parseSegmentsFromResponse(res["response"])
-				parseFailed = true
-			}
-			if len(segments) == 0 {
-				segments = parseLooseSegments(toString(res["segments"]))
-				parseFailed = true
-			}
-			if len(segments) == 0 {
-				segments = parseLooseSegments(toString(res["response"]))
-				parseFailed = true
+			reconstructionOK := true
+			var allTranslations []sentenceTranslation
+
+			for _, sent := range sentences {
+				callCtx, cancel := context.WithTimeout(ctx, 40*time.Second)
+				segRes, err := segMod.Process(callCtx, map[string]any{"text": sent})
+				cancel()
+				if err != nil {
+					parseFailed = true
+					continue
+				}
+
+				segments := parseSegments(segRes["segments"])
+				if len(segments) == 0 {
+					parseFailed = true
+					continue
+				}
+
+				// Reconstruction check for this sentence.
+				if normalizeForReconstruction(strings.Join(segments, "")) != normalizeForReconstruction(sent) {
+					reconstructionOK = false
+				}
+
+				// Filter to CJK-bearing segments for translation.
+				var cjkSegments []string
+				for _, seg := range segments {
+					if !shouldSkipSegment(seg) {
+						cjkSegments = append(cjkSegments, seg)
+					}
+				}
+
+				var translations []map[string]interface{}
+				if len(cjkSegments) > 0 {
+					segJSON, _ := json.Marshal(cjkSegments)
+					transCtx, transCancel := context.WithTimeout(ctx, 40*time.Second)
+					transRes, err := transMod.Process(transCtx, map[string]any{
+						"segments_json": string(segJSON),
+						"sentence":      sent,
+						"full_text":     paragraph,
+					})
+					transCancel()
+					if err != nil {
+						parseFailed = true
+					} else {
+						translations = parseBatchTranslationsGeneric(transRes["translations_json"])
+					}
+				}
+
+				allTranslations = append(allTranslations, sentenceTranslation{
+					Sentence:     sent,
+					Segments:     segments,
+					Translations: translations,
+				})
 			}
 
-			reconstructionOK := normalizeForReconstruction(strings.Join(segments, "")) == normalizeForReconstruction(text)
+			translationsJSON, _ := json.Marshal(allTranslations)
 			return map[string]interface{}{
-				"segments":          segments,
-				"text":              text,
-				"parse_failed":      parseFailed || len(segments) == 0,
+				"translations_json": string(translationsJSON),
+				"paragraph":         paragraph,
 				"reconstruction_ok": reconstructionOK,
+				"parse_failed":      parseFailed,
 				"latency_ms":        float64(time.Since(start).Milliseconds()),
 			}, nil
 		},
 	}
 }
 
-func BuildGEPASentenceDataset(corpus []Case, maxUnits int) (*datasets.SimpleDataset, []core.Example) {
+// parseBatchTranslationsGeneric extracts a []map[string]interface{} from the
+// translations_json output field, which may arrive as a string, []any, or
+// other JSON-serialisable shape.
+func parseBatchTranslationsGeneric(v any) []map[string]interface{} {
+	if v == nil {
+		return nil
+	}
+	var raw []byte
+	switch t := v.(type) {
+	case string:
+		raw = []byte(t)
+	case []any:
+		b, err := json.Marshal(t)
+		if err != nil {
+			return nil
+		}
+		raw = b
+	default:
+		b, err := json.Marshal(v)
+		if err != nil {
+			return nil
+		}
+		raw = b
+	}
+	var out []map[string]interface{}
+	_ = json.Unmarshal(raw, &out)
+	return out
+}
+
+// ---------------------------------------------------------------------------
+// Full pipeline metric (judge LLM)
+// ---------------------------------------------------------------------------
+
+func fullPipelineMetric(judgeLLM core.LLM) func(expected, actual map[string]interface{}) float64 {
+	return func(expected, actual map[string]interface{}) float64 {
+		paragraph := strings.TrimSpace(toString(actual["paragraph"]))
+		if paragraph == "" {
+			paragraph = strings.TrimSpace(toString(expected["paragraph"]))
+		}
+		if paragraph == "" {
+			return 0
+		}
+
+		score := 1.0
+
+		// Reconstruction penalty.
+		if !isTruthy(actual["reconstruction_ok"]) {
+			score -= 0.45
+		}
+
+		// Parse failure penalty.
+		if isTruthy(actual["parse_failed"]) {
+			score -= 0.35
+		}
+
+		// Judge LLM scoring 0-10.
+		translationsJSON := toString(actual["translations_json"])
+		judgeInput := formatTranslationsForJudge(paragraph, translationsJSON)
+		if judgeInput != "" && judgeLLM != nil {
+			judgeScore := queryJudge(judgeLLM, judgeInput)
+			score = score - 1.0 + (judgeScore / 10.0) // replace the base 1.0 with normalised judge score
+		}
+
+		// Latency penalty (capped at 0.05).
+		latencyMs := toFloat64(actual["latency_ms"])
+		if latencyMs > 0 {
+			score -= boundFloat(latencyMs/10000.0, 0, 0.05)
+		}
+
+		return boundFloat(score, 0, 1)
+	}
+}
+
+func formatTranslationsForJudge(paragraph, translationsJSON string) string {
+	if strings.TrimSpace(translationsJSON) == "" || translationsJSON == "null" {
+		return ""
+	}
+	return fmt.Sprintf("Chinese paragraph:\n%s\n\nSegmentation and translation results (JSON):\n%s\n\nRate the overall translation quality from 0 to 10. Consider: Are segments reasonable Chinese word boundaries? Are pinyin readings correct? Are English translations accurate and contextually appropriate? Reply with ONLY a number 0-10.", paragraph, translationsJSON)
+}
+
+func queryJudge(judgeLLM core.LLM, prompt string) float64 {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	fullPrompt := "You are a Chinese language expert evaluating segmentation and translation quality. Reply with ONLY a number from 0 to 10.\n\n" + prompt
+
+	resp, err := judgeLLM.Generate(ctx, fullPrompt)
+	if err != nil {
+		return 5.0 // neutral fallback on error
+	}
+	return parseJudgeScore(resp.Content)
+}
+
+func parseJudgeScore(raw string) float64 {
+	raw = strings.TrimSpace(raw)
+	// Try to parse the first number found.
+	re := regexp.MustCompile(`(\d+(?:\.\d+)?)`)
+	match := re.FindString(raw)
+	if match == "" {
+		return 5.0
+	}
+	f, err := strconv.ParseFloat(match, 64)
+	if err != nil {
+		return 5.0
+	}
+	return boundFloat(f, 0, 10)
+}
+
+func boundFloat(v, lo, hi float64) float64 {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
+}
+
+// ---------------------------------------------------------------------------
+// Paragraph dataset builder
+// ---------------------------------------------------------------------------
+
+func BuildGEPAParagraphDataset(corpus []Case, maxUnits int) (*datasets.SimpleDataset, []core.Example) {
 	examples := make([]core.Example, 0, maxUnits)
 	for _, tc := range corpus {
-		text := strings.TrimSpace(tc.Text)
-		if text == "" || len(tc.Expected) == 0 {
+		p := strings.TrimSpace(tc.Paragraph)
+		if p == "" {
 			continue
 		}
 		examples = append(examples, core.Example{
-			Inputs:  map[string]interface{}{"text": text},
-			Outputs: map[string]interface{}{"text": text, "segments": tc.Expected},
+			Inputs:  map[string]interface{}{"paragraph": p},
+			Outputs: map[string]interface{}{"paragraph": p},
 		})
 		if len(examples) >= maxUnits {
 			return datasets.NewSimpleDataset(examples), examples
@@ -391,29 +674,36 @@ func BuildGEPASentenceDataset(corpus []Case, maxUnits int) (*datasets.SimpleData
 	return datasets.NewSimpleDataset(examples), examples
 }
 
-func CompileGEPASentenceLevel(
+// ---------------------------------------------------------------------------
+// Compile / Evaluate / Multi-seed orchestration
+// ---------------------------------------------------------------------------
+
+func CompileFullPipeline(
 	ctx context.Context,
-	llm core.LLM,
+	workerLLM core.LLM,
+	judgeLLM core.LLM,
 	corpus []Case,
 	baseInstruction string,
 	cfg *optimizers.GEPAConfig,
 	maxDatasetUnits int,
 ) (CompileResult, error) {
-	dataset, units := BuildGEPASentenceDataset(corpus, maxDatasetUnits)
+	dataset, units := BuildGEPAParagraphDataset(corpus, maxDatasetUnits)
 	if len(units) == 0 {
 		return CompileResult{}, fmt.Errorf("empty GEPA dataset")
 	}
 
-	program := NewGEPASegmentationProgram(llm, baseInstruction)
+	program := NewFullPipelineProgram(workerLLM, baseInstruction, defaultTranslateInstruction)
 	gepa, err := optimizers.NewGEPA(cfg)
 	if err != nil {
 		return CompileResult{}, fmt.Errorf("new GEPA: %w", err)
 	}
 
+	metric := fullPipelineMetric(judgeLLM)
+
 	compileCtx, cancel := context.WithTimeout(ctx, 20*time.Minute)
 	defer cancel()
 	start := time.Now()
-	optimizedProgram, err := gepa.Compile(compileCtx, program, dataset, gepaSentenceMetric)
+	optimizedProgram, err := gepa.Compile(compileCtx, program, dataset, metric)
 	if err != nil {
 		return CompileResult{}, err
 	}
@@ -437,11 +727,13 @@ func CompileGEPASentenceLevel(
 	}, nil
 }
 
-func EvaluateSentenceLevelProgram(ctx context.Context, program core.Program, corpus []Case) EvalSummary {
+func EvaluateFullPipeline(ctx context.Context, program core.Program, judgeLLM core.LLM, corpus []Case) EvalSummary {
+	metric := fullPipelineMetric(judgeLLM)
+
 	summary := EvalSummary{TotalCases: len(corpus)}
 	for _, tc := range corpus {
 		start := time.Now()
-		res, err := program.Execute(ctx, map[string]interface{}{"text": tc.Text})
+		res, err := program.Execute(ctx, map[string]interface{}{"paragraph": tc.Paragraph})
 		latency := time.Since(start)
 		if err != nil {
 			summary.Errors++
@@ -451,26 +743,13 @@ func EvaluateSentenceLevelProgram(ctx context.Context, program core.Program, cor
 		}
 		summary.TotalLatency += latency
 
-		segments := parseSegments(res["segments"])
-		if len(segments) == 0 {
-			segments = parseSegmentsFromResponse(res["response"])
-		}
-		if len(segments) == 0 {
-			segments = parseLooseSegments(toString(res["segments"]))
-		}
-		if len(segments) == 0 {
-			segments = parseLooseSegments(toString(res["response"]))
-		}
-		if len(segments) == 0 {
-			summary.Errors++
-			summary.ReconstructionFail++
-			continue
-		}
-
-		if equalSegments(segments, tc.Expected) {
+		// Use the metric to score.
+		expected := map[string]interface{}{"paragraph": tc.Paragraph}
+		score := metric(expected, res)
+		if score >= 0.9 {
 			summary.ExactMatches++
 		}
-		if normalizeForReconstruction(strings.Join(segments, "")) != normalizeForReconstruction(tc.Text) {
+		if !isTruthy(res["reconstruction_ok"]) {
 			summary.ReconstructionFail++
 		}
 	}
@@ -480,6 +759,7 @@ func EvaluateSentenceLevelProgram(ctx context.Context, program core.Program, cor
 func RunMultiSeedOptimization(
 	ctx context.Context,
 	llm core.LLM,
+	judgeLLM core.LLM,
 	modelID string,
 	allCases []Case,
 	datasetPath string,
@@ -511,15 +791,15 @@ func RunMultiSeedOptimization(
 		}
 
 		baseInstruction := BuildConstrainedInstruction(preferences[i%len(preferences)])
-		comp, err := CompileGEPASentenceLevel(ctx, llm, train, baseInstruction, cfg, len(train))
+		comp, err := CompileFullPipeline(ctx, llm, judgeLLM, train, baseInstruction, cfg, len(train))
 		if err != nil {
 			return nil, CampaignSummary{}, PromotionDecision{}, fmt.Errorf("seed %d compile failed: %w", seed, err)
 		}
 
-		baselineProgram := NewGEPASegmentationProgram(llm, HardenedInstruction)
-		compiledProgram := NewGEPASegmentationProgram(llm, comp.BestInstruction)
-		baselineEval := EvaluateSentenceLevelProgram(ctx, baselineProgram, eval)
-		compiledEval := EvaluateSentenceLevelProgram(ctx, compiledProgram, eval)
+		baselineProgram := NewFullPipelineProgram(llm, HardenedInstruction, defaultTranslateInstruction)
+		compiledProgram := NewFullPipelineProgram(llm, comp.BestInstruction, defaultTranslateInstruction)
+		baselineEval := EvaluateFullPipeline(ctx, baselineProgram, judgeLLM, eval)
+		compiledEval := EvaluateFullPipeline(ctx, compiledProgram, judgeLLM, eval)
 
 		promotable, reasons := EvaluatePromotionGate(baselineEval, compiledEval)
 		run := SeedRunResult{
@@ -545,6 +825,10 @@ func RunMultiSeedOptimization(
 	decision.GeneratedAtUTC = time.Now().UTC().Format(time.RFC3339)
 	return runs, summary, decision, nil
 }
+
+// ---------------------------------------------------------------------------
+// Promotion gate / summary / selection
+// ---------------------------------------------------------------------------
 
 func EvaluatePromotionGate(baseline EvalSummary, compiled EvalSummary) (bool, []string) {
 	reasons := make([]string, 0, 3)
@@ -631,6 +915,10 @@ func SelectPromotionDecision(runs []SeedRunResult) PromotionDecision {
 	decision.Reason = "selected_best_promotable_candidate"
 	return decision
 }
+
+// ---------------------------------------------------------------------------
+// Artifact writers
+// ---------------------------------------------------------------------------
 
 func WriteGEPAArtifacts(
 	artifactDir string,
@@ -780,16 +1068,16 @@ func WriteGEPAResultsReport(
 		generations = result.State.CurrentGeneration + 1
 	}
 
-	content := fmt.Sprintf(`# GEPA Segmentation Results (2026-02-14)
+	content := fmt.Sprintf(`# GEPA Full Pipeline Results
 
 ## Setup
 - model: %s
 - optimizer: GEPA
-- objective: sentence-level segmentation prompt optimization
+- objective: full pipeline (segment + translate) prompt optimization with judge LLM
 - dataset source: %s
-- dataset size (sentence units): %d
+- dataset size (paragraph units): %d
 
-## Quick-Budget Config
+## GEPA Config
 - population_size: %d
 - max_generations: %d
 - evaluation_batch_size: %d
@@ -851,6 +1139,10 @@ func WriteGEPAResultsReport(
 	return os.WriteFile(reportPath, []byte(content), 0o644)
 }
 
+// ---------------------------------------------------------------------------
+// Helpers: accuracy, latency, misc
+// ---------------------------------------------------------------------------
+
 func AccuracyOf(summary EvalSummary) float64 {
 	return float64(summary.ExactMatches) / float64(max(1, summary.TotalCases))
 }
@@ -879,83 +1171,6 @@ func normalizeOpenAIEndpoint(rawBaseURL string) (string, string, error) {
 	parsed.Path = path
 	parsed.RawPath = ""
 	return strings.TrimRight(parsed.String(), "/"), "/chat/completions", nil
-}
-
-func buildSegmentSignature(instruction string) core.Signature {
-	return core.NewSignature(
-		[]core.InputField{{Field: core.NewField("text", core.WithDescription("Chinese sentence to segment"))}},
-		[]core.OutputField{{Field: core.NewField("segments", core.WithDescription("Array of segmented words in order"))}},
-	).WithInstruction(instruction)
-}
-
-func gepaSentenceMetric(expected, actual map[string]interface{}) float64 {
-	expectedSegments := parseSegments(expected["segments"])
-	actualSegments := parseSegments(actual["segments"])
-	text := strings.TrimSpace(toString(expected["text"]))
-	if text == "" {
-		text = strings.TrimSpace(toString(actual["text"]))
-	}
-	if len(expectedSegments) == 0 || text == "" || len(actualSegments) == 0 {
-		return 0
-	}
-
-	score := boundaryF1FromSegments(expectedSegments, actualSegments)
-	if equalSegments(expectedSegments, actualSegments) {
-		score = 1.0
-	}
-	if isTruthy(actual["parse_failed"]) {
-		score -= 0.35
-	}
-	reconstructionOK := normalizeForReconstruction(strings.Join(actualSegments, "")) == normalizeForReconstruction(text)
-	if !reconstructionOK {
-		score -= 0.45
-	}
-	latencyMs := toFloat64(actual["latency_ms"])
-	if latencyMs > 0 {
-		score -= minFloat(0.05, latencyMs/10000.0)
-	}
-	if score < 0 {
-		return 0
-	}
-	if score > 1 {
-		return 1
-	}
-	return score
-}
-
-func boundaryF1FromSegments(expected, actual []string) float64 {
-	expectedBounds := segmentationBoundaries(expected)
-	actualBounds := segmentationBoundaries(actual)
-	if len(expectedBounds) == 0 && len(actualBounds) == 0 {
-		return 1
-	}
-	if len(expectedBounds) == 0 || len(actualBounds) == 0 {
-		return 0
-	}
-	tp := 0
-	for b := range actualBounds {
-		if _, ok := expectedBounds[b]; ok {
-			tp++
-		}
-	}
-	precision := float64(tp) / float64(max(1, len(actualBounds)))
-	recall := float64(tp) / float64(max(1, len(expectedBounds)))
-	if precision+recall == 0 {
-		return 0
-	}
-	return 2 * precision * recall / (precision + recall)
-}
-
-func segmentationBoundaries(segments []string) map[int]struct{} {
-	bounds := make(map[int]struct{})
-	pos := 0
-	for idx, seg := range segments {
-		pos += len([]rune(seg))
-		if idx < len(segments)-1 {
-			bounds[pos] = struct{}{}
-		}
-	}
-	return bounds
 }
 
 func extractInstructionFromProgram(program core.Program, moduleName string) string {
@@ -1133,18 +1348,6 @@ func parseLooseSegments(raw string) []string {
 	return parts
 }
 
-func equalSegments(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
-}
-
 func normalizeForReconstruction(s string) string {
 	var b strings.Builder
 	for _, r := range s {
@@ -1194,6 +1397,9 @@ func minFloat(a, b float64) float64 {
 	}
 	return b
 }
+
+// Suppress unused warning for minFloat.
+var _ = minFloat
 
 func meanFloat(values []float64) float64 {
 	if len(values) == 0 {
