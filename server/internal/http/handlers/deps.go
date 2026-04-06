@@ -30,18 +30,19 @@ type chatStore interface {
 }
 
 type srsStore interface {
-	SaveVocabItem(headword string, pinyin string, english string, translationID *string, snippet *string, status string) (string, error)
-	UpdateVocabStatus(vocabItemID string, status string) error
-	RecordLookup(vocabItemID string) (translation.VocabSRSInfo, bool)
-	GetVocabSRSInfo(headwords []string) ([]translation.VocabSRSInfo, error)
-	GetReviewQueue(limit int) ([]translation.ReviewCard, error)
-	GetDueCount() int
-	RecordReviewAnswer(vocabItemID string, grade int) (translation.ReviewAnswerResult, bool, error)
-	CountVocabByStatus(status string) int
-	CountTotalVocab() int
+	SaveSegment(headword string, pinyin string, english string, translationID *string, snippet *string, status string) (string, error)
+	UpdateSegmentStatus(segmentID string, status string) error
+	UpdateCharacterStatus(characterID string, status string) error
+	RecordLookup(segmentID string) (translation.SegmentSRSInfo, bool)
+	GetSegmentSRSInfo(headwords []string) ([]translation.SegmentSRSInfo, error)
+	GetSegmentReviewQueue(limit int) ([]translation.SegmentReviewCard, error)
+	GetSegmentDueCount() int
+	RecordReviewAnswer(entityID string, entityType string, grade int) (translation.ReviewAnswerResult, bool, error)
+	CountSegmentsByStatus(status string) int
+	CountTotalSegments() int
 	ExportProgressJSON() (string, error)
 	ImportProgressJSON(input string) (map[string]int, error)
-	ExtractAndLinkCharacters(vocabItemID string, headword string, charData []translation.CharTranslation) error
+	ExtractAndLinkCharacters(segmentID string, segment string, segmentPinyin string, segmentEnglish string, charData []translation.CharTranslation) error
 	GetCharacterReviewQueue(limit int) ([]translation.CharacterReviewCard, error)
 	GetCharacterDueCount() int
 }

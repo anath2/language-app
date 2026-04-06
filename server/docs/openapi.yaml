@@ -479,9 +479,9 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [vocab_item_id]
+                required: [segment_id]
                 properties:
-                  vocab_item_id:
+                  segment_id:
                     type: string
         "400":
           $ref: "#/components/responses/BadRequest"
@@ -499,9 +499,11 @@ paths:
           application/json:
             schema:
               type: object
-              required: [vocab_item_id, status]
+              required: [segment_id, status]
               properties:
-                vocab_item_id:
+                segment_id:
+                  type: string
+                character_id:
                   type: string
                 status:
                   type: string
@@ -533,9 +535,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: [vocab_item_id]
+              required: [segment_id]
               properties:
-                vocab_item_id:
+                segment_id:
                   type: string
       responses:
         "200":
@@ -544,9 +546,9 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [vocab_item_id, opacity, is_struggling]
+                required: [segment_id, opacity, is_struggling]
                 properties:
-                  vocab_item_id:
+                  segment_id:
                     type: string
                   opacity:
                     type: number
@@ -628,10 +630,15 @@ paths:
           application/json:
             schema:
               type: object
-              required: [vocab_item_id, grade]
+              required: [grade]
               properties:
-                vocab_item_id:
+                segment_id:
                   type: string
+                character_id:
+                  type: string
+                entity_type:
+                  type: string
+                  enum: [segment, character]
                 grade:
                   type: integer
       responses:
@@ -641,9 +648,11 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [vocab_item_id, interval_days, remaining_due]
+                required: [interval_days, remaining_due]
                 properties:
-                  vocab_item_id:
+                  segment_id:
+                    type: string
+                  character_id:
                     type: string
                   next_due_at:
                     type: ["string", "null"]
@@ -1093,9 +1102,9 @@ components:
 
     VocabSRSItem:
       type: object
-      required: [vocab_item_id, headword, pinyin, english, opacity, is_struggling, status]
+      required: [segment_id, headword, pinyin, english, opacity, is_struggling, status]
       properties:
-        vocab_item_id:
+        segment_id:
           type: string
         headword:
           type: string
@@ -1123,9 +1132,9 @@ components:
 
     ReviewCard:
       type: object
-      required: [vocab_item_id, headword, pinyin, english, snippets]
+      required: [segment_id, headword, pinyin, english, snippets]
       properties:
-        vocab_item_id:
+        segment_id:
           type: string
         headword:
           type: string
@@ -1168,9 +1177,9 @@ components:
 
     CharacterReviewCard:
       type: object
-      required: [vocab_item_id, character, pinyin, english, example_words]
+      required: [character_id, character, pinyin, english, example_segments]
       properties:
-        vocab_item_id:
+        character_id:
           type: string
         character:
           type: string
@@ -1178,20 +1187,20 @@ components:
           type: string
         english:
           type: string
-        example_words:
+        example_segments:
           type: array
           items:
-            $ref: "#/components/schemas/CharacterExampleWord"
+            $ref: "#/components/schemas/CharacterExampleSegment"
 
-    CharacterExampleWord:
+    CharacterExampleSegment:
       type: object
-      required: [vocab_item_id, headword, pinyin, english]
+      required: [segment, segment_pinyin, segment_translation]
       properties:
-        vocab_item_id:
+        segment_id:
           type: string
-        headword:
+        segment:
           type: string
-        pinyin:
+        segment_pinyin:
           type: string
-        english:
+        segment_translation:
           type: string

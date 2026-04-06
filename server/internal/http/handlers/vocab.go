@@ -18,11 +18,12 @@ type saveVocabRequest struct {
 }
 
 type saveVocabResponse struct {
-	VocabItemID string `json:"vocab_item_id"`
+	SegmentID string `json:"segment_id"`
 }
 
 type updateVocabStatusRequest struct {
-	VocabItemID string `json:"vocab_item_id"`
+	SegmentID   string `json:"segment_id"`
+	CharacterID string `json:"character_id"`
 	Status      string `json:"status"`
 }
 
@@ -31,17 +32,17 @@ type okResponse struct {
 }
 
 type recordLookupRequest struct {
-	VocabItemID string `json:"vocab_item_id"`
+	SegmentID string `json:"segment_id"`
 }
 
 type recordLookupResponse struct {
-	VocabItemID  string  `json:"vocab_item_id"`
+	SegmentID    string  `json:"segment_id"`
 	Opacity      float64 `json:"opacity"`
 	IsStruggling bool    `json:"is_struggling"`
 }
 
 type vocabSRSInfoResponse struct {
-	VocabItemID  string  `json:"vocab_item_id"`
+	SegmentID    string  `json:"segment_id"`
 	Headword     string  `json:"headword"`
 	Pinyin       string  `json:"pinyin"`
 	English      string  `json:"english"`
@@ -57,11 +58,11 @@ type vocabSRSInfoListResponse struct {
 }
 
 type reviewCardResponse struct {
-	VocabItemID string   `json:"vocab_item_id"`
-	Headword    string   `json:"headword"`
-	Pinyin      string   `json:"pinyin"`
-	English     string   `json:"english"`
-	Snippets    []string `json:"snippets"`
+	SegmentID string   `json:"segment_id"`
+	Headword  string   `json:"headword"`
+	Pinyin    string   `json:"pinyin"`
+	English   string   `json:"english"`
+	Snippets  []string `json:"snippets"`
 }
 
 type reviewQueueResponse struct {
@@ -70,12 +71,15 @@ type reviewQueueResponse struct {
 }
 
 type reviewAnswerRequest struct {
-	VocabItemID string `json:"vocab_item_id"`
+	SegmentID   string `json:"segment_id"`
+	CharacterID string `json:"character_id"`
+	EntityType  string `json:"entity_type"`
 	Grade       int    `json:"grade"`
 }
 
 type reviewAnswerResponse struct {
-	VocabItemID  string  `json:"vocab_item_id"`
+	SegmentID    *string `json:"segment_id,omitempty"`
+	CharacterID  *string `json:"character_id,omitempty"`
 	NextDueAt    *string `json:"next_due_at"`
 	IntervalDays float64 `json:"interval_days"`
 	RemainingDue int     `json:"remaining_due"`
@@ -85,19 +89,19 @@ type dueCountResponse struct {
 	DueCount int `json:"due_count"`
 }
 
-type characterExampleWordResponse struct {
-	VocabItemID string `json:"vocab_item_id"`
-	Headword    string `json:"headword"`
-	Pinyin      string `json:"pinyin"`
-	English     string `json:"english"`
+type characterExampleSegmentResponse struct {
+	SegmentID          string `json:"segment_id,omitempty"`
+	Segment            string `json:"segment"`
+	SegmentPinyin      string `json:"segment_pinyin"`
+	SegmentTranslation string `json:"segment_translation"`
 }
 
 type characterReviewCardResponse struct {
-	VocabItemID  string                         `json:"vocab_item_id"`
-	Character    string                         `json:"character"`
-	Pinyin       string                         `json:"pinyin"`
-	English      string                         `json:"english"`
-	ExampleWords []characterExampleWordResponse `json:"example_words"`
+	CharacterID     string                            `json:"character_id"`
+	Character       string                            `json:"character"`
+	Pinyin          string                            `json:"pinyin"`
+	English         string                            `json:"english"`
+	ExampleSegments []characterExampleSegmentResponse `json:"example_segments"`
 }
 
 type characterReviewQueueResponse struct {
@@ -115,13 +119,13 @@ func SaveVocab(w http.ResponseWriter, r *http.Request) {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": "Invalid JSON payload"})
 		return
 	}
-	id, err := srs.SaveVocabItem(req.Headword, req.Pinyin, req.English, req.TranslationID, req.Snippet, req.Status)
+	id, err := srs.SaveSegment(req.Headword, req.Pinyin, req.English, req.TranslationID, req.Snippet, req.Status)
 	if err != nil {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": err.Error()})
 		return
 	}
-	_ = srs.ExtractAndLinkCharacters(id, req.Headword, nil)
-	WriteJSON(w, http.StatusOK, saveVocabResponse{VocabItemID: id})
+	_ = srs.ExtractAndLinkCharacters(id, req.Headword, req.Pinyin, req.English, nil)
+	WriteJSON(w, http.StatusOK, saveVocabResponse{SegmentID: id})
 }
 
 func UpdateVocabStatus(w http.ResponseWriter, r *http.Request) {
@@ -134,10 +138,15 @@ func UpdateVocabStatus(w http.ResponseWriter, r *http.Request) {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": "Invalid JSON payload"})
 		return
 	}
-	err := srs.UpdateVocabStatus(req.VocabItemID, req.Status)
+	var err error
+	if strings.TrimSpace(req.CharacterID) != "" {
+		err = srs.UpdateCharacterStatus(req.CharacterID, req.Status)
+	} else {
+		err = srs.UpdateSegmentStatus(req.SegmentID, req.Status)
+	}
 	if err != nil {
 		if err == translation.ErrNotFound {
-			WriteJSON(w, http.StatusNotFound, map[string]string{"detail": "Vocab item not found"})
+			WriteJSON(w, http.StatusNotFound, map[string]string{"detail": "Saved item not found"})
 			return
 		}
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": err.Error()})
@@ -156,13 +165,13 @@ func RecordLookup(w http.ResponseWriter, r *http.Request) {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": "Invalid JSON payload"})
 		return
 	}
-	info, ok := srs.RecordLookup(req.VocabItemID)
+	info, ok := srs.RecordLookup(req.SegmentID)
 	if !ok {
-		WriteJSON(w, http.StatusNotFound, map[string]string{"detail": "Vocab item not found"})
+		WriteJSON(w, http.StatusNotFound, map[string]string{"detail": "Segment not found"})
 		return
 	}
 	WriteJSON(w, http.StatusOK, recordLookupResponse{
-		VocabItemID:  info.VocabItemID,
+		SegmentID:    info.SegmentID,
 		Opacity:      info.Opacity,
 		IsStruggling: info.IsStruggling,
 	})
@@ -179,7 +188,7 @@ func GetVocabSRSInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	parts := strings.Split(headwords, ",")
-	items, err := srs.GetVocabSRSInfo(parts)
+	items, err := srs.GetSegmentSRSInfo(parts)
 	if err != nil {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": err.Error()})
 		return
@@ -187,7 +196,7 @@ func GetVocabSRSInfo(w http.ResponseWriter, r *http.Request) {
 	resp := make([]vocabSRSInfoResponse, 0, len(items))
 	for _, it := range items {
 		resp = append(resp, vocabSRSInfoResponse{
-			VocabItemID:  it.VocabItemID,
+			SegmentID:    it.SegmentID,
 			Headword:     it.Headword,
 			Pinyin:       it.Pinyin,
 			English:      it.English,
@@ -207,7 +216,7 @@ func GetReviewQueue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	limit := parseIntDefault(r.URL.Query().Get("limit"), 10)
-	cards, err := srs.GetReviewQueue(limit)
+	cards, err := srs.GetSegmentReviewQueue(limit)
 	if err != nil {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": err.Error()})
 		return
@@ -215,16 +224,16 @@ func GetReviewQueue(w http.ResponseWriter, r *http.Request) {
 	respCards := make([]reviewCardResponse, 0, len(cards))
 	for _, c := range cards {
 		respCards = append(respCards, reviewCardResponse{
-			VocabItemID: c.VocabItemID,
-			Headword:    c.Headword,
-			Pinyin:      c.Pinyin,
-			English:     c.English,
-			Snippets:    c.Snippets,
+			SegmentID: c.SegmentID,
+			Headword:  c.Headword,
+			Pinyin:    c.Pinyin,
+			English:   c.English,
+			Snippets:  c.Snippets,
 		})
 	}
 	WriteJSON(w, http.StatusOK, reviewQueueResponse{
 		Cards:    respCards,
-		DueCount: srs.GetDueCount(),
+		DueCount: srs.GetSegmentDueCount(),
 	})
 }
 
@@ -238,17 +247,28 @@ func RecordReviewAnswer(w http.ResponseWriter, r *http.Request) {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": "Invalid JSON payload"})
 		return
 	}
-	res, ok, err := srs.RecordReviewAnswer(req.VocabItemID, req.Grade)
+	entityID := strings.TrimSpace(req.SegmentID)
+	entityType := strings.TrimSpace(req.EntityType)
+	if strings.TrimSpace(req.CharacterID) != "" {
+		entityID = strings.TrimSpace(req.CharacterID)
+		if entityType == "" {
+			entityType = "character"
+		}
+	} else if entityType == "" {
+		entityType = "segment"
+	}
+	res, ok, err := srs.RecordReviewAnswer(entityID, entityType, req.Grade)
 	if err != nil {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": err.Error()})
 		return
 	}
 	if !ok {
-		WriteJSON(w, http.StatusNotFound, map[string]string{"detail": "Vocab item not found"})
+		WriteJSON(w, http.StatusNotFound, map[string]string{"detail": "Saved item not found"})
 		return
 	}
 	WriteJSON(w, http.StatusOK, reviewAnswerResponse{
-		VocabItemID:  res.VocabItemID,
+		SegmentID:    res.SegmentID,
+		CharacterID:  res.CharacterID,
 		NextDueAt:    res.NextDueAt,
 		IntervalDays: res.IntervalDays,
 		RemainingDue: res.RemainingDue,
@@ -260,7 +280,7 @@ func GetReviewCount(w http.ResponseWriter, r *http.Request) {
 		WriteJSON(w, http.StatusInternalServerError, map[string]string{"detail": err.Error()})
 		return
 	}
-	WriteJSON(w, http.StatusOK, dueCountResponse{DueCount: srs.GetDueCount()})
+	WriteJSON(w, http.StatusOK, dueCountResponse{DueCount: srs.GetSegmentDueCount()})
 }
 
 func GetCharacterReviewQueue(w http.ResponseWriter, r *http.Request) {
@@ -276,21 +296,21 @@ func GetCharacterReviewQueue(w http.ResponseWriter, r *http.Request) {
 	}
 	respCards := make([]characterReviewCardResponse, 0, len(cards))
 	for _, c := range cards {
-		examples := make([]characterExampleWordResponse, 0, len(c.ExampleWords))
-		for _, ex := range c.ExampleWords {
-			examples = append(examples, characterExampleWordResponse{
-				VocabItemID: ex.VocabItemID,
-				Headword:    ex.Headword,
-				Pinyin:      ex.Pinyin,
-				English:     ex.English,
+		examples := make([]characterExampleSegmentResponse, 0, len(c.ExampleSegments))
+		for _, ex := range c.ExampleSegments {
+			examples = append(examples, characterExampleSegmentResponse{
+				SegmentID:          ex.SegmentID,
+				Segment:            ex.Segment,
+				SegmentPinyin:      ex.SegmentPinyin,
+				SegmentTranslation: ex.SegmentTranslation,
 			})
 		}
 		respCards = append(respCards, characterReviewCardResponse{
-			VocabItemID:  c.VocabItemID,
-			Character:    c.Character,
-			Pinyin:       c.Pinyin,
-			English:      c.English,
-			ExampleWords: examples,
+			CharacterID:     c.CharacterID,
+			Character:       c.Character,
+			Pinyin:          c.Pinyin,
+			English:         c.English,
+			ExampleSegments: examples,
 		})
 	}
 	WriteJSON(w, http.StatusOK, characterReviewQueueResponse{

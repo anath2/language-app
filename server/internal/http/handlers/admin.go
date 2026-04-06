@@ -72,9 +72,9 @@ func GetProfile(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, map[string]any{
 		"profile": profileObj,
 		"vocabStats": map[string]int{
-			"known":    srs.CountVocabByStatus("known"),
-			"learning": srs.CountVocabByStatus("learning"),
-			"total":    srs.CountTotalVocab(),
+			"known":    srs.CountSegmentsByStatus("known"),
+			"learning": srs.CountSegmentsByStatus("learning"),
+			"total":    srs.CountTotalSegments(),
 		},
 	})
 }
