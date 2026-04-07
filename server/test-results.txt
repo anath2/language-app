@@ -1,0 +1,915 @@
+?   	github.com/anath2/language-app/cmd/gepa-segmentation	[no test files]
+?   	github.com/anath2/language-app/cmd/migrate	[no test files]
+?   	github.com/anath2/language-app/cmd/server	[no test files]
+=== RUN   TestLoadRequiresOpenAIEnv
+--- PASS: TestLoadRequiresOpenAIEnv (0.00s)
+=== RUN   TestLoadFromDotenvThenValidate
+--- PASS: TestLoadFromDotenvThenValidate (0.00s)
+=== RUN   TestLoadCedictPathAliases
+--- PASS: TestLoadCedictPathAliases (0.00s)
+=== RUN   TestLoadValidatesOpenAIBaseURL
+--- PASS: TestLoadValidatesOpenAIBaseURL (0.00s)
+=== RUN   TestLoadNormalizesOpenAIBaseURL
+--- PASS: TestLoadNormalizesOpenAIBaseURL (0.00s)
+=== RUN   TestLoadSupportsLegacyOpenRouterEnvNames
+--- PASS: TestLoadSupportsLegacyOpenRouterEnvNames (0.00s)
+PASS
+ok  	github.com/anath2/language-app/internal/config	0.592s
+=== RUN   TestRegisterRoutesIncludesCoreEndpoints
+--- PASS: TestRegisterRoutesIncludesCoreEndpoints (0.00s)
+=== RUN   TestRouteContractWithAuthenticatedSession
+2026/04/01 18:31:06 OK   00001_init.sql (1.74ms)
+2026/04/01 18:31:06 OK   00002_vocab_lookups.sql (596.67µs)
+2026/04/01 18:31:06 OK   00003_user_profile.sql (528.83µs)
+2026/04/01 18:31:06 OK   00004_job_queue.sql (1.02ms)
+2026/04/01 18:31:06 OK   00005_rename_job_to_translation.sql (2.39ms)
+2026/04/01 18:31:06 OK   00006_go_compat.sql (1.02ms)
+2026/04/01 18:31:06 OK   00007_character_srs.sql (1.65ms)
+2026/04/01 18:31:06 OK   00008_translation_chat.sql (720.42µs)
+2026/04/01 18:31:06 OK   00009_review_cards.sql (573.17µs)
+2026/04/01 18:31:06 OK   00010_paragraph_hash.sql (705.42µs)
+2026/04/01 18:31:06 OK   00011_rename_paragraphs_to_sentences.sql (2.78ms)
+2026/04/01 18:31:06 OK   00012_add_title_to_translations.sql (544.96µs)
+2026/04/01 18:31:06 OK   00013_replace_selected_segment_ids_with_text.sql (1.33ms)
+2026/04/01 18:31:06 OK   00014_flatten_vocab_context_and_drop_legacy_tables.sql (1.64ms)
+2026/04/01 18:31:06 OK   00015_drop_texts_and_rewire_translation_fks.sql (5.22ms)
+2026/04/01 18:31:06 goose: successfully migrated database to version: 15
+2026/04/01 18:31:06 compiled segmentation instruction not found, using default instruction
+2026/04/01 18:31:06 cedict load warning: path= err=open cedict: open : no such file or directory
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/H55FclATph-000001] "POST http://example.com/api/auth/login HTTP/1.1" from 192.0.2.1:1234 - 200 12B in 88.917µs
+=== RUN   TestRouteContractWithAuthenticatedSession/health
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/H55FclATph-000002] "GET http://example.com/health HTTP/1.1" from 192.0.2.1:1234 - 200 16B in 83.042µs
+=== RUN   TestRouteContractWithAuthenticatedSession/logout
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/H55FclATph-000003] "POST http://example.com/api/auth/logout HTTP/1.1" from 192.0.2.1:1234 - 200 12B in 30.125µs
+=== RUN   TestRouteContractWithAuthenticatedSession/create_translation
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/H55FclATph-000004] "POST http://example.com/api/translations HTTP/1.1" from 192.0.2.1:1234 - 400 34B in 22.875µs
+=== RUN   TestRouteContractWithAuthenticatedSession/list_translations
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/H55FclATph-000005] "GET http://example.com/api/translations HTTP/1.1" from 192.0.2.1:1234 - 200 30B in 166.417µs
+=== RUN   TestRouteContractWithAuthenticatedSession/get_translation
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/H55FclATph-000006] "GET http://example.com/api/translations/123 HTTP/1.1" from 192.0.2.1:1234 - 404 35B in 35.833µs
+=== RUN   TestRouteContractWithAuthenticatedSession/translation_status
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/H55FclATph-000007] "GET http://example.com/api/translations/123/status HTTP/1.1" from 192.0.2.1:1234 - 404 35B in 53.875µs
+=== RUN   TestRouteContractWithAuthenticatedSession/delete_translation
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/H55FclATph-000008] "DELETE http://example.com/api/translations/123 HTTP/1.1" from 192.0.2.1:1234 - 404 35B in 150.458µs
+=== RUN   TestRouteContractWithAuthenticatedSession/save_vocab
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/H55FclATph-000009] "POST http://example.com/api/vocab/save HTTP/1.1" from 192.0.2.1:1234 - 400 34B in 10.208µs
+=== RUN   TestRouteContractWithAuthenticatedSession/update_vocab_status
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/H55FclATph-000010] "POST http://example.com/api/vocab/status HTTP/1.1" from 192.0.2.1:1234 - 400 34B in 6.875µs
+=== RUN   TestRouteContractWithAuthenticatedSession/lookup_vocab
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/H55FclATph-000011] "POST http://example.com/api/vocab/lookup HTTP/1.1" from 192.0.2.1:1234 - 400 34B in 9.167µs
+=== RUN   TestRouteContractWithAuthenticatedSession/vocab_srs_info
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/H55FclATph-000012] "GET http://example.com/api/vocab/srs-info HTTP/1.1" from 192.0.2.1:1234 - 200 13B in 37.125µs
+=== RUN   TestRouteContractWithAuthenticatedSession/review_queue
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/H55FclATph-000013] "GET http://example.com/api/review/words/queue HTTP/1.1" from 192.0.2.1:1234 - 200 27B in 126.25µs
+=== RUN   TestRouteContractWithAuthenticatedSession/review_answer
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/H55FclATph-000014] "POST http://example.com/api/review/answer HTTP/1.1" from 192.0.2.1:1234 - 400 34B in 7.5µs
+=== RUN   TestRouteContractWithAuthenticatedSession/review_count
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/H55FclATph-000015] "GET http://example.com/api/review/words/count HTTP/1.1" from 192.0.2.1:1234 - 200 16B in 34.166µs
+=== RUN   TestRouteContractWithAuthenticatedSession/translate_batch
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/H55FclATph-000016] "POST http://example.com/api/translations/segments/batch HTTP/1.1" from 192.0.2.1:1234 - 400 34B in 7.208µs
+=== RUN   TestRouteContractWithAuthenticatedSession/export_progress
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/H55FclATph-000017] "GET http://example.com/api/admin/progress/export HTTP/1.1" from 192.0.2.1:1234 - 200 166B in 92µs
+=== RUN   TestRouteContractWithAuthenticatedSession/import_progress
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/H55FclATph-000018] "POST http://example.com/api/admin/progress/import HTTP/1.1" from 192.0.2.1:1234 - 400 39B in 7.75µs
+=== RUN   TestRouteContractWithAuthenticatedSession/get_profile
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/H55FclATph-000019] "GET http://example.com/api/admin/profile HTTP/1.1" from 192.0.2.1:1234 - 200 172B in 65.208µs
+=== RUN   TestRouteContractWithAuthenticatedSession/update_profile
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/H55FclATph-000020] "POST http://example.com/api/admin/profile HTTP/1.1" from 192.0.2.1:1234 - 400 34B in 7.792µs
+=== RUN   TestRouteContractWithAuthenticatedSession/extract_text_no_file
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/H55FclATph-000021] "POST http://example.com/api/ocr/extract-text HTTP/1.1" from 192.0.2.1:1234 - 400 39B in 6.583µs
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/H55FclATph-000022] "GET http://example.com/api/translations/123/stream HTTP/1.1" from 192.0.2.1:1234 - 200 58B in 20.708µs
+--- PASS: TestRouteContractWithAuthenticatedSession (0.03s)
+    --- PASS: TestRouteContractWithAuthenticatedSession/health (0.00s)
+    --- PASS: TestRouteContractWithAuthenticatedSession/logout (0.00s)
+    --- PASS: TestRouteContractWithAuthenticatedSession/create_translation (0.00s)
+    --- PASS: TestRouteContractWithAuthenticatedSession/list_translations (0.00s)
+    --- PASS: TestRouteContractWithAuthenticatedSession/get_translation (0.00s)
+    --- PASS: TestRouteContractWithAuthenticatedSession/translation_status (0.00s)
+    --- PASS: TestRouteContractWithAuthenticatedSession/delete_translation (0.00s)
+    --- PASS: TestRouteContractWithAuthenticatedSession/save_vocab (0.00s)
+    --- PASS: TestRouteContractWithAuthenticatedSession/update_vocab_status (0.00s)
+    --- PASS: TestRouteContractWithAuthenticatedSession/lookup_vocab (0.00s)
+    --- PASS: TestRouteContractWithAuthenticatedSession/vocab_srs_info (0.00s)
+    --- PASS: TestRouteContractWithAuthenticatedSession/review_queue (0.00s)
+    --- PASS: TestRouteContractWithAuthenticatedSession/review_answer (0.00s)
+    --- PASS: TestRouteContractWithAuthenticatedSession/review_count (0.00s)
+    --- PASS: TestRouteContractWithAuthenticatedSession/translate_batch (0.00s)
+    --- PASS: TestRouteContractWithAuthenticatedSession/export_progress (0.00s)
+    --- PASS: TestRouteContractWithAuthenticatedSession/import_progress (0.00s)
+    --- PASS: TestRouteContractWithAuthenticatedSession/get_profile (0.00s)
+    --- PASS: TestRouteContractWithAuthenticatedSession/update_profile (0.00s)
+    --- PASS: TestRouteContractWithAuthenticatedSession/extract_text_no_file (0.00s)
+=== RUN   TestTranslationCRUDFlow
+2026/04/01 18:31:06 OK   00001_init.sql (1.1ms)
+2026/04/01 18:31:06 OK   00002_vocab_lookups.sql (504.04µs)
+2026/04/01 18:31:06 OK   00003_user_profile.sql (406.21µs)
+2026/04/01 18:31:06 OK   00004_job_queue.sql (856.96µs)
+2026/04/01 18:31:06 OK   00005_rename_job_to_translation.sql (2.16ms)
+2026/04/01 18:31:06 OK   00006_go_compat.sql (917.83µs)
+2026/04/01 18:31:06 OK   00007_character_srs.sql (848.33µs)
+2026/04/01 18:31:06 OK   00008_translation_chat.sql (665.67µs)
+2026/04/01 18:31:06 OK   00009_review_cards.sql (560.88µs)
+2026/04/01 18:31:06 OK   00010_paragraph_hash.sql (519.25µs)
+2026/04/01 18:31:06 OK   00011_rename_paragraphs_to_sentences.sql (2.69ms)
+2026/04/01 18:31:06 OK   00012_add_title_to_translations.sql (522.83µs)
+2026/04/01 18:31:06 OK   00013_replace_selected_segment_ids_with_text.sql (1.3ms)
+2026/04/01 18:31:06 OK   00014_flatten_vocab_context_and_drop_legacy_tables.sql (1.67ms)
+2026/04/01 18:31:06 OK   00015_drop_texts_and_rewire_translation_fks.sql (5.16ms)
+2026/04/01 18:31:06 goose: successfully migrated database to version: 15
+2026/04/01 18:31:06 compiled segmentation instruction not found, using default instruction
+2026/04/01 18:31:06 cedict load warning: path= err=open cedict: open : no such file or directory
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/H55FclATph-000023] "POST http://example.com/api/auth/login HTTP/1.1" from 192.0.2.1:1234 - 200 12B in 15.625µs
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/H55FclATph-000024] "POST http://example.com/api/translations HTTP/1.1" from 192.0.2.1:1234 - 200 60B in 361.5µs
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/H55FclATph-000025] "GET http://example.com/api/translations?limit=20&offset=0 HTTP/1.1" from 192.0.2.1:1234 - 200 263B in 50.959µs
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/H55FclATph-000026] "GET http://example.com/api/translations/1775039466129205000 HTTP/1.1" from 192.0.2.1:1234 - 200 216B in 53.5µs
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/H55FclATph-000027] "GET http://example.com/api/translations/1775039466129205000/status HTTP/1.1" from 192.0.2.1:1234 - 200 89B in 36.375µs
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/H55FclATph-000028] "DELETE http://example.com/api/translations/1775039466129205000 HTTP/1.1" from 192.0.2.1:1234 - 200 12B in 226.083µs
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/H55FclATph-000029] "GET http://example.com/api/translations/1775039466129205000 HTTP/1.1" from 192.0.2.1:1234 - 404 35B in 20.5µs
+--- PASS: TestTranslationCRUDFlow (0.02s)
+=== RUN   TestTranslationSSEFlow
+2026/04/01 18:31:06 OK   00001_init.sql (1.15ms)
+2026/04/01 18:31:06 OK   00002_vocab_lookups.sql (488.5µs)
+2026/04/01 18:31:06 OK   00003_user_profile.sql (421.75µs)
+2026/04/01 18:31:06 OK   00004_job_queue.sql (806.38µs)
+2026/04/01 18:31:06 OK   00005_rename_job_to_translation.sql (2.18ms)
+2026/04/01 18:31:06 OK   00006_go_compat.sql (946.33µs)
+2026/04/01 18:31:06 OK   00007_character_srs.sql (1.03ms)
+2026/04/01 18:31:06 OK   00008_translation_chat.sql (694.54µs)
+2026/04/01 18:31:06 OK   00009_review_cards.sql (543.17µs)
+2026/04/01 18:31:06 OK   00010_paragraph_hash.sql (510.21µs)
+2026/04/01 18:31:06 OK   00011_rename_paragraphs_to_sentences.sql (2.81ms)
+2026/04/01 18:31:06 OK   00012_add_title_to_translations.sql (532.38µs)
+2026/04/01 18:31:06 OK   00013_replace_selected_segment_ids_with_text.sql (1.31ms)
+2026/04/01 18:31:06 OK   00014_flatten_vocab_context_and_drop_legacy_tables.sql (1.63ms)
+2026/04/01 18:31:06 OK   00015_drop_texts_and_rewire_translation_fks.sql (5.21ms)
+2026/04/01 18:31:06 goose: successfully migrated database to version: 15
+2026/04/01 18:31:06 compiled segmentation instruction not found, using default instruction
+2026/04/01 18:31:06 cedict load warning: path= err=open cedict: open : no such file or directory
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/H55FclATph-000030] "POST http://example.com/api/auth/login HTTP/1.1" from 192.0.2.1:1234 - 200 12B in 16.833µs
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/H55FclATph-000031] "POST http://example.com/api/translations HTTP/1.1" from 192.0.2.1:1234 - 200 60B in 384.333µs
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/H55FclATph-000032] "GET http://example.com/api/translations/1775039466152801000/stream HTTP/1.1" from 192.0.2.1:1234 - 200 609B in 104.792µs
+--- PASS: TestTranslationSSEFlow (0.05s)
+=== RUN   TestCoreAPIPersistenceFlow
+2026/04/01 18:31:06 OK   00001_init.sql (1.18ms)
+2026/04/01 18:31:06 OK   00002_vocab_lookups.sql (508.75µs)
+2026/04/01 18:31:06 OK   00003_user_profile.sql (434.08µs)
+2026/04/01 18:31:06 OK   00004_job_queue.sql (890.04µs)
+2026/04/01 18:31:06 OK   00005_rename_job_to_translation.sql (2.3ms)
+2026/04/01 18:31:06 OK   00006_go_compat.sql (963.38µs)
+2026/04/01 18:31:06 OK   00007_character_srs.sql (929.5µs)
+2026/04/01 18:31:06 OK   00008_translation_chat.sql (724.08µs)
+2026/04/01 18:31:06 OK   00009_review_cards.sql (571.13µs)
+2026/04/01 18:31:06 OK   00010_paragraph_hash.sql (508.08µs)
+2026/04/01 18:31:06 OK   00011_rename_paragraphs_to_sentences.sql (2.78ms)
+2026/04/01 18:31:06 OK   00012_add_title_to_translations.sql (539µs)
+2026/04/01 18:31:06 OK   00013_replace_selected_segment_ids_with_text.sql (1.39ms)
+2026/04/01 18:31:06 OK   00014_flatten_vocab_context_and_drop_legacy_tables.sql (1.82ms)
+2026/04/01 18:31:06 OK   00015_drop_texts_and_rewire_translation_fks.sql (5.78ms)
+2026/04/01 18:31:06 goose: successfully migrated database to version: 15
+2026/04/01 18:31:06 compiled segmentation instruction not found, using default instruction
+2026/04/01 18:31:06 cedict load warning: path= err=open cedict: open : no such file or directory
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/H55FclATph-000033] "POST http://example.com/api/auth/login HTTP/1.1" from 192.0.2.1:1234 - 200 12B in 15.542µs
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/H55FclATph-000034] "POST http://example.com/api/translations HTTP/1.1" from 192.0.2.1:1234 - 200 60B in 365.709µs
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/H55FclATph-000035] "POST http://example.com/api/vocab/save HTTP/1.1" from 192.0.2.1:1234 - 200 40B in 1.031916ms
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/H55FclATph-000036] "POST http://example.com/api/vocab/lookup HTTP/1.1" from 192.0.2.1:1234 - 200 91B in 269.375µs
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/H55FclATph-000037] "GET http://example.com/api/review/words/queue HTTP/1.1" from 192.0.2.1:1234 - 200 138B in 93.625µs
+2026/04/01 18:31:06 dspy pinyin failed: err=failed to generate prediction: request failed: Post "http://127.0.0.1:9/v1/chat/completions": dial tcp 127.0.0.1:9: connect: connection refused [module=Predict prompt=Given the fields 'segment, sentence_context', produce the fields 'pinyin'.
+
+The pinyin field should start with 'pinyin:' followed by the content on new lines.
+ Pinyin transliteration for the segment
+
+Return the pinyin transliteration for the Chinese segment given the sentence context. Keep output JSON structured.
+
+---
+
+segment: 你
+sentence_context: 
+ model=openai/gpt-4o-mini ] segment="你"
+2026/04/01 18:31:06 dspy meaning failed: err=failed to generate prediction: request failed: Post "http://127.0.0.1:9/v1/chat/completions": dial tcp 127.0.0.1:9: connect: connection refused [module=Predict prompt=Given the fields 'segment, sentence_context', produce the fields 'english'.
+
+The english field should start with 'english:' followed by the content on new lines.
+ Short natural English translation for the segment
+
+Return a concise English translation for the Chinese segment given the sentence context. Keep output JSON structured.
+
+---
+
+segment: 你
+sentence_context: 
+ model=openai/gpt-4o-mini ] segment="你"
+2026/04/01 18:31:06 dspy pinyin failed: err=failed to generate prediction: request failed: Post "http://127.0.0.1:9/v1/chat/completions": dial tcp 127.0.0.1:9: connect: connection refused [module=Predict prompt=Given the fields 'segment, sentence_context', produce the fields 'pinyin'.
+
+The pinyin field should start with 'pinyin:' followed by the content on new lines.
+ Pinyin transliteration for the segment
+
+Return the pinyin transliteration for the Chinese segment given the sentence context. Keep output JSON structured.
+
+---
+
+segment: 好
+sentence_context: 
+ model=openai/gpt-4o-mini ] segment="好"
+2026/04/01 18:31:06 dspy meaning failed: err=failed to generate prediction: request failed: Post "http://127.0.0.1:9/v1/chat/completions": dial tcp 127.0.0.1:9: connect: connection refused [module=Predict prompt=Given the fields 'segment, sentence_context', produce the fields 'english'.
+
+The english field should start with 'english:' followed by the content on new lines.
+ Short natural English translation for the segment
+
+Return a concise English translation for the Chinese segment given the sentence context. Keep output JSON structured.
+
+---
+
+segment: 好
+sentence_context: 
+ model=openai/gpt-4o-mini ] segment="好"
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/H55FclATph-000038] "POST http://example.com/api/translations/segments/batch HTTP/1.1" from 192.0.2.1:1234 - 200 139B in 363.625µs
+--- PASS: TestCoreAPIPersistenceFlow (0.03s)
+=== RUN   TestAdminAndOCRContracts
+2026/04/01 18:31:06 OK   00001_init.sql (1.11ms)
+2026/04/01 18:31:06 OK   00002_vocab_lookups.sql (520.88µs)
+2026/04/01 18:31:06 OK   00003_user_profile.sql (424.13µs)
+2026/04/01 18:31:06 OK   00004_job_queue.sql (840.38µs)
+2026/04/01 18:31:06 OK   00005_rename_job_to_translation.sql (2.06ms)
+2026/04/01 18:31:06 OK   00006_go_compat.sql (877.92µs)
+2026/04/01 18:31:06 OK   00007_character_srs.sql (824.5µs)
+2026/04/01 18:31:06 OK   00008_translation_chat.sql (661.92µs)
+2026/04/01 18:31:06 OK   00009_review_cards.sql (532.38µs)
+2026/04/01 18:31:06 OK   00010_paragraph_hash.sql (496.13µs)
+2026/04/01 18:31:06 OK   00011_rename_paragraphs_to_sentences.sql (2.85ms)
+2026/04/01 18:31:06 OK   00012_add_title_to_translations.sql (548.83µs)
+2026/04/01 18:31:06 OK   00013_replace_selected_segment_ids_with_text.sql (1.26ms)
+2026/04/01 18:31:06 OK   00014_flatten_vocab_context_and_drop_legacy_tables.sql (1.58ms)
+2026/04/01 18:31:06 OK   00015_drop_texts_and_rewire_translation_fks.sql (5.01ms)
+2026/04/01 18:31:06 goose: successfully migrated database to version: 15
+2026/04/01 18:31:06 compiled segmentation instruction not found, using default instruction
+2026/04/01 18:31:06 cedict load warning: path= err=open cedict: open : no such file or directory
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/H55FclATph-000039] "POST http://example.com/api/auth/login HTTP/1.1" from 192.0.2.1:1234 - 200 12B in 15.416µs
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/H55FclATph-000040] "GET http://example.com/api/admin/profile HTTP/1.1" from 192.0.2.1:1234 - 200 172B in 66.459µs
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/H55FclATph-000041] "POST http://example.com/api/admin/profile HTTP/1.1" from 192.0.2.1:1234 - 200 152B in 151.709µs
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/H55FclATph-000042] "GET http://example.com/api/admin/progress/export HTTP/1.1" from 192.0.2.1:1234 - 200 165B in 70.5µs
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/H55FclATph-000043] "POST http://example.com/api/ocr/extract-text HTTP/1.1" from 192.0.2.1:1234 - 200 12B in 20.708µs
+--- PASS: TestAdminAndOCRContracts (0.02s)
+=== RUN   TestTranslationSSENotFound
+2026/04/01 18:31:06 OK   00001_init.sql (1.05ms)
+2026/04/01 18:31:06 OK   00002_vocab_lookups.sql (447.88µs)
+2026/04/01 18:31:06 OK   00003_user_profile.sql (427.13µs)
+2026/04/01 18:31:06 OK   00004_job_queue.sql (862.29µs)
+2026/04/01 18:31:06 OK   00005_rename_job_to_translation.sql (2.17ms)
+2026/04/01 18:31:06 OK   00006_go_compat.sql (1.05ms)
+2026/04/01 18:31:06 OK   00007_character_srs.sql (891.79µs)
+2026/04/01 18:31:06 OK   00008_translation_chat.sql (658.63µs)
+2026/04/01 18:31:06 OK   00009_review_cards.sql (521.79µs)
+2026/04/01 18:31:06 OK   00010_paragraph_hash.sql (575.42µs)
+2026/04/01 18:31:06 OK   00011_rename_paragraphs_to_sentences.sql (2.79ms)
+2026/04/01 18:31:06 OK   00012_add_title_to_translations.sql (546.42µs)
+2026/04/01 18:31:06 OK   00013_replace_selected_segment_ids_with_text.sql (1.29ms)
+2026/04/01 18:31:06 OK   00014_flatten_vocab_context_and_drop_legacy_tables.sql (1.64ms)
+2026/04/01 18:31:06 OK   00015_drop_texts_and_rewire_translation_fks.sql (5ms)
+2026/04/01 18:31:06 goose: successfully migrated database to version: 15
+2026/04/01 18:31:06 compiled segmentation instruction not found, using default instruction
+2026/04/01 18:31:06 cedict load warning: path= err=open cedict: open : no such file or directory
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/H55FclATph-000044] "POST http://example.com/api/auth/login HTTP/1.1" from 192.0.2.1:1234 - 200 12B in 17.709µs
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/H55FclATph-000045] "GET http://example.com/api/translations/not-found/stream HTTP/1.1" from 192.0.2.1:1234 - 200 58B in 32.292µs
+--- PASS: TestTranslationSSENotFound (0.02s)
+=== RUN   TestAuthBehaviorParity
+2026/04/01 18:31:06 OK   00001_init.sql (1.12ms)
+2026/04/01 18:31:06 OK   00002_vocab_lookups.sql (516.38µs)
+2026/04/01 18:31:06 OK   00003_user_profile.sql (413.79µs)
+2026/04/01 18:31:06 OK   00004_job_queue.sql (906.71µs)
+2026/04/01 18:31:06 OK   00005_rename_job_to_translation.sql (2.34ms)
+2026/04/01 18:31:06 OK   00006_go_compat.sql (964.29µs)
+2026/04/01 18:31:06 OK   00007_character_srs.sql (898.29µs)
+2026/04/01 18:31:06 OK   00008_translation_chat.sql (644.63µs)
+2026/04/01 18:31:06 OK   00009_review_cards.sql (513.25µs)
+2026/04/01 18:31:06 OK   00010_paragraph_hash.sql (543.88µs)
+2026/04/01 18:31:06 OK   00011_rename_paragraphs_to_sentences.sql (2.78ms)
+2026/04/01 18:31:06 OK   00012_add_title_to_translations.sql (507.88µs)
+2026/04/01 18:31:06 OK   00013_replace_selected_segment_ids_with_text.sql (1.35ms)
+2026/04/01 18:31:06 OK   00014_flatten_vocab_context_and_drop_legacy_tables.sql (1.54ms)
+2026/04/01 18:31:06 OK   00015_drop_texts_and_rewire_translation_fks.sql (5.14ms)
+2026/04/01 18:31:06 goose: successfully migrated database to version: 15
+2026/04/01 18:31:06 compiled segmentation instruction not found, using default instruction
+2026/04/01 18:31:06 cedict load warning: path= err=open cedict: open : no such file or directory
+=== RUN   TestAuthBehaviorParity/api_unauthenticated
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/H55FclATph-000046] "GET http://example.com/api/translations/1 HTTP/1.1" from 192.0.2.1:1234 - 401 30B in 4.25µs
+--- PASS: TestAuthBehaviorParity (0.02s)
+    --- PASS: TestAuthBehaviorParity/api_unauthenticated (0.00s)
+PASS
+ok  	github.com/anath2/language-app/internal/http	1.754s
+?   	github.com/anath2/language-app/internal/http/handlers	[no test files]
+?   	github.com/anath2/language-app/internal/http/middleware	[no test files]
+=== RUN   TestRegisterHealthRoutes
+--- PASS: TestRegisterHealthRoutes (0.00s)
+=== RUN   TestRegisterOCRRoutes
+--- PASS: TestRegisterOCRRoutes (0.00s)
+PASS
+ok  	github.com/anath2/language-app/internal/http/routes	0.744s
+?   	github.com/anath2/language-app/internal/intelligence	[no test files]
+?   	github.com/anath2/language-app/internal/intelligence/chat	[no test files]
+=== RUN   TestShouldSkipSegment
+=== PAUSE TestShouldSkipSegment
+=== RUN   TestNumberedPinyinToToneMarks
+=== PAUSE TestNumberedPinyinToToneMarks
+=== RUN   TestLoadCedictDictionary
+=== PAUSE TestLoadCedictDictionary
+=== RUN   TestMultiEntryLoading
+=== PAUSE TestMultiEntryLoading
+=== RUN   TestIsCharAmbiguous
+=== PAUSE TestIsCharAmbiguous
+=== RUN   TestComposeSegmentPinyin
+=== PAUSE TestComposeSegmentPinyin
+=== RUN   TestPreferredEntryAvoidsSurnameSense
+=== PAUSE TestPreferredEntryAvoidsSurnameSense
+=== RUN   TestPreferredEntryResolvesRedirectDefinition
+=== PAUSE TestPreferredEntryResolvesRedirectDefinition
+=== RUN   TestPreferredEntryRedirectLoopFallsBackSafely
+=== PAUSE TestPreferredEntryRedirectLoopFallsBackSafely
+=== RUN   TestResolveDictionarySenseSingleCandidateSkipsSelector
+=== PAUSE TestResolveDictionarySenseSingleCandidateSkipsSelector
+=== RUN   TestResolveDictionarySenseAmbiguousUsesSelectorResult
+=== PAUSE TestResolveDictionarySenseAmbiguousUsesSelectorResult
+=== RUN   TestResolveDictionarySenseInvalidSelectorOutputFallsBack
+=== PAUSE TestResolveDictionarySenseInvalidSelectorOutputFallsBack
+=== RUN   TestResolveDictionarySenseSelectorErrorFallsBack
+=== PAUSE TestResolveDictionarySenseSelectorErrorFallsBack
+=== RUN   TestParseSegments
+=== PAUSE TestParseSegments
+=== RUN   TestParseSegmentsFromResponse_NewlineFormat
+--- PASS: TestParseSegmentsFromResponse_NewlineFormat (0.00s)
+=== RUN   TestIsMetadataSegment
+=== PAUSE TestIsMetadataSegment
+=== CONT  TestShouldSkipSegment
+=== RUN   TestShouldSkipSegment/#00
+=== PAUSE TestShouldSkipSegment/#00
+=== RUN   TestShouldSkipSegment/___
+=== PAUSE TestShouldSkipSegment/___
+=== RUN   TestShouldSkipSegment/!!!
+=== CONT  TestPreferredEntryRedirectLoopFallsBackSafely
+=== PAUSE TestShouldSkipSegment/!!!
+=== CONT  TestPreferredEntryResolvesRedirectDefinition
+=== CONT  TestPreferredEntryAvoidsSurnameSense
+=== CONT  TestComposeSegmentPinyin
+=== CONT  TestIsCharAmbiguous
+--- PASS: TestPreferredEntryRedirectLoopFallsBackSafely (0.00s)
+=== CONT  TestNumberedPinyinToToneMarks
+=== RUN   TestNumberedPinyinToToneMarks/ni3_hao3
+=== RUN   TestComposeSegmentPinyin/word-level_unambiguous
+=== PAUSE TestComposeSegmentPinyin/word-level_unambiguous
+=== RUN   TestComposeSegmentPinyin/ambiguous_char_in_segment
+=== PAUSE TestComposeSegmentPinyin/ambiguous_char_in_segment
+=== RUN   TestComposeSegmentPinyin/particle_char_—_uses_tone-5_preferred
+=== PAUSE TestComposeSegmentPinyin/particle_char_—_uses_tone-5_preferred
+=== RUN   TestComposeSegmentPinyin/missing_char_falls_back_to_false
+=== PAUSE TestComposeSegmentPinyin/missing_char_falls_back_to_false
+=== RUN   TestComposeSegmentPinyin/nil_dict
+=== PAUSE TestComposeSegmentPinyin/nil_dict
+=== CONT  TestResolveDictionarySenseSelectorErrorFallsBack
+--- PASS: TestPreferredEntryResolvesRedirectDefinition (0.00s)
+=== CONT  TestIsMetadataSegment
+--- PASS: TestIsMetadataSegment (0.00s)
+=== CONT  TestParseSegments
+=== RUN   TestParseSegments/array_of_strings
+=== PAUSE TestParseSegments/array_of_strings
+=== RUN   TestParseSegments/filters_metadata_segment
+=== PAUSE TestParseSegments/filters_metadata_segment
+=== RUN   TestParseSegments/filters_segments:_with_space
+=== CONT  TestMultiEntryLoading
+=== PAUSE TestNumberedPinyinToToneMarks/ni3_hao3
+=== RUN   TestNumberedPinyinToToneMarks/lu:4
+=== PAUSE TestNumberedPinyinToToneMarks/lu:4
+=== RUN   TestNumberedPinyinToToneMarks/nv3
+=== PAUSE TestNumberedPinyinToToneMarks/nv3
+=== RUN   TestNumberedPinyinToToneMarks/shi4_jie4
+=== CONT  TestLoadCedictDictionary
+=== RUN   TestShouldSkipSegment/abc
+2026/04/01 18:31:04 sense selection fallback to deterministic: segment="行" err=upstream failed
+=== CONT  TestResolveDictionarySenseAmbiguousUsesSelectorResult
+=== PAUSE TestParseSegments/filters_segments:_with_space
+=== PAUSE TestNumberedPinyinToToneMarks/shi4_jie4
+--- PASS: TestPreferredEntryAvoidsSurnameSense (0.00s)
+--- PASS: TestResolveDictionarySenseSelectorErrorFallsBack (0.00s)
+=== CONT  TestResolveDictionarySenseInvalidSelectorOutputFallsBack
+=== CONT  TestResolveDictionarySenseSingleCandidateSkipsSelector
+=== PAUSE TestShouldSkipSegment/abc
+=== RUN   TestShouldSkipSegment/，。！？
+=== PAUSE TestShouldSkipSegment/，。！？
+=== RUN   TestParseSegments/string_with_segments_prefix
+=== RUN   TestShouldSkipSegment/你好
+2026/04/01 18:31:04 sense selection returned invalid index: segment="行" idx=42 candidates=2
+=== PAUSE TestParseSegments/string_with_segments_prefix
+=== RUN   TestParseSegments/json_object_with_segments_key
+=== PAUSE TestParseSegments/json_object_with_segments_key
+=== RUN   TestParseSegments/freeform_text_with_array
+=== PAUSE TestParseSegments/freeform_text_with_array
+=== CONT  TestComposeSegmentPinyin/word-level_unambiguous
+=== CONT  TestComposeSegmentPinyin/missing_char_falls_back_to_false
+=== CONT  TestComposeSegmentPinyin/nil_dict
+=== CONT  TestComposeSegmentPinyin/ambiguous_char_in_segment
+=== CONT  TestComposeSegmentPinyin/particle_char_—_uses_tone-5_preferred
+=== CONT  TestNumberedPinyinToToneMarks/ni3_hao3
+=== CONT  TestNumberedPinyinToToneMarks/nv3
+=== CONT  TestNumberedPinyinToToneMarks/shi4_jie4
+--- PASS: TestResolveDictionarySenseInvalidSelectorOutputFallsBack (0.00s)
+=== CONT  TestNumberedPinyinToToneMarks/lu:4
+=== CONT  TestParseSegments/array_of_strings
+=== RUN   TestIsCharAmbiguous/行
+--- PASS: TestNumberedPinyinToToneMarks (0.00s)
+    --- PASS: TestNumberedPinyinToToneMarks/ni3_hao3 (0.00s)
+    --- PASS: TestNumberedPinyinToToneMarks/nv3 (0.00s)
+    --- PASS: TestNumberedPinyinToToneMarks/shi4_jie4 (0.00s)
+    --- PASS: TestNumberedPinyinToToneMarks/lu:4 (0.00s)
+=== PAUSE TestShouldSkipSegment/你好
+=== CONT  TestParseSegments/json_object_with_segments_key
+=== RUN   TestShouldSkipSegment/你！
+=== PAUSE TestShouldSkipSegment/你！
+=== CONT  TestParseSegments/string_with_segments_prefix
+=== CONT  TestParseSegments/filters_segments:_with_space
+=== CONT  TestShouldSkipSegment/#00
+=== PAUSE TestIsCharAmbiguous/行
+=== CONT  TestParseSegments/filters_metadata_segment
+=== CONT  TestParseSegments/freeform_text_with_array
+--- PASS: TestComposeSegmentPinyin (0.00s)
+    --- PASS: TestComposeSegmentPinyin/word-level_unambiguous (0.00s)
+    --- PASS: TestComposeSegmentPinyin/missing_char_falls_back_to_false (0.00s)
+    --- PASS: TestComposeSegmentPinyin/nil_dict (0.00s)
+    --- PASS: TestComposeSegmentPinyin/ambiguous_char_in_segment (0.00s)
+    --- PASS: TestComposeSegmentPinyin/particle_char_—_uses_tone-5_preferred (0.00s)
+=== CONT  TestShouldSkipSegment/，。！？
+=== CONT  TestShouldSkipSegment/你！
+--- PASS: TestParseSegments (0.00s)
+    --- PASS: TestParseSegments/array_of_strings (0.00s)
+    --- PASS: TestParseSegments/json_object_with_segments_key (0.00s)
+    --- PASS: TestParseSegments/filters_segments:_with_space (0.00s)
+    --- PASS: TestParseSegments/string_with_segments_prefix (0.00s)
+    --- PASS: TestParseSegments/filters_metadata_segment (0.00s)
+    --- PASS: TestParseSegments/freeform_text_with_array (0.00s)
+=== CONT  TestShouldSkipSegment/你好
+=== CONT  TestShouldSkipSegment/___
+--- PASS: TestLoadCedictDictionary (0.00s)
+=== CONT  TestShouldSkipSegment/!!!
+=== CONT  TestShouldSkipSegment/abc
+--- PASS: TestShouldSkipSegment (0.00s)
+    --- PASS: TestShouldSkipSegment/#00 (0.00s)
+    --- PASS: TestShouldSkipSegment/，。！？ (0.00s)
+    --- PASS: TestShouldSkipSegment/你！ (0.00s)
+    --- PASS: TestShouldSkipSegment/你好 (0.00s)
+    --- PASS: TestShouldSkipSegment/___ (0.00s)
+    --- PASS: TestShouldSkipSegment/!!! (0.00s)
+    --- PASS: TestShouldSkipSegment/abc (0.00s)
+=== RUN   TestIsCharAmbiguous/好
+=== PAUSE TestIsCharAmbiguous/好
+=== RUN   TestIsCharAmbiguous/吗
+=== PAUSE TestIsCharAmbiguous/吗
+=== RUN   TestIsCharAmbiguous/的
+=== PAUSE TestIsCharAmbiguous/的
+=== RUN   TestIsCharAmbiguous/X
+=== PAUSE TestIsCharAmbiguous/X
+=== CONT  TestIsCharAmbiguous/行
+=== CONT  TestIsCharAmbiguous/X
+=== CONT  TestIsCharAmbiguous/好
+=== CONT  TestIsCharAmbiguous/吗
+=== CONT  TestIsCharAmbiguous/的
+--- PASS: TestMultiEntryLoading (0.00s)
+--- PASS: TestResolveDictionarySenseSingleCandidateSkipsSelector (0.00s)
+--- PASS: TestResolveDictionarySenseAmbiguousUsesSelectorResult (0.00s)
+--- PASS: TestIsCharAmbiguous (0.00s)
+    --- PASS: TestIsCharAmbiguous/行 (0.00s)
+    --- PASS: TestIsCharAmbiguous/X (0.00s)
+    --- PASS: TestIsCharAmbiguous/好 (0.00s)
+    --- PASS: TestIsCharAmbiguous/的 (0.00s)
+    --- PASS: TestIsCharAmbiguous/吗 (0.00s)
+PASS
+ok  	github.com/anath2/language-app/internal/intelligence/translation	0.437s
+?   	github.com/anath2/language-app/internal/migrations	[no test files]
+=== RUN   TestQueueProgressLifecycle
+2026/04/01 18:27:37 OK   00001_init.sql (2.98ms)
+2026/04/01 18:27:37 OK   00002_vocab_lookups.sql (1.19ms)
+2026/04/01 18:27:37 OK   00003_user_profile.sql (937.79µs)
+2026/04/01 18:27:37 OK   00004_job_queue.sql (3.87ms)
+2026/04/01 18:27:37 OK   00005_rename_job_to_translation.sql (5.09ms)
+2026/04/01 18:27:37 OK   00006_go_compat.sql (2.2ms)
+2026/04/01 18:27:37 OK   00007_character_srs.sql (1.98ms)
+2026/04/01 18:27:37 OK   00008_translation_chat.sql (1.83ms)
+2026/04/01 18:27:37 OK   00009_review_cards.sql (1.04ms)
+2026/04/01 18:27:37 OK   00010_paragraph_hash.sql (981.5µs)
+2026/04/01 18:27:37 OK   00011_rename_paragraphs_to_sentences.sql (4.52ms)
+2026/04/01 18:27:37 OK   00012_add_title_to_translations.sql (894.38µs)
+2026/04/01 18:27:37 OK   00013_replace_selected_segment_ids_with_text.sql (2.42ms)
+2026/04/01 18:27:37 OK   00014_flatten_vocab_context_and_drop_legacy_tables.sql (2.4ms)
+2026/04/01 18:27:37 OK   00015_drop_texts_and_rewire_translation_fks.sql (6.98ms)
+2026/04/01 18:27:37 goose: successfully migrated database to version: 15
+--- PASS: TestQueueProgressLifecycle (0.13s)
+=== RUN   TestQueueProgressSurvivesManagerRestart
+2026/04/01 18:27:37 OK   00001_init.sql (4.86ms)
+2026/04/01 18:27:37 OK   00002_vocab_lookups.sql (1.48ms)
+2026/04/01 18:27:37 OK   00003_user_profile.sql (792.42µs)
+2026/04/01 18:27:37 OK   00004_job_queue.sql (1.65ms)
+2026/04/01 18:27:37 OK   00005_rename_job_to_translation.sql (3.6ms)
+2026/04/01 18:27:37 OK   00006_go_compat.sql (1.82ms)
+2026/04/01 18:27:37 OK   00007_character_srs.sql (1.32ms)
+2026/04/01 18:27:37 OK   00008_translation_chat.sql (1.12ms)
+2026/04/01 18:27:37 OK   00009_review_cards.sql (916.79µs)
+2026/04/01 18:27:37 OK   00010_paragraph_hash.sql (809.75µs)
+2026/04/01 18:27:37 OK   00011_rename_paragraphs_to_sentences.sql (3.88ms)
+2026/04/01 18:27:37 OK   00012_add_title_to_translations.sql (741.83µs)
+2026/04/01 18:27:37 OK   00013_replace_selected_segment_ids_with_text.sql (1.76ms)
+2026/04/01 18:27:37 OK   00014_flatten_vocab_context_and_drop_legacy_tables.sql (2.31ms)
+2026/04/01 18:27:37 OK   00015_drop_texts_and_rewire_translation_fks.sql (6.83ms)
+2026/04/01 18:27:37 goose: successfully migrated database to version: 15
+--- PASS: TestQueueProgressSurvivesManagerRestart (0.08s)
+=== RUN   TestResumeRestartableJobsCompletesPendingTranslation
+2026/04/01 18:27:37 OK   00001_init.sql (1.69ms)
+2026/04/01 18:27:37 OK   00002_vocab_lookups.sql (798.79µs)
+2026/04/01 18:27:37 OK   00003_user_profile.sql (510.54µs)
+2026/04/01 18:27:37 OK   00004_job_queue.sql (1.38ms)
+2026/04/01 18:27:37 OK   00005_rename_job_to_translation.sql (3.62ms)
+2026/04/01 18:27:37 OK   00006_go_compat.sql (1.46ms)
+2026/04/01 18:27:37 OK   00007_character_srs.sql (2.2ms)
+2026/04/01 18:27:37 OK   00008_translation_chat.sql (1.98ms)
+2026/04/01 18:27:37 OK   00009_review_cards.sql (1.14ms)
+2026/04/01 18:27:37 OK   00010_paragraph_hash.sql (616.79µs)
+2026/04/01 18:27:37 OK   00011_rename_paragraphs_to_sentences.sql (3.29ms)
+2026/04/01 18:27:37 OK   00012_add_title_to_translations.sql (597.29µs)
+2026/04/01 18:27:37 OK   00013_replace_selected_segment_ids_with_text.sql (1.5ms)
+2026/04/01 18:27:37 OK   00014_flatten_vocab_context_and_drop_legacy_tables.sql (2.03ms)
+2026/04/01 18:27:37 OK   00015_drop_texts_and_rewire_translation_fks.sql (5.84ms)
+2026/04/01 18:27:37 goose: successfully migrated database to version: 15
+--- PASS: TestResumeRestartableJobsCompletesPendingTranslation (0.12s)
+=== RUN   TestTranslateFullFailureFails
+2026/04/01 18:27:38 OK   00001_init.sql (1.77ms)
+2026/04/01 18:27:38 OK   00002_vocab_lookups.sql (740.96µs)
+2026/04/01 18:27:38 OK   00003_user_profile.sql (653.04µs)
+2026/04/01 18:27:38 OK   00004_job_queue.sql (1.22ms)
+2026/04/01 18:27:38 OK   00005_rename_job_to_translation.sql (3.74ms)
+2026/04/01 18:27:38 OK   00006_go_compat.sql (1.36ms)
+2026/04/01 18:27:38 OK   00007_character_srs.sql (1.41ms)
+2026/04/01 18:27:38 OK   00008_translation_chat.sql (1.91ms)
+2026/04/01 18:27:38 OK   00009_review_cards.sql (1.06ms)
+2026/04/01 18:27:38 OK   00010_paragraph_hash.sql (653.63µs)
+2026/04/01 18:27:38 OK   00011_rename_paragraphs_to_sentences.sql (3.53ms)
+2026/04/01 18:27:38 OK   00012_add_title_to_translations.sql (659.88µs)
+2026/04/01 18:27:38 OK   00013_replace_selected_segment_ids_with_text.sql (1.55ms)
+2026/04/01 18:27:38 OK   00014_flatten_vocab_context_and_drop_legacy_tables.sql (2.09ms)
+2026/04/01 18:27:38 OK   00015_drop_texts_and_rewire_translation_fks.sql (5.81ms)
+2026/04/01 18:27:38 goose: successfully migrated database to version: 15
+--- PASS: TestTranslateFullFailureFails (0.05s)
+=== RUN   TestReprocessingPreservesFullTranslation
+2026/04/01 18:27:38 OK   00001_init.sql (1.49ms)
+2026/04/01 18:27:38 OK   00002_vocab_lookups.sql (594.75µs)
+2026/04/01 18:27:38 OK   00003_user_profile.sql (536.13µs)
+2026/04/01 18:27:38 OK   00004_job_queue.sql (983.04µs)
+2026/04/01 18:27:38 OK   00005_rename_job_to_translation.sql (2.46ms)
+2026/04/01 18:27:38 OK   00006_go_compat.sql (1.01ms)
+2026/04/01 18:27:38 OK   00007_character_srs.sql (948.17µs)
+2026/04/01 18:27:38 OK   00008_translation_chat.sql (756.21µs)
+2026/04/01 18:27:38 OK   00009_review_cards.sql (563.17µs)
+2026/04/01 18:27:38 OK   00010_paragraph_hash.sql (597.75µs)
+2026/04/01 18:27:38 OK   00011_rename_paragraphs_to_sentences.sql (3.06ms)
+2026/04/01 18:27:38 OK   00012_add_title_to_translations.sql (598.58µs)
+2026/04/01 18:27:38 OK   00013_replace_selected_segment_ids_with_text.sql (1.43ms)
+2026/04/01 18:27:38 OK   00014_flatten_vocab_context_and_drop_legacy_tables.sql (1.86ms)
+2026/04/01 18:27:38 OK   00015_drop_texts_and_rewire_translation_fks.sql (5.73ms)
+2026/04/01 18:27:38 goose: successfully migrated database to version: 15
+--- PASS: TestReprocessingPreservesFullTranslation (0.21s)
+=== RUN   TestReprocessingGeneratesFullTranslationWhenAbsent
+2026/04/01 18:27:38 OK   00001_init.sql (3.3ms)
+2026/04/01 18:27:38 OK   00002_vocab_lookups.sql (1.12ms)
+2026/04/01 18:27:38 OK   00003_user_profile.sql (1.05ms)
+2026/04/01 18:27:38 OK   00004_job_queue.sql (2.07ms)
+2026/04/01 18:27:38 OK   00005_rename_job_to_translation.sql (5.06ms)
+2026/04/01 18:27:38 OK   00006_go_compat.sql (2.12ms)
+2026/04/01 18:27:38 OK   00007_character_srs.sql (1.98ms)
+2026/04/01 18:27:38 OK   00008_translation_chat.sql (1.39ms)
+2026/04/01 18:27:38 OK   00009_review_cards.sql (1.19ms)
+2026/04/01 18:27:38 OK   00010_paragraph_hash.sql (1.09ms)
+2026/04/01 18:27:38 OK   00011_rename_paragraphs_to_sentences.sql (5.82ms)
+2026/04/01 18:27:38 OK   00012_add_title_to_translations.sql (846.29µs)
+2026/04/01 18:27:38 OK   00013_replace_selected_segment_ids_with_text.sql (2.2ms)
+2026/04/01 18:27:38 OK   00014_flatten_vocab_context_and_drop_legacy_tables.sql (2.79ms)
+2026/04/01 18:27:38 OK   00015_drop_texts_and_rewire_translation_fks.sql (8.37ms)
+2026/04/01 18:27:38 goose: successfully migrated database to version: 15
+--- PASS: TestReprocessingGeneratesFullTranslationWhenAbsent (0.13s)
+=== RUN   TestScannerRecoversStaleLeasedJob
+2026/04/01 18:27:38 OK   00001_init.sql (1.95ms)
+2026/04/01 18:27:38 OK   00002_vocab_lookups.sql (852.63µs)
+2026/04/01 18:27:38 OK   00003_user_profile.sql (765.67µs)
+2026/04/01 18:27:38 OK   00004_job_queue.sql (1.37ms)
+2026/04/01 18:27:38 OK   00005_rename_job_to_translation.sql (3.33ms)
+2026/04/01 18:27:38 OK   00006_go_compat.sql (1.46ms)
+2026/04/01 18:27:38 OK   00007_character_srs.sql (1.42ms)
+2026/04/01 18:27:38 OK   00008_translation_chat.sql (1.13ms)
+2026/04/01 18:27:38 OK   00009_review_cards.sql (820.13µs)
+2026/04/01 18:27:38 OK   00010_paragraph_hash.sql (841.04µs)
+2026/04/01 18:27:38 OK   00011_rename_paragraphs_to_sentences.sql (3.85ms)
+2026/04/01 18:27:38 OK   00012_add_title_to_translations.sql (714.79µs)
+2026/04/01 18:27:38 OK   00013_replace_selected_segment_ids_with_text.sql (1.77ms)
+2026/04/01 18:27:38 OK   00014_flatten_vocab_context_and_drop_legacy_tables.sql (2.88ms)
+2026/04/01 18:27:38 OK   00015_drop_texts_and_rewire_translation_fks.sql (7.54ms)
+2026/04/01 18:27:38 goose: successfully migrated database to version: 15
+--- PASS: TestScannerRecoversStaleLeasedJob (0.12s)
+=== RUN   TestScannerDoesNotDoubleProcessActiveJob
+2026/04/01 18:27:38 OK   00001_init.sql (2.23ms)
+2026/04/01 18:27:38 OK   00002_vocab_lookups.sql (874.92µs)
+2026/04/01 18:27:38 OK   00003_user_profile.sql (1.35ms)
+2026/04/01 18:27:38 OK   00004_job_queue.sql (1.78ms)
+2026/04/01 18:27:38 OK   00005_rename_job_to_translation.sql (3.36ms)
+2026/04/01 18:27:38 OK   00006_go_compat.sql (1.36ms)
+2026/04/01 18:27:38 OK   00007_character_srs.sql (1.51ms)
+2026/04/01 18:27:38 OK   00008_translation_chat.sql (1.28ms)
+2026/04/01 18:27:38 OK   00009_review_cards.sql (913.54µs)
+2026/04/01 18:27:38 OK   00010_paragraph_hash.sql (812.17µs)
+2026/04/01 18:27:38 OK   00011_rename_paragraphs_to_sentences.sql (3.65ms)
+2026/04/01 18:27:38 OK   00012_add_title_to_translations.sql (686.71µs)
+2026/04/01 18:27:38 OK   00013_replace_selected_segment_ids_with_text.sql (1.69ms)
+2026/04/01 18:27:38 OK   00014_flatten_vocab_context_and_drop_legacy_tables.sql (2.47ms)
+2026/04/01 18:27:38 OK   00015_drop_texts_and_rewire_translation_fks.sql (6.72ms)
+2026/04/01 18:27:38 goose: successfully migrated database to version: 15
+--- PASS: TestScannerDoesNotDoubleProcessActiveJob (0.12s)
+PASS
+ok  	github.com/anath2/language-app/internal/queue	(cached)
+=== RUN   TestNewDBRequiresMigratedSchema
+--- PASS: TestNewDBRequiresMigratedSchema (0.00s)
+=== RUN   TestRunUpIsIdempotentAndCreatesUsableSchema
+2026/04/01 18:31:05 OK   00001_init.sql (2.24ms)
+2026/04/01 18:31:05 OK   00002_vocab_lookups.sql (814.29µs)
+2026/04/01 18:31:05 OK   00003_user_profile.sql (603.38µs)
+2026/04/01 18:31:05 OK   00004_job_queue.sql (1.08ms)
+2026/04/01 18:31:05 OK   00005_rename_job_to_translation.sql (2.63ms)
+2026/04/01 18:31:05 OK   00006_go_compat.sql (1.21ms)
+2026/04/01 18:31:05 OK   00007_character_srs.sql (1.38ms)
+2026/04/01 18:31:05 OK   00008_translation_chat.sql (878.25µs)
+2026/04/01 18:31:05 OK   00009_review_cards.sql (696.38µs)
+2026/04/01 18:31:05 OK   00010_paragraph_hash.sql (664.46µs)
+2026/04/01 18:31:05 OK   00011_rename_paragraphs_to_sentences.sql (3.21ms)
+2026/04/01 18:31:05 OK   00012_add_title_to_translations.sql (626.33µs)
+2026/04/01 18:31:05 OK   00013_replace_selected_segment_ids_with_text.sql (1.41ms)
+2026/04/01 18:31:05 OK   00014_flatten_vocab_context_and_drop_legacy_tables.sql (1.82ms)
+2026/04/01 18:31:05 OK   00015_drop_texts_and_rewire_translation_fks.sql (5.36ms)
+2026/04/01 18:31:05 goose: successfully migrated database to version: 15
+2026/04/01 18:31:05 goose: no migrations to run. current version: 15
+--- PASS: TestRunUpIsIdempotentAndCreatesUsableSchema (0.03s)
+=== RUN   TestChatThreadAndMessagesLifecycle
+2026/04/01 18:31:05 OK   00001_init.sql (1.08ms)
+2026/04/01 18:31:05 OK   00002_vocab_lookups.sql (510.17µs)
+2026/04/01 18:31:05 OK   00003_user_profile.sql (530.04µs)
+2026/04/01 18:31:05 OK   00004_job_queue.sql (983.71µs)
+2026/04/01 18:31:05 OK   00005_rename_job_to_translation.sql (2.16ms)
+2026/04/01 18:31:05 OK   00006_go_compat.sql (898µs)
+2026/04/01 18:31:05 OK   00007_character_srs.sql (937.13µs)
+2026/04/01 18:31:05 OK   00008_translation_chat.sql (674.75µs)
+2026/04/01 18:31:05 OK   00009_review_cards.sql (503.17µs)
+2026/04/01 18:31:05 OK   00010_paragraph_hash.sql (477.46µs)
+2026/04/01 18:31:05 OK   00011_rename_paragraphs_to_sentences.sql (2.73ms)
+2026/04/01 18:31:05 OK   00012_add_title_to_translations.sql (529.58µs)
+2026/04/01 18:31:05 OK   00013_replace_selected_segment_ids_with_text.sql (1.28ms)
+2026/04/01 18:31:05 OK   00014_flatten_vocab_context_and_drop_legacy_tables.sql (1.75ms)
+2026/04/01 18:31:05 OK   00015_drop_texts_and_rewire_translation_fks.sql (5.28ms)
+2026/04/01 18:31:05 goose: successfully migrated database to version: 15
+--- PASS: TestChatThreadAndMessagesLifecycle (0.02s)
+=== RUN   TestClearChatMessages
+2026/04/01 18:31:05 OK   00001_init.sql (1.03ms)
+2026/04/01 18:31:05 OK   00002_vocab_lookups.sql (483.71µs)
+2026/04/01 18:31:05 OK   00003_user_profile.sql (418.63µs)
+2026/04/01 18:31:05 OK   00004_job_queue.sql (832.13µs)
+2026/04/01 18:31:05 OK   00005_rename_job_to_translation.sql (2.03ms)
+2026/04/01 18:31:05 OK   00006_go_compat.sql (920.88µs)
+2026/04/01 18:31:05 OK   00007_character_srs.sql (876.83µs)
+2026/04/01 18:31:05 OK   00008_translation_chat.sql (656.33µs)
+2026/04/01 18:31:05 OK   00009_review_cards.sql (520.79µs)
+2026/04/01 18:31:05 OK   00010_paragraph_hash.sql (511.88µs)
+2026/04/01 18:31:05 OK   00011_rename_paragraphs_to_sentences.sql (2.71ms)
+2026/04/01 18:31:05 OK   00012_add_title_to_translations.sql (577.88µs)
+2026/04/01 18:31:05 OK   00013_replace_selected_segment_ids_with_text.sql (1.37ms)
+2026/04/01 18:31:05 OK   00014_flatten_vocab_context_and_drop_legacy_tables.sql (1.64ms)
+2026/04/01 18:31:05 OK   00015_drop_texts_and_rewire_translation_fks.sql (5.17ms)
+2026/04/01 18:31:05 goose: successfully migrated database to version: 15
+--- PASS: TestClearChatMessages (0.02s)
+=== RUN   TestRenewLeaseUpdatesLeaseUntil
+2026/04/01 18:31:05 OK   00001_init.sql (1.04ms)
+2026/04/01 18:31:05 OK   00002_vocab_lookups.sql (431.71µs)
+2026/04/01 18:31:05 OK   00003_user_profile.sql (389.79µs)
+2026/04/01 18:31:05 OK   00004_job_queue.sql (828.5µs)
+2026/04/01 18:31:05 OK   00005_rename_job_to_translation.sql (2.18ms)
+2026/04/01 18:31:05 OK   00006_go_compat.sql (944.92µs)
+2026/04/01 18:31:05 OK   00007_character_srs.sql (1.03ms)
+2026/04/01 18:31:05 OK   00008_translation_chat.sql (883.54µs)
+2026/04/01 18:31:05 OK   00009_review_cards.sql (540.75µs)
+2026/04/01 18:31:05 OK   00010_paragraph_hash.sql (529.75µs)
+2026/04/01 18:31:05 OK   00011_rename_paragraphs_to_sentences.sql (2.79ms)
+2026/04/01 18:31:05 OK   00012_add_title_to_translations.sql (535.92µs)
+2026/04/01 18:31:05 OK   00013_replace_selected_segment_ids_with_text.sql (1.4ms)
+2026/04/01 18:31:05 OK   00014_flatten_vocab_context_and_drop_legacy_tables.sql (1.66ms)
+2026/04/01 18:31:05 OK   00015_drop_texts_and_rewire_translation_fks.sql (5.19ms)
+2026/04/01 18:31:05 goose: successfully migrated database to version: 15
+--- PASS: TestRenewLeaseUpdatesLeaseUntil (0.03s)
+=== RUN   TestRenewLeaseNoopForCompletedJob
+2026/04/01 18:31:05 OK   00001_init.sql (1.11ms)
+2026/04/01 18:31:05 OK   00002_vocab_lookups.sql (518.71µs)
+2026/04/01 18:31:05 OK   00003_user_profile.sql (418.92µs)
+2026/04/01 18:31:05 OK   00004_job_queue.sql (859.04µs)
+2026/04/01 18:31:05 OK   00005_rename_job_to_translation.sql (2.06ms)
+2026/04/01 18:31:05 OK   00006_go_compat.sql (854.21µs)
+2026/04/01 18:31:05 OK   00007_character_srs.sql (880.42µs)
+2026/04/01 18:31:05 OK   00008_translation_chat.sql (642.5µs)
+2026/04/01 18:31:05 OK   00009_review_cards.sql (516.54µs)
+2026/04/01 18:31:05 OK   00010_paragraph_hash.sql (516.29µs)
+2026/04/01 18:31:05 OK   00011_rename_paragraphs_to_sentences.sql (2.73ms)
+2026/04/01 18:31:05 OK   00012_add_title_to_translations.sql (511.46µs)
+2026/04/01 18:31:05 OK   00013_replace_selected_segment_ids_with_text.sql (1.27ms)
+2026/04/01 18:31:05 OK   00014_flatten_vocab_context_and_drop_legacy_tables.sql (1.58ms)
+2026/04/01 18:31:05 OK   00015_drop_texts_and_rewire_translation_fks.sql (5.29ms)
+2026/04/01 18:31:05 goose: successfully migrated database to version: 15
+--- PASS: TestRenewLeaseNoopForCompletedJob (0.02s)
+PASS
+ok  	github.com/anath2/language-app/internal/translation	1.270s
+=== RUN   TestLoadCasesFromCSV_DefaultDataset
+=== PAUSE TestLoadCasesFromCSV_DefaultDataset
+=== RUN   TestLoadCasesFromCSV_InvalidJSON
+=== PAUSE TestLoadCasesFromCSV_InvalidJSON
+=== RUN   TestBuildGEPASentenceDataset_SentenceOnly
+=== PAUSE TestBuildGEPASentenceDataset_SentenceOnly
+=== RUN   TestSplitCasesDeterministic
+=== PAUSE TestSplitCasesDeterministic
+=== RUN   TestEvaluatePromotionGate_Strict
+=== PAUSE TestEvaluatePromotionGate_Strict
+=== RUN   TestParseSegmentsFromResponse_NewlineFormat
+=== PAUSE TestParseSegmentsFromResponse_NewlineFormat
+=== RUN   TestSelectPromotionDecision_TieBreakers
+=== PAUSE TestSelectPromotionDecision_TieBreakers
+=== CONT  TestLoadCasesFromCSV_DefaultDataset
+=== CONT  TestEvaluatePromotionGate_Strict
+--- PASS: TestEvaluatePromotionGate_Strict (0.00s)
+=== CONT  TestParseSegmentsFromResponse_NewlineFormat
+--- PASS: TestParseSegmentsFromResponse_NewlineFormat (0.00s)
+=== CONT  TestBuildGEPASentenceDataset_SentenceOnly
+--- PASS: TestBuildGEPASentenceDataset_SentenceOnly (0.00s)
+=== CONT  TestSplitCasesDeterministic
+--- PASS: TestSplitCasesDeterministic (0.00s)
+=== CONT  TestLoadCasesFromCSV_InvalidJSON
+=== CONT  TestSelectPromotionDecision_TieBreakers
+--- PASS: TestSelectPromotionDecision_TieBreakers (0.00s)
+--- PASS: TestLoadCasesFromCSV_InvalidJSON (0.00s)
+--- PASS: TestLoadCasesFromCSV_DefaultDataset (0.00s)
+PASS
+ok  	github.com/anath2/language-app/scripts/segmentation	2.187s
+=== RUN   TestTranslationChatSSELifecycleAndClear
+2026/04/01 18:31:06 OK   00001_init.sql (1.43ms)
+2026/04/01 18:31:06 OK   00002_vocab_lookups.sql (608.29µs)
+2026/04/01 18:31:06 OK   00003_user_profile.sql (522.92µs)
+2026/04/01 18:31:06 OK   00004_job_queue.sql (955.54µs)
+2026/04/01 18:31:06 OK   00005_rename_job_to_translation.sql (2.25ms)
+2026/04/01 18:31:06 OK   00006_go_compat.sql (873.04µs)
+2026/04/01 18:31:06 OK   00007_character_srs.sql (858.54µs)
+2026/04/01 18:31:06 OK   00008_translation_chat.sql (667.83µs)
+2026/04/01 18:31:06 OK   00009_review_cards.sql (568.13µs)
+2026/04/01 18:31:06 OK   00010_paragraph_hash.sql (537.13µs)
+2026/04/01 18:31:06 OK   00011_rename_paragraphs_to_sentences.sql (2.87ms)
+2026/04/01 18:31:06 OK   00012_add_title_to_translations.sql (546µs)
+2026/04/01 18:31:06 OK   00013_replace_selected_segment_ids_with_text.sql (1.26ms)
+2026/04/01 18:31:06 OK   00014_flatten_vocab_context_and_drop_legacy_tables.sql (1.6ms)
+2026/04/01 18:31:06 OK   00015_drop_texts_and_rewire_translation_fks.sql (4.95ms)
+2026/04/01 18:31:06 goose: successfully migrated database to version: 15
+2026/04/01 18:31:06 loaded compiled segmentation instruction: path=/Users/ajitnath/Personal/language-app/server/data/jepa/compiled_instruction.txt
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/tMd3wHPw84-000001] "POST http://example.com/api/auth/login HTTP/1.1" from 192.0.2.1:1234 - 200 12B in 105.541µs
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/tMd3wHPw84-000002] "POST http://example.com/api/translations/1775039466723492000/chat/new HTTP/1.1" from 192.0.2.1:1234 - 200 365B in 743.333µs
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/tMd3wHPw84-000003] "GET http://example.com/api/translations/1775039466723492000/chat/list HTTP/1.1" from 192.0.2.1:1234 - 200 485B in 152.916µs
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/tMd3wHPw84-000004] "POST http://example.com/api/translations/1775039466723492000/chat/clear HTTP/1.1" from 192.0.2.1:1234 - 200 12B in 182.833µs
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/tMd3wHPw84-000005] "GET http://example.com/api/translations/1775039466723492000/chat/list HTTP/1.1" from 192.0.2.1:1234 - 200 48B in 62.333µs
+--- PASS: TestTranslationChatSSELifecycleAndClear (0.24s)
+=== RUN   TestAuthAndSessionFlow
+2026/04/01 18:31:06 OK   00001_init.sql (1.28ms)
+2026/04/01 18:31:06 OK   00002_vocab_lookups.sql (556.83µs)
+2026/04/01 18:31:06 OK   00003_user_profile.sql (436.92µs)
+2026/04/01 18:31:06 OK   00004_job_queue.sql (782.54µs)
+2026/04/01 18:31:06 OK   00005_rename_job_to_translation.sql (2.04ms)
+2026/04/01 18:31:06 OK   00006_go_compat.sql (890.96µs)
+2026/04/01 18:31:06 OK   00007_character_srs.sql (824.38µs)
+2026/04/01 18:31:06 OK   00008_translation_chat.sql (673.71µs)
+2026/04/01 18:31:06 OK   00009_review_cards.sql (493.54µs)
+2026/04/01 18:31:06 OK   00010_paragraph_hash.sql (489.54µs)
+2026/04/01 18:31:06 OK   00011_rename_paragraphs_to_sentences.sql (2.73ms)
+2026/04/01 18:31:06 OK   00012_add_title_to_translations.sql (538.71µs)
+2026/04/01 18:31:06 OK   00013_replace_selected_segment_ids_with_text.sql (1.29ms)
+2026/04/01 18:31:06 OK   00014_flatten_vocab_context_and_drop_legacy_tables.sql (1.65ms)
+2026/04/01 18:31:06 OK   00015_drop_texts_and_rewire_translation_fks.sql (5.31ms)
+2026/04/01 18:31:06 goose: successfully migrated database to version: 15
+2026/04/01 18:31:06 loaded compiled segmentation instruction: path=/Users/ajitnath/Personal/language-app/server/data/jepa/compiled_instruction.txt
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/tMd3wHPw84-000006] "GET http:// HTTP/1.1" from  - 401 30B in 7.167µs
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/tMd3wHPw84-000007] "POST http://example.com/api/auth/login HTTP/1.1" from 192.0.2.1:1234 - 401 30B in 9.917µs
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/tMd3wHPw84-000008] "POST http://example.com/api/auth/login HTTP/1.1" from 192.0.2.1:1234 - 200 12B in 10.166µs
+2026/04/01 18:31:06 [Ajits-MacBook-Air.local/tMd3wHPw84-000009] "POST http://example.com/api/auth/logout HTTP/1.1" from 192.0.2.1:1234 - 200 12B in 7.625µs
+--- PASS: TestAuthAndSessionFlow (0.23s)
+=== RUN   TestCoreJSONPersistenceFlow
+2026/04/01 18:31:06 OK   00001_init.sql (1.17ms)
+2026/04/01 18:31:06 OK   00002_vocab_lookups.sql (572.25µs)
+2026/04/01 18:31:06 OK   00003_user_profile.sql (601.58µs)
+2026/04/01 18:31:06 OK   00004_job_queue.sql (913.79µs)
+2026/04/01 18:31:06 OK   00005_rename_job_to_translation.sql (2.21ms)
+2026/04/01 18:31:06 OK   00006_go_compat.sql (908.75µs)
+2026/04/01 18:31:06 OK   00007_character_srs.sql (856.33µs)
+2026/04/01 18:31:06 OK   00008_translation_chat.sql (675.38µs)
+2026/04/01 18:31:06 OK   00009_review_cards.sql (531.42µs)
+2026/04/01 18:31:06 OK   00010_paragraph_hash.sql (529.71µs)
+2026/04/01 18:31:06 OK   00011_rename_paragraphs_to_sentences.sql (2.8ms)
+2026/04/01 18:31:06 OK   00012_add_title_to_translations.sql (678.83µs)
+2026/04/01 18:31:06 OK   00013_replace_selected_segment_ids_with_text.sql (1.42ms)
+2026/04/01 18:31:06 OK   00014_flatten_vocab_context_and_drop_legacy_tables.sql (1.66ms)
+2026/04/01 18:31:06 OK   00015_drop_texts_and_rewire_translation_fks.sql (5.1ms)
+2026/04/01 18:31:06 goose: successfully migrated database to version: 15
+2026/04/01 18:31:06 loaded compiled segmentation instruction: path=/Users/ajitnath/Personal/language-app/server/data/jepa/compiled_instruction.txt
+2026/04/01 18:31:07 [Ajits-MacBook-Air.local/tMd3wHPw84-000010] "POST http://example.com/api/auth/login HTTP/1.1" from 192.0.2.1:1234 - 200 12B in 22.125µs
+2026/04/01 18:31:07 [Ajits-MacBook-Air.local/tMd3wHPw84-000011] "POST http://example.com/api/translations HTTP/1.1" from 192.0.2.1:1234 - 200 60B in 1.007167ms
+2026/04/01 18:31:07 [Ajits-MacBook-Air.local/tMd3wHPw84-000012] "POST http://example.com/api/vocab/save HTTP/1.1" from 192.0.2.1:1234 - 200 40B in 1.237709ms
+2026/04/01 18:31:07 [Ajits-MacBook-Air.local/tMd3wHPw84-000013] "POST http://example.com/api/vocab/lookup HTTP/1.1" from 192.0.2.1:1234 - 200 91B in 345.875µs
+2026/04/01 18:31:07 [Ajits-MacBook-Air.local/tMd3wHPw84-000014] "GET http://example.com/api/vocab/srs-info?headwords=%E4%BD%A0%E5%A5%BD HTTP/1.1" from 192.0.2.1:1234 - 200 241B in 63.125µs
+2026/04/01 18:31:07 [Ajits-MacBook-Air.local/tMd3wHPw84-000015] "GET http://example.com/api/review/words/queue HTTP/1.1" from 192.0.2.1:1234 - 200 138B in 112.833µs
+2026/04/01 18:31:07 [Ajits-MacBook-Air.local/tMd3wHPw84-000016] "GET http://example.com/api/review/words/count HTTP/1.1" from 192.0.2.1:1234 - 200 16B in 26.125µs
+--- PASS: TestCoreJSONPersistenceFlow (0.23s)
+=== RUN   TestAdminJSONEndpoints
+2026/04/01 18:31:07 OK   00001_init.sql (1.24ms)
+2026/04/01 18:31:07 OK   00002_vocab_lookups.sql (544.29µs)
+2026/04/01 18:31:07 OK   00003_user_profile.sql (511.29µs)
+2026/04/01 18:31:07 OK   00004_job_queue.sql (843.92µs)
+2026/04/01 18:31:07 OK   00005_rename_job_to_translation.sql (2.07ms)
+2026/04/01 18:31:07 OK   00006_go_compat.sql (884.58µs)
+2026/04/01 18:31:07 OK   00007_character_srs.sql (895.25µs)
+2026/04/01 18:31:07 OK   00008_translation_chat.sql (682.5µs)
+2026/04/01 18:31:07 OK   00009_review_cards.sql (555.71µs)
+2026/04/01 18:31:07 OK   00010_paragraph_hash.sql (523.79µs)
+2026/04/01 18:31:07 OK   00011_rename_paragraphs_to_sentences.sql (2.67ms)
+2026/04/01 18:31:07 OK   00012_add_title_to_translations.sql (609.21µs)
+2026/04/01 18:31:07 OK   00013_replace_selected_segment_ids_with_text.sql (1.29ms)
+2026/04/01 18:31:07 OK   00014_flatten_vocab_context_and_drop_legacy_tables.sql (1.65ms)
+2026/04/01 18:31:07 OK   00015_drop_texts_and_rewire_translation_fks.sql (5.09ms)
+2026/04/01 18:31:07 goose: successfully migrated database to version: 15
+2026/04/01 18:31:07 loaded compiled segmentation instruction: path=/Users/ajitnath/Personal/language-app/server/data/jepa/compiled_instruction.txt
+2026/04/01 18:31:07 [Ajits-MacBook-Air.local/tMd3wHPw84-000017] "POST http://example.com/api/auth/login HTTP/1.1" from 192.0.2.1:1234 - 200 12B in 18.25µs
+2026/04/01 18:31:07 [Ajits-MacBook-Air.local/tMd3wHPw84-000018] "GET http://example.com/api/admin/profile HTTP/1.1" from 192.0.2.1:1234 - 200 172B in 114.708µs
+2026/04/01 18:31:07 [Ajits-MacBook-Air.local/tMd3wHPw84-000019] "POST http://example.com/api/admin/profile HTTP/1.1" from 192.0.2.1:1234 - 200 179B in 586.584µs
+2026/04/01 18:31:07 [Ajits-MacBook-Air.local/tMd3wHPw84-000020] "GET http://example.com/api/admin/progress/export HTTP/1.1" from 192.0.2.1:1234 - 200 166B in 94.667µs
+--- PASS: TestAdminJSONEndpoints (0.23s)
+=== RUN   TestMigrationIdempotencyAndRestartSmoke
+2026/04/01 18:31:07 OK   00001_init.sql (1.14ms)
+2026/04/01 18:31:07 OK   00002_vocab_lookups.sql (467.33µs)
+2026/04/01 18:31:07 OK   00003_user_profile.sql (430.71µs)
+2026/04/01 18:31:07 OK   00004_job_queue.sql (836.21µs)
+2026/04/01 18:31:07 OK   00005_rename_job_to_translation.sql (2.09ms)
+2026/04/01 18:31:07 OK   00006_go_compat.sql (874.33µs)
+2026/04/01 18:31:07 OK   00007_character_srs.sql (883.83µs)
+2026/04/01 18:31:07 OK   00008_translation_chat.sql (675.92µs)
+2026/04/01 18:31:07 OK   00009_review_cards.sql (540.83µs)
+2026/04/01 18:31:07 OK   00010_paragraph_hash.sql (527.88µs)
+2026/04/01 18:31:07 OK   00011_rename_paragraphs_to_sentences.sql (2.63ms)
+2026/04/01 18:31:07 OK   00012_add_title_to_translations.sql (511.83µs)
+2026/04/01 18:31:07 OK   00013_replace_selected_segment_ids_with_text.sql (1.31ms)
+2026/04/01 18:31:07 OK   00014_flatten_vocab_context_and_drop_legacy_tables.sql (1.71ms)
+2026/04/01 18:31:07 OK   00015_drop_texts_and_rewire_translation_fks.sql (5.02ms)
+2026/04/01 18:31:07 goose: successfully migrated database to version: 15
+2026/04/01 18:31:07 goose: no migrations to run. current version: 15
+2026/04/01 18:31:07 goose: no migrations to run. current version: 15
+2026/04/01 18:31:07 loaded compiled segmentation instruction: path=/Users/ajitnath/Personal/language-app/server/data/jepa/compiled_instruction.txt
+2026/04/01 18:31:07 [Ajits-MacBook-Air.local/tMd3wHPw84-000021] "POST http://example.com/api/auth/login HTTP/1.1" from 192.0.2.1:1234 - 200 12B in 24.709µs
+2026/04/01 18:31:07 [Ajits-MacBook-Air.local/tMd3wHPw84-000022] "GET http://example.com/health HTTP/1.1" from 192.0.2.1:1234 - 200 16B in 6.25µs
+2026/04/01 18:31:07 goose: no migrations to run. current version: 15
+2026/04/01 18:31:07 loaded compiled segmentation instruction: path=/Users/ajitnath/Personal/language-app/server/data/jepa/compiled_instruction.txt
+2026/04/01 18:31:07 [Ajits-MacBook-Air.local/tMd3wHPw84-000023] "POST http://example.com/api/auth/login HTTP/1.1" from 192.0.2.1:1234 - 200 12B in 19.042µs
+2026/04/01 18:31:07 [Ajits-MacBook-Air.local/tMd3wHPw84-000024] "GET http://example.com/health HTTP/1.1" from 192.0.2.1:1234 - 200 16B in 2.417µs
+--- PASS: TestMigrationIdempotencyAndRestartSmoke (0.42s)
+=== RUN   TestPatchTranslationSource
+2026/04/01 18:31:07 OK   00001_init.sql (1.43ms)
+2026/04/01 18:31:07 OK   00002_vocab_lookups.sql (694.67µs)
+2026/04/01 18:31:07 OK   00003_user_profile.sql (614.25µs)
+2026/04/01 18:31:07 OK   00004_job_queue.sql (950.96µs)
+2026/04/01 18:31:07 OK   00005_rename_job_to_translation.sql (2.22ms)
+2026/04/01 18:31:07 OK   00006_go_compat.sql (986.5µs)
+2026/04/01 18:31:07 OK   00007_character_srs.sql (880.42µs)
+2026/04/01 18:31:07 OK   00008_translation_chat.sql (705.88µs)
+2026/04/01 18:31:07 OK   00009_review_cards.sql (548.67µs)
+2026/04/01 18:31:07 OK   00010_paragraph_hash.sql (544.83µs)
+2026/04/01 18:31:07 OK   00011_rename_paragraphs_to_sentences.sql (2.74ms)
+2026/04/01 18:31:07 OK   00012_add_title_to_translations.sql (562.46µs)
+2026/04/01 18:31:07 OK   00013_replace_selected_segment_ids_with_text.sql (1.25ms)
+2026/04/01 18:31:07 OK   00014_flatten_vocab_context_and_drop_legacy_tables.sql (1.63ms)
+2026/04/01 18:31:07 OK   00015_drop_texts_and_rewire_translation_fks.sql (5.07ms)
+2026/04/01 18:31:07 goose: successfully migrated database to version: 15
+2026/04/01 18:31:07 loaded compiled segmentation instruction: path=/Users/ajitnath/Personal/language-app/server/data/jepa/compiled_instruction.txt
+2026/04/01 18:31:08 [Ajits-MacBook-Air.local/tMd3wHPw84-000025] "POST http://example.com/api/auth/login HTTP/1.1" from 192.0.2.1:1234 - 200 12B in 25.708µs
+2026/04/01 18:31:08 [Ajits-MacBook-Air.local/tMd3wHPw84-000026] "POST http://example.com/api/translations HTTP/1.1" from 192.0.2.1:1234 - 200 60B in 1.008125ms
+2026/04/01 18:31:08 [Ajits-MacBook-Air.local/tMd3wHPw84-000027] "PATCH http://example.com/api/translations/nonexistent HTTP/1.1" from 192.0.2.1:1234 - 404 35B in 47.75µs
+2026/04/01 18:31:08 [Ajits-MacBook-Air.local/tMd3wHPw84-000028] "PATCH http://example.com/api/translations/1775039468042868000 HTTP/1.1" from 192.0.2.1:1234 - 200 43B in 415.833µs
+2026/04/01 18:31:08 [Ajits-MacBook-Air.local/tMd3wHPw84-000029] "PATCH http://example.com/api/translations/1775039468042868000 HTTP/1.1" from 192.0.2.1:1234 - 200 45B in 35.833µs
+2026/04/01 18:31:08 [Ajits-MacBook-Air.local/tMd3wHPw84-000030] "PATCH http://example.com/api/translations/1775039468042868000 HTTP/1.1" from 192.0.2.1:1234 - 400 45B in 5.208µs
+--- PASS: TestPatchTranslationSource (0.22s)
+=== RUN   TestUpstreamTranslateBatch
+    upstream_llm_test.go:14: skipping upstream integration test; pass -upstream to enable
+--- SKIP: TestUpstreamTranslateBatch (0.00s)
+=== RUN   TestUpstreamTranslationLifecycleSSE
+    upstream_llm_test.go:51: skipping upstream integration test; pass -upstream to enable
+--- SKIP: TestUpstreamTranslationLifecycleSSE (0.00s)
+=== RUN   TestUpstreamChatReviewCard
+    upstream_llm_test.go:132: skipping upstream integration test; pass -upstream to enable
+--- SKIP: TestUpstreamChatReviewCard (0.00s)
+=== RUN   TestUpstreamChatReviewCardAccept
+    upstream_llm_test.go:231: skipping upstream integration test; pass -upstream to enable
+--- SKIP: TestUpstreamChatReviewCardAccept (0.00s)
+PASS
+ok  	github.com/anath2/language-app/tests/integration	3.389s

@@ -15,7 +15,11 @@ class VocabStore {
   characterDueCount = $state(0);
 
   async fetchSrsInfo(headwords: string[]): Promise<void> {
-    if (headwords.length === 0) return;
+    this.savedVocabMap = await this.fetchSrsInfoMap(headwords);
+  }
+
+  async fetchSrsInfoMap(headwords: string[]): Promise<Map<string, SavedVocabInfo>> {
+    if (headwords.length === 0) return new Map(this.savedVocabMap);
 
     try {
       const params = new URLSearchParams();
@@ -32,12 +36,31 @@ class VocabStore {
           opacity,
           isStruggling: info.is_struggling,
           status: info.status,
+          intervalDays: info.interval_days ?? 0,
+          nextDueAt: info.next_due_at ?? null,
         });
       });
-      this.savedVocabMap = nextMap;
+      return nextMap;
     } catch (error) {
       console.error('Failed to fetch SRS info:', error);
+      return new Map(this.savedVocabMap);
     }
+  }
+
+  async refreshHeadwordInMap(
+    headword: string,
+    currentMap: Map<string, SavedVocabInfo>
+  ): Promise<Map<string, SavedVocabInfo>> {
+    if (!headword) return currentMap;
+    const fetchedMap = await this.fetchSrsInfoMap([headword]);
+    const nextMap = new Map(currentMap);
+    const refreshed = fetchedMap.get(headword);
+    if (refreshed) {
+      nextMap.set(headword, refreshed);
+    } else {
+      nextMap.delete(headword);
+    }
+    return nextMap;
   }
 
   /**
@@ -47,7 +70,7 @@ class VocabStore {
     headword: string,
     pinyin: string,
     english: string,
-    textId: string | null,
+    translationId: string | null,
     snippet: string
   ): Promise<SavedVocabInfo | null> {
     try {
@@ -55,7 +78,7 @@ class VocabStore {
         headword,
         pinyin,
         english,
-        text_id: textId,
+        translation_id: translationId,
         snippet,
         status: 'learning',
       });
@@ -65,6 +88,8 @@ class VocabStore {
         opacity: 1,
         isStruggling: false,
         status: 'learning',
+        intervalDays: 0,
+        nextDueAt: null,
       };
 
       this.savedVocabMap = new Map(this.savedVocabMap.set(headword, info));

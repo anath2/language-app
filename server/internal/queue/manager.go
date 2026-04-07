@@ -39,6 +39,7 @@ type translationStore interface {
 	ListRestartableTranslationIDs() ([]string, error)
 	Get(id string) (translation.Translation, bool)
 	ClaimTranslationJob(translationID string, leaseDuration time.Duration) (bool, error)
+	RenewLease(translationID string, d time.Duration) error
 	Fail(id string, message string) error
 	SetFullTranslation(id string, fullTranslation string) error
 	SetProcessing(id string, total int, sentences []translation.SentenceInit) error
@@ -61,7 +62,9 @@ type sentenceInfo struct {
 	Separator string
 }
 
-const jobLeaseDuration = 30 * time.Second
+const jobLeaseDuration = 5 * time.Minute
+const leaseRenewalInterval = 100 * time.Second    // renew at ~1/3 of jobLeaseDuration
+const expiredLeaseScanInterval = 30 * time.Second // how often the scanner polls for expired leases
 
 func NewManager(store translationStore, provider intelligence.TranslationProvider) *Manager {
 	return &Manager{
@@ -69,11 +72,6 @@ func NewManager(store translationStore, provider intelligence.TranslationProvide
 		provider: provider,
 		running:  make(map[string]struct{}),
 	}
-}
-
-func (m *Manager) Submit(translationID string) {
-	// Progress is persisted in the database; no in-memory state is required.
-	_ = translationID
 }
 
 func (m *Manager) ResumeRestartableJobs() {
@@ -85,6 +83,27 @@ func (m *Manager) ResumeRestartableJobs() {
 	for _, translationID := range ids {
 		m.StartProcessing(translationID)
 	}
+}
+
+// StartBackgroundScanner periodically scans for jobs with expired leases and
+// re-queues them via ResumeRestartableJobs. The in-memory running map prevents
+// double-processing jobs that are still active.
+//
+// Pass context.Background() for a process-lifetime scanner (killed when the
+// process exits). Use a cancellable context for graceful shutdown.
+func (m *Manager) StartBackgroundScanner(ctx context.Context) {
+	go func() {
+		ticker := time.NewTicker(expiredLeaseScanInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				m.ResumeRestartableJobs()
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
 }
 
 func (m *Manager) StartProcessing(translationID string) {
@@ -111,67 +130,12 @@ func (m *Manager) StartProcessing(translationID string) {
 	}
 
 	go func(item translation.Translation) {
-		ctx := context.Background()
-		sentences := splitInputSentences(item.InputText)
-		if len(sentences) == 0 {
-			_ = m.store.Fail(translationID, "No sentences found for segmentation")
-			m.removeRunning(translationID)
-			return
-		}
-
-		// Generate full translation before segmentation (non-fatal).
-		if fullTranslation, err := m.provider.TranslateFull(ctx, item.InputText); err != nil {
-			log.Printf("full translation failed (non-fatal): id=%s err=%v", translationID, err)
-		} else if fullTranslation != "" {
-			if err := m.store.SetFullTranslation(translationID, fullTranslation); err != nil {
-				log.Printf("set full translation failed (non-fatal): id=%s err=%v", translationID, err)
-			}
-		}
-
-		queued, err := m.segmentInputBySentence(ctx, sentences)
-		if err != nil {
-			msg := err.Error()
-			if len(msg) > 200 {
-				msg = msg[:200] + "..."
-			}
-			_ = m.store.Fail(translationID, "Failed to segment: "+msg)
-			m.removeRunning(translationID)
-			return
-		}
-		total := len(queued)
-		if total == 0 {
-			_ = m.store.Fail(translationID, "No translatable segments found")
-			m.removeRunning(translationID)
-			return
-		}
-
-		startIndex := item.Progress
-		if item.Status == "pending" {
-			startIndex = 0
-			sentenceInits := make([]translation.SentenceInit, len(sentences))
-			for i, s := range sentences {
-				sentenceInits[i] = translation.SentenceInit{Indent: s.Indent, Separator: s.Separator}
-			}
-			if err := m.store.SetProcessing(translationID, total, sentenceInits); err != nil {
-				m.removeRunning(translationID)
-				return
-			}
-		}
-
-		if startIndex >= len(queued) {
-			if err := m.store.Complete(translationID); err != nil {
-				_ = m.store.Fail(translationID, "Failed to complete translation")
-			}
-			m.removeRunning(translationID)
-			return
-		}
-
-		m.runJob(ctx, translationID, queued, startIndex)
+		m.runJob(context.Background(), translationID, item)
 	}(item)
 }
 
 // StartReprocessing processes only the sentences in sentencesToProcess (sentenceIdx → sentence text).
-// It does not call TranslateFull — the existing full translation is preserved.
+// It regenerates the full translation and re-segments only the changed sentences.
 func (m *Manager) StartReprocessing(translationID string, sentencesToProcess map[int]string) {
 	if len(sentencesToProcess) == 0 {
 		return
@@ -193,21 +157,50 @@ func (m *Manager) StartReprocessing(translationID string, sentencesToProcess map
 
 	go func() {
 		ctx := context.Background()
+		defer m.removeRunning(translationID)
+
+		// Renewal goroutine: same pattern as runJob.
+		// defer cancelRenew() handles all exit paths — no per-return call needed.
+		renewCtx, cancelRenew := context.WithCancel(ctx)
+		defer cancelRenew()
+		go func() {
+			ticker := time.NewTicker(leaseRenewalInterval)
+			defer ticker.Stop()
+			consecutiveFailures := 0
+			for {
+				select {
+				case <-ticker.C:
+					if err := m.store.RenewLease(translationID, jobLeaseDuration); err != nil {
+						consecutiveFailures++
+						// TODO: fail job if consecutiveFailures exceeds threshold.
+						log.Printf("lease renewal failed for %s (consecutive failures: %d): %v",
+							translationID, consecutiveFailures, err)
+					} else {
+						consecutiveFailures = 0
+					}
+				case <-renewCtx.Done():
+					return
+				}
+			}
+		}()
 
 		// Load the full input text for generating the full translation.
 		item, ok := m.store.Get(translationID)
 		if !ok {
 			_ = m.store.Fail(translationID, "Translation not found during reprocessing")
-			m.removeRunning(translationID)
 			return
 		}
 
-		// Generate new full translation (non-fatal).
-		if fullTranslation, err := m.provider.TranslateFull(ctx, item.InputText); err != nil {
-			log.Printf("full translation failed (non-fatal): id=%s err=%v", translationID, err)
-		} else if fullTranslation != "" {
+		// Reuse existing full translation if set; only generate if absent.
+		if item.FullTranslation == nil || *item.FullTranslation == "" {
+			fullTranslation, err := m.provider.TranslateFull(ctx, item.InputText)
+			if err != nil {
+				_ = m.store.Fail(translationID, "Failed to generate full translation: "+err.Error())
+				return
+			}
 			if err := m.store.SetFullTranslation(translationID, fullTranslation); err != nil {
-				log.Printf("set full translation failed (non-fatal): id=%s err=%v", translationID, err)
+				_ = m.store.Fail(translationID, "Failed to store full translation: "+err.Error())
+				return
 			}
 		}
 
@@ -237,7 +230,6 @@ func (m *Manager) StartReprocessing(translationID string, sentencesToProcess map
 			segments, err := m.provider.Segment(ctx, sentence)
 			if err != nil {
 				_ = m.store.Fail(translationID, "Failed to segment during reprocessing: "+err.Error())
-				m.removeRunning(translationID)
 				return
 			}
 			for _, seg := range segments {
@@ -254,33 +246,46 @@ func (m *Manager) StartReprocessing(translationID string, sentencesToProcess map
 		}
 
 		if err := m.store.SetReprocessing(translationID, len(allWork)); err != nil {
-			m.removeRunning(translationID)
 			return
 		}
 
-		// Translate each segment and store with explicit (sentenceIdx, localSegIdx).
-		localSegIdx := make(map[int]int) // per-sentence counter
+		// Group by sentence for batched translation.
+		type reprocessBatch struct {
+			sentenceIdx  int
+			sentenceText string
+			segments     []string
+		}
+		batchMap := make(map[int]*reprocessBatch)
 		for _, work := range allWork {
-			translated, err := m.provider.TranslateSegments(ctx, []string{work.segment}, work.sentenceText)
+			b, ok := batchMap[work.sentenceIdx]
+			if !ok {
+				b = &reprocessBatch{sentenceIdx: work.sentenceIdx, sentenceText: work.sentenceText}
+				batchMap[work.sentenceIdx] = b
+			}
+			b.segments = append(b.segments, work.segment)
+		}
+
+		for _, sentenceIdx := range orderedIdxs {
+			b, ok := batchMap[sentenceIdx]
+			if !ok {
+				continue
+			}
+			translated, err := m.provider.TranslateSegments(ctx, b.segments, b.sentenceText, item.InputText)
 			if err != nil || len(translated) == 0 {
 				_ = m.store.Fail(translationID, "Failed to translate segment during reprocessing")
-				m.removeRunning(translationID)
 				return
 			}
-			segIdx := localSegIdx[work.sentenceIdx]
-			if err := m.store.AddReprocessedSegment(translationID, translated[0], work.sentenceIdx, segIdx); err != nil {
-				_ = m.store.Fail(translationID, "Failed to store reprocessed segment")
-				m.removeRunning(translationID)
-				return
+			for segIdx, result := range translated {
+				if err := m.store.AddReprocessedSegment(translationID, result, sentenceIdx, segIdx); err != nil {
+					_ = m.store.Fail(translationID, "Failed to store reprocessed segment")
+					return
+				}
 			}
-			localSegIdx[work.sentenceIdx]++
-			time.Sleep(15 * time.Millisecond)
 		}
 
 		if err := m.store.Complete(translationID); err != nil {
 			_ = m.store.Fail(translationID, "Failed to complete reprocessed translation")
 		}
-		m.removeRunning(translationID)
 	}()
 }
 
@@ -308,33 +313,129 @@ func (m *Manager) GetProgress(translationID string) (Progress, bool) {
 	return progress, true
 }
 
-func (m *Manager) CleanupProgress(translationID string) {
-	// Persisted progress should remain queryable after stream disconnect/restart.
-	_ = translationID
-}
-
-func (m *Manager) runJob(ctx context.Context, translationID string, segments []queuedSegment, startIndex int) {
+func (m *Manager) runJob(ctx context.Context, translationID string, item translation.Translation) {
 	defer m.removeRunning(translationID)
 
-	for idx := startIndex; idx < len(segments); idx++ {
-		work := segments[idx]
-		translated, err := m.provider.TranslateSegments(ctx, []string{work.Segment}, work.SentenceText)
+	// Renewal goroutine: extends the lease every leaseRenewalInterval.
+	// Cancelled automatically when runJob returns via defer cancelRenew() —
+	// no per-return cancelRenew() call is needed anywhere in this function.
+	renewCtx, cancelRenew := context.WithCancel(ctx)
+	defer cancelRenew()
+	go func() {
+		ticker := time.NewTicker(leaseRenewalInterval)
+		defer ticker.Stop()
+		consecutiveFailures := 0
+		for {
+			select {
+			case <-ticker.C:
+				if err := m.store.RenewLease(translationID, jobLeaseDuration); err != nil {
+					consecutiveFailures++
+					// TODO: if consecutiveFailures exceeds a threshold (e.g. 3),
+					// fail the job to avoid a zombie worker holding a claim it can no longer renew.
+					log.Printf("lease renewal failed for %s (consecutive failures: %d): %v",
+						translationID, consecutiveFailures, err)
+				} else {
+					consecutiveFailures = 0
+				}
+			case <-renewCtx.Done():
+				return
+			}
+		}
+	}()
+
+	sentences := splitInputSentences(item.InputText)
+	if len(sentences) == 0 {
+		_ = m.store.Fail(translationID, "No sentences found for segmentation")
+		return
+	}
+
+	fullTranslation, err := m.provider.TranslateFull(ctx, item.InputText)
+	if err != nil {
+		_ = m.store.Fail(translationID, "Failed to generate full translation: "+err.Error())
+		return
+	}
+	if err := m.store.SetFullTranslation(translationID, fullTranslation); err != nil {
+		_ = m.store.Fail(translationID, "Failed to store full translation: "+err.Error())
+		return
+	}
+
+	queued, err := m.segmentInputBySentence(ctx, sentences)
+	if err != nil {
+		msg := err.Error()
+		if len(msg) > 200 {
+			msg = msg[:200] + "..."
+		}
+		_ = m.store.Fail(translationID, "Failed to segment: "+msg)
+		return
+	}
+	total := len(queued)
+	if total == 0 {
+		_ = m.store.Fail(translationID, "No translatable segments found")
+		return
+	}
+
+	startIndex := item.Progress
+	if item.Status == "pending" {
+		startIndex = 0
+		sentenceInits := make([]translation.SentenceInit, len(sentences))
+		for i, s := range sentences {
+			sentenceInits[i] = translation.SentenceInit{Indent: s.Indent, Separator: s.Separator}
+		}
+		if err := m.store.SetProcessing(translationID, total, sentenceInits); err != nil {
+			_ = m.store.Fail(translationID, "Failed to initialise processing state: "+err.Error())
+			return
+		}
+	}
+
+	if startIndex >= len(queued) {
+		if err := m.store.Complete(translationID); err != nil {
+			_ = m.store.Fail(translationID, "Failed to complete translation")
+		}
+		return
+	}
+
+	// Group queued segments by sentence index for batched translation.
+	type sentenceBatch struct {
+		sentenceIdx  int
+		sentenceText string
+		segments     []string
+	}
+
+	var batches []sentenceBatch
+	var currentBatch *sentenceBatch
+	for idx := startIndex; idx < len(queued); idx++ {
+		work := queued[idx]
+		if currentBatch == nil || currentBatch.sentenceIdx != work.SentenceIndex {
+			if currentBatch != nil {
+				batches = append(batches, *currentBatch)
+			}
+			currentBatch = &sentenceBatch{
+				sentenceIdx:  work.SentenceIndex,
+				sentenceText: work.SentenceText,
+			}
+		}
+		currentBatch.segments = append(currentBatch.segments, work.Segment)
+	}
+	if currentBatch != nil {
+		batches = append(batches, *currentBatch)
+	}
+
+	for _, batch := range batches {
+		translated, err := m.provider.TranslateSegments(ctx, batch.segments, batch.sentenceText, item.InputText)
 		if err != nil || len(translated) == 0 {
 			_ = m.store.Fail(translationID, "Failed to translate segments")
 			return
 		}
-		segmentResult := translated[0]
-		if _, _, err := m.store.AddProgressSegment(translationID, segmentResult, work.SentenceIndex); err != nil {
-			_ = m.store.Fail(translationID, "Failed to update translation progress")
-			return
+		for _, segmentResult := range translated {
+			if _, _, err := m.store.AddProgressSegment(translationID, segmentResult, batch.sentenceIdx); err != nil {
+				_ = m.store.Fail(translationID, "Failed to update translation progress")
+				return
+			}
 		}
-
-		time.Sleep(15 * time.Millisecond)
 	}
 
 	if err := m.store.Complete(translationID); err != nil {
 		_ = m.store.Fail(translationID, "Failed to complete translation")
-		return
 	}
 }
 

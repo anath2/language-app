@@ -9,73 +9,74 @@ import (
 	"time"
 )
 
-func (s *SRSStore) SaveVocabItem(headword string, pinyin string, english string, textID *string, segmentID *string, snippet *string, status string) (string, error) {
+const (
+	reviewEntitySegment   = "segment"
+	reviewEntityCharacter = "character"
+)
+
+func (s *SRSStore) SaveSegment(headword string, pinyin string, english string, translationID *string, snippet *string, status string) (string, error) {
 	if strings.TrimSpace(headword) == "" {
 		return "", errors.New("headword is required")
 	}
 	if status == "" {
 		status = "learning"
 	}
-	if status != "unknown" && status != "learning" && status != "known" {
+	if !isValidStatus(status) {
 		return "", errors.New("Invalid status")
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	id, _ := newID()
 	if _, err := s.db.Exec(
-		`INSERT OR IGNORE INTO vocab_items (id, headword, pinyin, english, status, created_at, updated_at)
+		`INSERT OR IGNORE INTO saved_segments (id, headword, pinyin, english, status, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
 		id, strings.TrimSpace(headword), strings.TrimSpace(pinyin), strings.TrimSpace(english), status, now, now,
 	); err != nil {
-		return "", fmt.Errorf("insert vocab item: %w", err)
+		return "", fmt.Errorf("insert segment: %w", err)
 	}
-	var resolvedID string
+	var segmentID string
 	if err := s.db.QueryRow(
-		`SELECT id FROM vocab_items WHERE headword = ? AND pinyin = ? AND english = ?`,
-		strings.TrimSpace(headword), strings.TrimSpace(pinyin), strings.TrimSpace(english),
-	).Scan(&resolvedID); err != nil {
-		return "", fmt.Errorf("resolve vocab item id: %w", err)
+		`SELECT id FROM saved_segments WHERE headword = ? AND pinyin = ?`,
+		strings.TrimSpace(headword), strings.TrimSpace(pinyin),
+	).Scan(&segmentID); err != nil {
+		return "", fmt.Errorf("resolve segment id: %w", err)
 	}
-	if _, err := s.db.Exec(`UPDATE vocab_items SET updated_at = ? WHERE id = ?`, now, resolvedID); err != nil {
-		return "", fmt.Errorf("touch vocab item: %w", err)
-	}
-	occID, _ := newID()
-	var textIDVal any
-	var segmentIDVal any
+
+	var translationIDVal any
 	var snippetVal string
-	if textID != nil {
-		textIDVal = *textID
-	}
-	if segmentID != nil {
-		segmentIDVal = *segmentID
+	if translationID != nil {
+		translationIDVal = *translationID
 	}
 	if snippet != nil {
 		snippetVal = *snippet
 	}
 	if _, err := s.db.Exec(
-		`INSERT INTO vocab_occurrences (id, vocab_item_id, text_id, segment_id, snippet, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?)`,
-		occID, resolvedID, textIDVal, segmentIDVal, snippetVal, now,
+		`UPDATE saved_segments
+		 SET updated_at = ?,
+		     english = CASE WHEN ? = '' THEN english ELSE ? END,
+		     status = ?,
+		     last_seen_translation_id = COALESCE(?, last_seen_translation_id),
+		     last_seen_snippet = CASE WHEN ? = '' THEN last_seen_snippet ELSE ? END,
+		     last_seen_at = ?,
+		     seen_count = seen_count + 1
+		 WHERE id = ?`,
+		now, strings.TrimSpace(english), strings.TrimSpace(english), status, translationIDVal, snippetVal, snippetVal, now, segmentID,
 	); err != nil {
-		return "", fmt.Errorf("insert vocab occurrence: %w", err)
+		return "", fmt.Errorf("update segment context: %w", err)
 	}
-	if _, err := s.db.Exec(
-		`INSERT OR IGNORE INTO srs_state (vocab_item_id, due_at, interval_days, ease, reps, lapses, last_reviewed_at)
-		 VALUES (?, ?, 0, 2.5, 0, 0, ?)`,
-		resolvedID, now, now,
-	); err != nil {
-		return "", fmt.Errorf("init srs state: %w", err)
+	if err := s.ensureSegmentSRSState(segmentID, now); err != nil {
+		return "", err
 	}
-	return resolvedID, nil
+	return segmentID, nil
 }
 
-func (s *SRSStore) UpdateVocabStatus(vocabItemID string, status string) error {
-	if status != "unknown" && status != "learning" && status != "known" {
+func (s *SRSStore) UpdateSegmentStatus(segmentID string, status string) error {
+	if !isValidStatus(status) {
 		return errors.New("Invalid status")
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	res, err := s.db.Exec(`UPDATE vocab_items SET status = ?, updated_at = ? WHERE id = ?`, status, now, vocabItemID)
+	res, err := s.db.Exec(`UPDATE saved_segments SET status = ?, updated_at = ? WHERE id = ?`, status, now, segmentID)
 	if err != nil {
-		return fmt.Errorf("update vocab status: %w", err)
+		return fmt.Errorf("update segment status: %w", err)
 	}
 	affected, _ := res.RowsAffected()
 	if affected == 0 {
@@ -84,19 +85,34 @@ func (s *SRSStore) UpdateVocabStatus(vocabItemID string, status string) error {
 	return nil
 }
 
-func (s *SRSStore) RecordLookup(vocabItemID string) (VocabSRSInfo, bool) {
-	row := s.db.QueryRow(`SELECT id, headword, pinyin, english, status FROM vocab_items WHERE id = ?`, vocabItemID)
-	var rec VocabSRSInfo
-	if err := row.Scan(&rec.VocabItemID, &rec.Headword, &rec.Pinyin, &rec.English, &rec.Status); err != nil {
-		return VocabSRSInfo{}, false
+func (s *SRSStore) UpdateCharacterStatus(characterID string, status string) error {
+	if !isValidStatus(status) {
+		return errors.New("Invalid status")
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	res, err := s.db.Exec(`UPDATE saved_characters SET status = ?, updated_at = ? WHERE id = ?`, status, now, characterID)
+	if err != nil {
+		return fmt.Errorf("update character status: %w", err)
+	}
+	affected, _ := res.RowsAffected()
+	if affected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (s *SRSStore) RecordLookup(segmentID string) (SegmentSRSInfo, bool) {
+	row := s.db.QueryRow(`SELECT id, headword, pinyin, english, status FROM saved_segments WHERE id = ?`, segmentID)
+	var rec SegmentSRSInfo
+	if err := row.Scan(&rec.SegmentID, &rec.Headword, &rec.Pinyin, &rec.English, &rec.Status); err != nil {
+		return SegmentSRSInfo{}, false
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	lookupID, _ := newID()
-	_, _ = s.db.Exec(`INSERT INTO vocab_lookups (id, vocab_item_id, looked_up_at) VALUES (?, ?, ?)`, lookupID, vocabItemID, now)
-	_, _ = s.db.Exec(`INSERT OR IGNORE INTO srs_state (vocab_item_id, due_at, interval_days, ease, reps, lapses, last_reviewed_at)
-		VALUES (?, ?, 0, 2.5, 0, 0, ?)`, vocabItemID, now, now)
-	_, _ = s.db.Exec(`UPDATE srs_state SET last_reviewed_at = ? WHERE vocab_item_id = ?`, now, vocabItemID)
-	infoList, _ := s.GetVocabSRSInfo([]string{rec.Headword})
+	_, _ = s.db.Exec(`INSERT INTO vocab_lookups (id, segment_id, looked_up_at) VALUES (?, ?, ?)`, lookupID, segmentID, now)
+	_ = s.ensureSegmentSRSState(segmentID, now)
+	_, _ = s.db.Exec(`UPDATE srs_state SET last_reviewed_at = ? WHERE segment_id = ?`, now, segmentID)
+	infoList, _ := s.GetSegmentSRSInfo([]string{rec.Headword})
 	if len(infoList) > 0 {
 		return infoList[0], true
 	}
@@ -104,7 +120,7 @@ func (s *SRSStore) RecordLookup(vocabItemID string) (VocabSRSInfo, bool) {
 	return rec, true
 }
 
-func (s *SRSStore) GetVocabSRSInfo(headwords []string) ([]VocabSRSInfo, error) {
+func (s *SRSStore) GetSegmentSRSInfo(headwords []string) ([]SegmentSRSInfo, error) {
 	filtered := make([]string, 0, len(headwords))
 	for _, h := range headwords {
 		h = strings.TrimSpace(h)
@@ -113,7 +129,7 @@ func (s *SRSStore) GetVocabSRSInfo(headwords []string) ([]VocabSRSInfo, error) {
 		}
 	}
 	if len(filtered) == 0 {
-		return []VocabSRSInfo{}, nil
+		return []SegmentSRSInfo{}, nil
 	}
 	placeholders := strings.Repeat("?,", len(filtered))
 	placeholders = strings.TrimSuffix(placeholders, ",")
@@ -122,28 +138,36 @@ func (s *SRSStore) GetVocabSRSInfo(headwords []string) ([]VocabSRSInfo, error) {
 		args[i] = h
 	}
 	rows, err := s.db.Query(
-		fmt.Sprintf(`SELECT vi.id, vi.headword, vi.pinyin, vi.english, vi.status, ss.last_reviewed_at
-			FROM vocab_items vi
-			LEFT JOIN srs_state ss ON vi.id = ss.vocab_item_id
-			WHERE vi.headword IN (%s)`, placeholders),
+		fmt.Sprintf(`SELECT ss.id, ss.headword, ss.pinyin, ss.english, ss.status, st.last_reviewed_at, st.interval_days, st.due_at
+			FROM saved_segments ss
+			LEFT JOIN srs_state st ON ss.id = st.segment_id
+			WHERE ss.headword IN (%s)`, placeholders),
 		args...,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("query vocab srs info: %w", err)
+		return nil, fmt.Errorf("query segment srs info: %w", err)
 	}
 	defer rows.Close()
 	now := time.Now().UTC()
-	out := make([]VocabSRSInfo, 0)
+	out := make([]SegmentSRSInfo, 0)
 	for rows.Next() {
-		var info VocabSRSInfo
+		var info SegmentSRSInfo
 		var lastReviewed sql.NullString
-		if err := rows.Scan(&info.VocabItemID, &info.Headword, &info.Pinyin, &info.English, &info.Status, &lastReviewed); err != nil {
-			return nil, fmt.Errorf("scan vocab srs info: %w", err)
+		var intervalDays sql.NullFloat64
+		var dueAt sql.NullString
+		if err := rows.Scan(&info.SegmentID, &info.Headword, &info.Pinyin, &info.English, &info.Status, &lastReviewed, &intervalDays, &dueAt); err != nil {
+			return nil, fmt.Errorf("scan segment srs info: %w", err)
+		}
+		if intervalDays.Valid {
+			info.IntervalDays = intervalDays.Float64
+		}
+		if dueAt.Valid {
+			info.NextDueAt = &dueAt.String
 		}
 		recentCount := 0
 		_ = s.db.QueryRow(
-			`SELECT COUNT(*) FROM vocab_lookups WHERE vocab_item_id = ? AND looked_up_at >= ?`,
-			info.VocabItemID,
+			`SELECT COUNT(*) FROM vocab_lookups WHERE segment_id = ? AND looked_up_at >= ?`,
+			info.SegmentID,
 			now.Add(-7*24*time.Hour).Format(time.RFC3339Nano),
 		).Scan(&recentCount)
 		info.IsStruggling = recentCount >= 3
@@ -170,17 +194,17 @@ func (s *SRSStore) GetVocabSRSInfo(headwords []string) ([]VocabSRSInfo, error) {
 	return out, nil
 }
 
-func (s *SRSStore) GetReviewQueue(limit int) ([]ReviewCard, error) {
+func (s *SRSStore) GetSegmentReviewQueue(limit int) ([]SegmentReviewCard, error) {
 	if limit <= 0 {
 		limit = 10
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	rows, err := s.db.Query(
-		`SELECT vi.id, vi.headword, vi.pinyin, vi.english
-		 FROM vocab_items vi
-		 JOIN srs_state ss ON vi.id = ss.vocab_item_id
-		 WHERE vi.type = 'word' AND vi.status = 'learning' AND (ss.due_at IS NULL OR ss.due_at <= ?)
-		 ORDER BY ss.due_at ASC
+		`SELECT ss.id, ss.headword, ss.pinyin, ss.english
+		 FROM saved_segments ss
+		 JOIN srs_state st ON ss.id = st.segment_id
+		 WHERE ss.status = 'learning' AND (st.due_at IS NULL OR st.due_at <= ?)
+		 ORDER BY st.due_at ASC
 		 LIMIT ?`,
 		now,
 		limit,
@@ -189,56 +213,72 @@ func (s *SRSStore) GetReviewQueue(limit int) ([]ReviewCard, error) {
 		return nil, fmt.Errorf("query review queue: %w", err)
 	}
 	defer rows.Close()
-	out := make([]ReviewCard, 0)
+	out := make([]SegmentReviewCard, 0)
 	for rows.Next() {
-		var card ReviewCard
-		if err := rows.Scan(&card.VocabItemID, &card.Headword, &card.Pinyin, &card.English); err != nil {
+		var card SegmentReviewCard
+		if err := rows.Scan(&card.SegmentID, &card.Headword, &card.Pinyin, &card.English); err != nil {
 			return nil, fmt.Errorf("scan review card: %w", err)
 		}
-		snippetRows, err := s.db.Query(`SELECT snippet FROM vocab_occurrences WHERE vocab_item_id = ? AND snippet != '' ORDER BY created_at DESC LIMIT 3`, card.VocabItemID)
-		if err == nil {
-			for snippetRows.Next() {
-				var snip string
-				_ = snippetRows.Scan(&snip)
-				card.Snippets = append(card.Snippets, snip)
-			}
-			_ = snippetRows.Close()
+		var snippet sql.NullString
+		if err := s.db.QueryRow(`SELECT last_seen_snippet FROM saved_segments WHERE id = ?`, card.SegmentID).Scan(&snippet); err == nil && snippet.Valid && snippet.String != "" {
+			card.Snippets = []string{snippet.String}
 		}
 		out = append(out, card)
 	}
 	return out, nil
 }
 
-func (s *SRSStore) GetDueCount() int {
+func (s *SRSStore) GetSegmentDueCount() int {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	var cnt int
 	_ = s.db.QueryRow(
-		`SELECT COUNT(*) FROM vocab_items vi
-		 JOIN srs_state ss ON vi.id = ss.vocab_item_id
-		 WHERE vi.type = 'word' AND vi.status = 'learning' AND (ss.due_at IS NULL OR ss.due_at <= ?)`,
+		`SELECT COUNT(*) FROM saved_segments ss
+		 JOIN srs_state st ON ss.id = st.segment_id
+		 WHERE ss.status = 'learning' AND (st.due_at IS NULL OR st.due_at <= ?)`,
 		now,
 	).Scan(&cnt)
 	return cnt
 }
 
-func (s *SRSStore) RecordReviewAnswer(vocabItemID string, grade int) (ReviewAnswerResult, bool, error) {
+func (s *SRSStore) RecordReviewAnswer(entityID string, entityType string, grade int) (ReviewAnswerResult, bool, error) {
 	if grade < 0 || grade > 2 {
 		return ReviewAnswerResult{}, false, errors.New("Grade must be 0, 1, or 2")
 	}
-	var itemType string
-	err := s.db.QueryRow(`SELECT type FROM vocab_items WHERE id = ?`, vocabItemID).Scan(&itemType)
+	entityType = strings.TrimSpace(entityType)
+	if entityType == "" {
+		entityType = reviewEntitySegment
+	}
+	if entityType != reviewEntitySegment && entityType != reviewEntityCharacter {
+		return ReviewAnswerResult{}, false, errors.New("Invalid entity type")
+	}
+
+	entityExistsQuery := `SELECT 1 FROM saved_segments WHERE id = ?`
+	if entityType == reviewEntityCharacter {
+		entityExistsQuery = `SELECT 1 FROM saved_characters WHERE id = ?`
+	}
+	var exists int
+	err := s.db.QueryRow(entityExistsQuery, entityID).Scan(&exists)
 	if err != nil {
 		return ReviewAnswerResult{}, false, nil
 	}
+
 	now := time.Now().UTC()
 	nowStr := now.Format(time.RFC3339Nano)
 	var dueAt sql.NullString
 	var interval, ease float64
 	var reps, lapses int
-	err = s.db.QueryRow(`SELECT due_at, interval_days, ease, reps, lapses FROM srs_state WHERE vocab_item_id = ?`, vocabItemID).
+	stateQuery := `SELECT due_at, interval_days, ease, reps, lapses FROM srs_state WHERE segment_id = ?`
+	if entityType == reviewEntityCharacter {
+		stateQuery = `SELECT due_at, interval_days, ease, reps, lapses FROM srs_state WHERE character_id = ?`
+	}
+	err = s.db.QueryRow(stateQuery, entityID).
 		Scan(&dueAt, &interval, &ease, &reps, &lapses)
 	if err != nil {
-		_, _ = s.db.Exec(`INSERT OR IGNORE INTO srs_state (vocab_item_id, due_at, interval_days, ease, reps, lapses, last_reviewed_at) VALUES (?, ?, 0, 2.5, 0, 0, ?)`, vocabItemID, nowStr, nowStr)
+		if entityType == reviewEntityCharacter {
+			_ = s.ensureCharacterSRSState(entityID, nowStr)
+		} else {
+			_ = s.ensureSegmentSRSState(entityID, nowStr)
+		}
 		dueAt = sql.NullString{String: nowStr, Valid: true}
 		interval = 0
 		ease = 2.5
@@ -274,36 +314,45 @@ func (s *SRSStore) RecordReviewAnswer(vocabItemID string, grade int) (ReviewAnsw
 		newReps++
 	}
 	nextDue := now.Add(time.Duration(newInterval * 24 * float64(time.Hour))).Format(time.RFC3339Nano)
-	_, _ = s.db.Exec(`UPDATE srs_state SET due_at = ?, interval_days = ?, ease = ?, reps = ?, lapses = ?, last_reviewed_at = ? WHERE vocab_item_id = ?`,
-		nextDue, newInterval, newEase, newReps, newLapses, nowStr, vocabItemID)
+	updateQuery := `UPDATE srs_state SET due_at = ?, interval_days = ?, ease = ?, reps = ?, lapses = ?, last_reviewed_at = ? WHERE segment_id = ?`
+	if entityType == reviewEntityCharacter {
+		updateQuery = `UPDATE srs_state SET due_at = ?, interval_days = ?, ease = ?, reps = ?, lapses = ?, last_reviewed_at = ? WHERE character_id = ?`
+	}
+	_, _ = s.db.Exec(updateQuery, nextDue, newInterval, newEase, newReps, newLapses, nowStr, entityID)
 	nextDuePtr := nextDue
-	remainingDue := s.GetDueCount()
-	if itemType == "character" {
+	remainingDue := s.GetSegmentDueCount()
+	var segmentID *string
+	var characterID *string
+	if entityType == reviewEntityCharacter {
 		remainingDue = s.GetCharacterDueCount()
+		characterID = &entityID
+	} else {
+		segmentID = &entityID
 	}
 	return ReviewAnswerResult{
-		VocabItemID:  vocabItemID,
+		SegmentID:    segmentID,
+		CharacterID:  characterID,
 		NextDueAt:    &nextDuePtr,
 		IntervalDays: newInterval,
 		RemainingDue: remainingDue,
 	}, true, nil
 }
 
-func (s *SRSStore) CountVocabByStatus(status string) int {
+func (s *SRSStore) CountSegmentsByStatus(status string) int {
 	var cnt int
-	_ = s.db.QueryRow(`SELECT COUNT(*) FROM vocab_items WHERE type = 'word' AND status = ?`, status).Scan(&cnt)
+	_ = s.db.QueryRow(`SELECT COUNT(*) FROM saved_segments WHERE status = ?`, status).Scan(&cnt)
 	return cnt
 }
 
-func (s *SRSStore) CountTotalVocab() int {
+func (s *SRSStore) CountTotalSegments() int {
 	var cnt int
-	_ = s.db.QueryRow(`SELECT COUNT(*) FROM vocab_items WHERE type = 'word'`).Scan(&cnt)
+	_ = s.db.QueryRow(`SELECT COUNT(*) FROM saved_segments`).Scan(&cnt)
 	return cnt
 }
 
 func (s *SRSStore) ExportProgressJSON() (string, error) {
 	bundle := map[string]any{
-		"schema_version": 1,
+		"schema_version": 2,
 		"exported_at":    time.Now().UTC().Format(time.RFC3339Nano),
 	}
 	type tableDump struct {
@@ -311,10 +360,11 @@ func (s *SRSStore) ExportProgressJSON() (string, error) {
 		key   string
 	}
 	dumps := []tableDump{
-		{query: "SELECT id, headword, pinyin, english, type, status, created_at, updated_at FROM vocab_items ORDER BY created_at", key: "vocab_items"},
-		{query: "SELECT vocab_item_id, due_at, interval_days, ease, reps, lapses, last_reviewed_at FROM srs_state", key: "srs_state"},
-		{query: "SELECT id, vocab_item_id, looked_up_at FROM vocab_lookups ORDER BY looked_up_at", key: "vocab_lookups"},
-		{query: "SELECT id, character_item_id, word_item_id, created_at FROM character_word_links ORDER BY created_at", key: "character_word_links"},
+		{query: "SELECT id, headword, pinyin, english, status, created_at, updated_at, last_seen_translation_id, last_seen_snippet, last_seen_at, seen_count FROM saved_segments ORDER BY created_at", key: "saved_segments"},
+		{query: "SELECT id, character, pinyin, english, status, created_at, updated_at FROM saved_characters ORDER BY created_at", key: "saved_characters"},
+		{query: "SELECT id, character_id, segment, segment_pinyin, segment_translation, created_at FROM character_segment_links ORDER BY created_at", key: "character_segment_links"},
+		{query: "SELECT id, segment_id, character_id, due_at, interval_days, ease, reps, lapses, last_reviewed_at FROM srs_state", key: "srs_state"},
+		{query: "SELECT id, segment_id, character_id, looked_up_at FROM vocab_lookups ORDER BY looked_up_at", key: "vocab_lookups"},
 	}
 	for _, d := range dumps {
 		rows, err := s.db.Query(d.query)
@@ -377,10 +427,15 @@ func (s *SRSStore) ImportProgressJSON(input string) (map[string]int, error) {
 		}
 		return out
 	}
-	vocabItems, err := getArr("vocab_items")
+	segments, err := getArr("saved_segments")
 	if err != nil {
 		return nil, err
 	}
+	characters, err := getArr("saved_characters")
+	if err != nil {
+		return nil, err
+	}
+	charSegmentLinks := getArrOptional("character_segment_links")
 	srsState, err := getArr("srs_state")
 	if err != nil {
 		return nil, err
@@ -389,7 +444,6 @@ func (s *SRSStore) ImportProgressJSON(input string) (map[string]int, error) {
 	if err != nil {
 		return nil, err
 	}
-	charWordLinks := getArrOptional("character_word_links")
 
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -397,44 +451,84 @@ func (s *SRSStore) ImportProgressJSON(input string) (map[string]int, error) {
 	}
 	defer tx.Rollback()
 	for _, stmt := range []string{
-		"DELETE FROM character_word_links",
+		"DELETE FROM character_segment_links",
 		"DELETE FROM vocab_lookups",
 		"DELETE FROM srs_state",
-		"DELETE FROM vocab_occurrences",
-		"DELETE FROM vocab_items",
+		"DELETE FROM saved_characters",
+		"DELETE FROM saved_segments",
 	} {
 		if _, err := tx.Exec(stmt); err != nil {
 			return nil, err
 		}
 	}
-	for _, item := range vocabItems {
-		itemType := toString(item["type"])
-		if itemType == "" {
-			itemType = "word"
+	for _, item := range segments {
+		_, err := tx.Exec(`INSERT INTO saved_segments (id, headword, pinyin, english, status, created_at, updated_at, last_seen_translation_id, last_seen_snippet, last_seen_at, seen_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			toString(item["id"]),
+			toString(item["headword"]),
+			toString(item["pinyin"]),
+			toString(item["english"]),
+			toString(item["status"]),
+			toString(item["created_at"]),
+			toString(item["updated_at"]),
+			nullableString(item["last_seen_translation_id"]),
+			toString(item["last_seen_snippet"]),
+			nullableString(item["last_seen_at"]),
+			toInt(item["seen_count"]),
+		)
+		if err != nil {
+			return nil, err
 		}
-		_, err := tx.Exec(`INSERT INTO vocab_items (id, headword, pinyin, english, type, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-			toString(item["id"]), toString(item["headword"]), toString(item["pinyin"]), toString(item["english"]), itemType, toString(item["status"]), toString(item["created_at"]), toString(item["updated_at"]))
+	}
+	for _, item := range characters {
+		_, err := tx.Exec(`INSERT INTO saved_characters (id, character, pinyin, english, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			toString(item["id"]),
+			toString(item["character"]),
+			toString(item["pinyin"]),
+			toString(item["english"]),
+			toString(item["status"]),
+			toString(item["created_at"]),
+			toString(item["updated_at"]),
+		)
 		if err != nil {
 			return nil, err
 		}
 	}
 	for _, item := range srsState {
-		_, err := tx.Exec(`INSERT INTO srs_state (vocab_item_id, due_at, interval_days, ease, reps, lapses, last_reviewed_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			toString(item["vocab_item_id"]), nullableString(item["due_at"]), toFloat(item["interval_days"]), toFloat(item["ease"]), toInt(item["reps"]), toInt(item["lapses"]), nullableString(item["last_reviewed_at"]))
+		_, err := tx.Exec(`INSERT INTO srs_state (id, segment_id, character_id, due_at, interval_days, ease, reps, lapses, last_reviewed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			toString(item["id"]),
+			nullableString(item["segment_id"]),
+			nullableString(item["character_id"]),
+			nullableString(item["due_at"]),
+			toFloat(item["interval_days"]),
+			toFloat(item["ease"]),
+			toInt(item["reps"]),
+			toInt(item["lapses"]),
+			nullableString(item["last_reviewed_at"]),
+		)
 		if err != nil {
 			return nil, err
 		}
 	}
 	for _, item := range lookups {
-		_, err := tx.Exec(`INSERT INTO vocab_lookups (id, vocab_item_id, looked_up_at) VALUES (?, ?, ?)`,
-			toString(item["id"]), toString(item["vocab_item_id"]), toString(item["looked_up_at"]))
+		_, err := tx.Exec(`INSERT INTO vocab_lookups (id, segment_id, character_id, looked_up_at) VALUES (?, ?, ?, ?)`,
+			toString(item["id"]),
+			nullableString(item["segment_id"]),
+			nullableString(item["character_id"]),
+			toString(item["looked_up_at"]),
+		)
 		if err != nil {
 			return nil, err
 		}
 	}
-	for _, item := range charWordLinks {
-		_, err := tx.Exec(`INSERT INTO character_word_links (id, character_item_id, word_item_id, created_at) VALUES (?, ?, ?, ?)`,
-			toString(item["id"]), toString(item["character_item_id"]), toString(item["word_item_id"]), toString(item["created_at"]))
+	for _, item := range charSegmentLinks {
+		_, err := tx.Exec(`INSERT INTO character_segment_links (id, character_id, segment, segment_pinyin, segment_translation, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+			toString(item["id"]),
+			toString(item["character_id"]),
+			toString(item["segment"]),
+			toString(item["segment_pinyin"]),
+			toString(item["segment_translation"]),
+			toString(item["created_at"]),
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -443,83 +537,76 @@ func (s *SRSStore) ImportProgressJSON(input string) (map[string]int, error) {
 		return nil, err
 	}
 	counts := map[string]int{
-		"vocab_items":   len(vocabItems),
-		"srs_state":     len(srsState),
-		"vocab_lookups": len(lookups),
+		"saved_segments":   len(segments),
+		"saved_characters": len(characters),
+		"srs_state":        len(srsState),
+		"vocab_lookups":    len(lookups),
 	}
-	if len(charWordLinks) > 0 {
-		counts["character_word_links"] = len(charWordLinks)
+	if len(charSegmentLinks) > 0 {
+		counts["character_segment_links"] = len(charSegmentLinks)
 	}
 	return counts, nil
 }
 
-func isCJKIdeograph(r rune) bool {
-	return (r >= 0x4E00 && r <= 0x9FFF) ||
-		(r >= 0x3400 && r <= 0x4DBF) ||
-		(r >= 0x20000 && r <= 0x2A6DF) ||
-		(r >= 0x2A700 && r <= 0x2CEAF) ||
-		(r >= 0x2CEB0 && r <= 0x2EBEF) ||
-		(r >= 0x30000 && r <= 0x323AF)
-}
-
-func (s *SRSStore) ExtractAndLinkCharacters(vocabItemID string, headword string, cedictLookup func(string) (string, string, bool)) error {
-	runes := []rune(headword)
-	// Skip single-character words — the word IS the character.
-	cjkCount := 0
+func (s *SRSStore) ExtractAndLinkCharacters(segmentID string, segment string, segmentPinyin string, segmentEnglish string, charData []CharTranslation) error {
+	runes := []rune(segment)
+	cjkRunes := make([]rune, 0, len(runes))
 	for _, r := range runes {
 		if isCJKIdeograph(r) {
-			cjkCount++
+			cjkRunes = append(cjkRunes, r)
 		}
 	}
-	if cjkCount <= 1 {
+	if len(cjkRunes) == 0 {
 		return nil
 	}
 
+	charPinyinMap := make(map[string]string, len(charData))
+	for _, cd := range charData {
+		charPinyinMap[cd.Char] = cd.Pinyin
+	}
+
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	seen := make(map[rune]bool)
-	for _, r := range runes {
-		if !isCJKIdeograph(r) || seen[r] {
+	seen := make(map[string]bool)
+	for _, r := range cjkRunes {
+		char := string(r)
+		pinyin := strings.TrimSpace(charPinyinMap[char])
+		dedupKey := char + "|" + pinyin
+		if seen[dedupKey] {
 			continue
 		}
-		seen[r] = true
-		char := string(r)
+		seen[dedupKey] = true
 
-		pinyin, english := "", ""
-		if cedictLookup != nil {
-			p, e, found := cedictLookup(char)
-			if found {
-				pinyin = p
-				english = e
-			}
+		charEnglish := ""
+		if len(cjkRunes) == 1 {
+			charEnglish = strings.TrimSpace(segmentEnglish)
 		}
 
 		charID, _ := newID()
 		_, _ = s.db.Exec(
-			`INSERT OR IGNORE INTO vocab_items (id, headword, pinyin, english, type, status, created_at, updated_at)
-			 VALUES (?, ?, ?, ?, 'character', 'learning', ?, ?)`,
-			charID, char, pinyin, english, now, now,
+			`INSERT OR IGNORE INTO saved_characters (id, character, pinyin, english, status, created_at, updated_at)
+			 VALUES (?, ?, ?, ?, 'learning', ?, ?)`,
+			charID, char, pinyin, charEnglish, now, now,
 		)
 
 		var resolvedCharID string
 		if err := s.db.QueryRow(
-			`SELECT id FROM vocab_items WHERE headword = ? AND type = 'character'`, char,
+			`SELECT id FROM saved_characters WHERE character = ? AND pinyin = ?`,
+			char, pinyin,
 		).Scan(&resolvedCharID); err != nil {
 			continue
 		}
-
-		_, _ = s.db.Exec(
-			`INSERT OR IGNORE INTO srs_state (vocab_item_id, due_at, interval_days, ease, reps, lapses, last_reviewed_at)
-			 VALUES (?, ?, 0, 2.5, 0, 0, ?)`,
-			resolvedCharID, now, now,
-		)
+		if err := s.ensureCharacterSRSState(resolvedCharID, now); err != nil {
+			return err
+		}
 
 		linkID, _ := newID()
 		_, _ = s.db.Exec(
-			`INSERT OR IGNORE INTO character_word_links (id, character_item_id, word_item_id, created_at)
-			 VALUES (?, ?, ?, ?)`,
-			linkID, resolvedCharID, vocabItemID, now,
+			`INSERT OR IGNORE INTO character_segment_links (id, character_id, segment, segment_pinyin, segment_translation, created_at)
+			 VALUES (?, ?, ?, ?, ?, ?)`,
+			linkID, resolvedCharID, strings.TrimSpace(segment), strings.TrimSpace(segmentPinyin), strings.TrimSpace(segmentEnglish), now,
 		)
 	}
+	_ = segmentID
 	return nil
 }
 
@@ -529,11 +616,11 @@ func (s *SRSStore) GetCharacterReviewQueue(limit int) ([]CharacterReviewCard, er
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	rows, err := s.db.Query(
-		`SELECT vi.id, vi.headword, vi.pinyin, vi.english
-		 FROM vocab_items vi
-		 JOIN srs_state ss ON vi.id = ss.vocab_item_id
-		 WHERE vi.type = 'character' AND vi.status = 'learning' AND (ss.due_at IS NULL OR ss.due_at <= ?)
-		 ORDER BY ss.due_at ASC
+		`SELECT sc.id, sc.character, sc.pinyin, sc.english
+		 FROM saved_characters sc
+		 JOIN srs_state st ON sc.id = st.character_id
+		 WHERE sc.status = 'learning' AND (st.due_at IS NULL OR st.due_at <= ?)
+		 ORDER BY st.due_at ASC
 		 LIMIT ?`,
 		now,
 		limit,
@@ -545,23 +632,22 @@ func (s *SRSStore) GetCharacterReviewQueue(limit int) ([]CharacterReviewCard, er
 	out := make([]CharacterReviewCard, 0)
 	for rows.Next() {
 		var card CharacterReviewCard
-		if err := rows.Scan(&card.VocabItemID, &card.Character, &card.Pinyin, &card.English); err != nil {
+		if err := rows.Scan(&card.CharacterID, &card.Character, &card.Pinyin, &card.English); err != nil {
 			return nil, fmt.Errorf("scan character review card: %w", err)
 		}
 		exRows, err := s.db.Query(
-			`SELECT wv.id, wv.headword, wv.pinyin, wv.english
-			 FROM character_word_links cwl
-			 JOIN vocab_items wv ON cwl.word_item_id = wv.id
-			 WHERE cwl.character_item_id = ?
-			 ORDER BY wv.created_at DESC
+			`SELECT csl.segment, csl.segment_pinyin, csl.segment_translation
+			 FROM character_segment_links csl
+			 WHERE csl.character_id = ?
+			 ORDER BY csl.created_at DESC
 			 LIMIT 5`,
-			card.VocabItemID,
+			card.CharacterID,
 		)
 		if err == nil {
 			for exRows.Next() {
-				var ex CharacterExampleWord
-				_ = exRows.Scan(&ex.VocabItemID, &ex.Headword, &ex.Pinyin, &ex.English)
-				card.ExampleWords = append(card.ExampleWords, ex)
+				var ex CharacterExampleSegment
+				_ = exRows.Scan(&ex.Segment, &ex.SegmentPinyin, &ex.SegmentTranslation)
+				card.ExampleSegments = append(card.ExampleSegments, ex)
 			}
 			_ = exRows.Close()
 		}
@@ -574,12 +660,49 @@ func (s *SRSStore) GetCharacterDueCount() int {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	var cnt int
 	_ = s.db.QueryRow(
-		`SELECT COUNT(*) FROM vocab_items vi
-		 JOIN srs_state ss ON vi.id = ss.vocab_item_id
-		 WHERE vi.type = 'character' AND vi.status = 'learning' AND (ss.due_at IS NULL OR ss.due_at <= ?)`,
+		`SELECT COUNT(*) FROM saved_characters sc
+		 JOIN srs_state st ON sc.id = st.character_id
+		 WHERE sc.status = 'learning' AND (st.due_at IS NULL OR st.due_at <= ?)`,
 		now,
 	).Scan(&cnt)
 	return cnt
+}
+
+func (s *SRSStore) ensureSegmentSRSState(segmentID string, now string) error {
+	id := "seg-" + segmentID
+	if _, err := s.db.Exec(
+		`INSERT OR IGNORE INTO srs_state (id, segment_id, due_at, interval_days, ease, reps, lapses, last_reviewed_at)
+		 VALUES (?, ?, ?, 0, 2.5, 0, 0, ?)`,
+		id, segmentID, now, now,
+	); err != nil {
+		return fmt.Errorf("init segment srs state: %w", err)
+	}
+	return nil
+}
+
+func (s *SRSStore) ensureCharacterSRSState(characterID string, now string) error {
+	id := "char-" + characterID
+	if _, err := s.db.Exec(
+		`INSERT OR IGNORE INTO srs_state (id, character_id, due_at, interval_days, ease, reps, lapses, last_reviewed_at)
+		 VALUES (?, ?, ?, 0, 2.5, 0, 0, ?)`,
+		id, characterID, now, now,
+	); err != nil {
+		return fmt.Errorf("init character srs state: %w", err)
+	}
+	return nil
+}
+
+func isValidStatus(status string) bool {
+	return status == "unknown" || status == "learning" || status == "known"
+}
+
+func isCJKIdeograph(r rune) bool {
+	return (r >= 0x4E00 && r <= 0x9FFF) ||
+		(r >= 0x3400 && r <= 0x4DBF) ||
+		(r >= 0x20000 && r <= 0x2A6DF) ||
+		(r >= 0x2A700 && r <= 0x2CEAF) ||
+		(r >= 0x2CEB0 && r <= 0x2EBEF) ||
+		(r >= 0x30000 && r <= 0x323AF)
 }
 
 func maxFloat(a float64, b float64) float64 {

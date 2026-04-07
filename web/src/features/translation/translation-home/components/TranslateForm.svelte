@@ -1,4 +1,5 @@
 <script lang="ts">
+import { extractText } from '@/features/translation/api';
 import type { ExtractTextResponse } from '@/features/translation/types';
 import Button from '@/ui/Button.svelte';
 import { Languages, Camera, X, LoaderCircle } from '@lucide/svelte';
@@ -46,16 +47,7 @@ async function extractTextFromImage() {
   try {
     const formData = new FormData();
     formData.append('image', ocrFile);
-    const res = await fetch('/api/extract-text', {
-      method: 'POST',
-      body: formData,
-      credentials: 'include',
-    });
-    if (!res.ok) {
-      const data = (await res.json()) as { detail?: string };
-      throw new Error(data?.detail || 'OCR failed');
-    }
-    const data = (await res.json()) as ExtractTextResponse;
+    const data = (await extractText(formData)) as ExtractTextResponse;
     textInput = data.text || '';
     clearPreview();
   } catch (error) {

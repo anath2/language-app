@@ -23,10 +23,6 @@ tags:
     description: Authentication
   - name: translations
     description: Translation CRUD and streaming
-  - name: texts
-    description: Raw text persistence
-  - name: events
-    description: Interaction event tracking
   - name: vocab
     description: Vocabulary management and SRS
   - name: review
@@ -451,119 +447,6 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
-  /api/texts:
-    post:
-      tags: [texts]
-      summary: Create a text record
-      operationId: createText
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [raw_text, source_type]
-              properties:
-                raw_text:
-                  type: string
-                source_type:
-                  type: string
-                metadata:
-                  type: object
-                  additionalProperties: true
-      responses:
-        "200":
-          description: Text created
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [id]
-                properties:
-                  id:
-                    type: string
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-
-  /api/texts/{text_id}:
-    get:
-      tags: [texts]
-      summary: Get a text record
-      operationId: getText
-      parameters:
-        - name: text_id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Text record
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [id, created_at, source_type, raw_text, normalized_text]
-                properties:
-                  id:
-                    type: string
-                  created_at:
-                    type: string
-                    format: date-time
-                  source_type:
-                    type: string
-                  raw_text:
-                    type: string
-                  normalized_text:
-                    type: string
-                  metadata:
-                    type: object
-                    additionalProperties: true
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-
-  /api/events:
-    post:
-      tags: [events]
-      summary: Create an interaction event
-      operationId: createEvent
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [event_type]
-              properties:
-                event_type:
-                  type: string
-                text_id:
-                  type: ["string", "null"]
-                segment_id:
-                  type: ["string", "null"]
-                payload:
-                  type: object
-                  additionalProperties: true
-      responses:
-        "200":
-          description: Event created
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [id]
-                properties:
-                  id:
-                    type: string
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-
   /api/vocab/save:
     post:
       tags: [vocab]
@@ -583,9 +466,7 @@ paths:
                   type: string
                 english:
                   type: string
-                text_id:
-                  type: ["string", "null"]
-                segment_id:
+                translation_id:
                   type: ["string", "null"]
                 snippet:
                   type: ["string", "null"]
@@ -598,9 +479,9 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [vocab_item_id]
+                required: [segment_id]
                 properties:
-                  vocab_item_id:
+                  segment_id:
                     type: string
         "400":
           $ref: "#/components/responses/BadRequest"
@@ -618,9 +499,11 @@ paths:
           application/json:
             schema:
               type: object
-              required: [vocab_item_id, status]
+              required: [segment_id, status]
               properties:
-                vocab_item_id:
+                segment_id:
+                  type: string
+                character_id:
                   type: string
                 status:
                   type: string
@@ -652,9 +535,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: [vocab_item_id]
+              required: [segment_id]
               properties:
-                vocab_item_id:
+                segment_id:
                   type: string
       responses:
         "200":
@@ -663,9 +546,9 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [vocab_item_id, opacity, is_struggling]
+                required: [segment_id, opacity, is_struggling]
                 properties:
-                  vocab_item_id:
+                  segment_id:
                     type: string
                   opacity:
                     type: number
@@ -747,10 +630,15 @@ paths:
           application/json:
             schema:
               type: object
-              required: [vocab_item_id, grade]
+              required: [grade]
               properties:
-                vocab_item_id:
+                segment_id:
                   type: string
+                character_id:
+                  type: string
+                entity_type:
+                  type: string
+                  enum: [segment, character]
                 grade:
                   type: integer
       responses:
@@ -760,9 +648,11 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [vocab_item_id, interval_days, remaining_due]
+                required: [interval_days, remaining_due]
                 properties:
-                  vocab_item_id:
+                  segment_id:
+                    type: string
+                  character_id:
                     type: string
                   next_due_at:
                     type: ["string", "null"]
@@ -846,9 +736,9 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
-  /api/segments/translate-batch:
+  /api/translations/segments/batch:
     post:
-      tags: [segments]
+      tags: [translations]
       summary: Translate a batch of segments
       operationId: translateBatch
       requestBody:
@@ -1000,7 +890,7 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
-  /api/extract-text:
+  /api/ocr/extract-text:
     post:
       tags: [ocr]
       summary: Extract text from an image via OCR
@@ -1212,9 +1102,9 @@ components:
 
     VocabSRSItem:
       type: object
-      required: [vocab_item_id, headword, pinyin, english, opacity, is_struggling, status]
+      required: [segment_id, headword, pinyin, english, opacity, is_struggling, status]
       properties:
-        vocab_item_id:
+        segment_id:
           type: string
         headword:
           type: string
@@ -1230,12 +1120,21 @@ components:
           type: boolean
         status:
           type: string
+        interval_days:
+          type: number
+          format: float
+          description: "Current SRS interval in days"
+        next_due_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: "Next due date for review, null if not yet scheduled"
 
     ReviewCard:
       type: object
-      required: [vocab_item_id, headword, pinyin, english, snippets]
+      required: [segment_id, headword, pinyin, english, snippets]
       properties:
-        vocab_item_id:
+        segment_id:
           type: string
         headword:
           type: string
@@ -1278,9 +1177,9 @@ components:
 
     CharacterReviewCard:
       type: object
-      required: [vocab_item_id, character, pinyin, english, example_words]
+      required: [character_id, character, pinyin, english, example_segments]
       properties:
-        vocab_item_id:
+        character_id:
           type: string
         character:
           type: string
@@ -1288,20 +1187,20 @@ components:
           type: string
         english:
           type: string
-        example_words:
+        example_segments:
           type: array
           items:
-            $ref: "#/components/schemas/CharacterExampleWord"
+            $ref: "#/components/schemas/CharacterExampleSegment"
 
-    CharacterExampleWord:
+    CharacterExampleSegment:
       type: object
-      required: [vocab_item_id, headword, pinyin, english]
+      required: [segment, segment_pinyin, segment_translation]
       properties:
-        vocab_item_id:
+        segment_id:
           type: string
-        headword:
+        segment:
           type: string
-        pinyin:
+        segment_pinyin:
           type: string
-        english:
+        segment_translation:
           type: string

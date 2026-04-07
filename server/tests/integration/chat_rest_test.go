@@ -19,7 +19,7 @@ func (m mockTranslationProvider) Segment(_ context.Context, text string) ([]stri
 	return []string{text}, nil
 }
 
-func (m mockTranslationProvider) TranslateSegments(_ context.Context, segments []string, _ string) ([]translation.SegmentResult, error) {
+func (m mockTranslationProvider) TranslateSegments(_ context.Context, segments []string, _ string, _ string) ([]translation.SegmentResult, error) {
 	out := make([]translation.SegmentResult, 0, len(segments))
 	for _, seg := range segments {
 		out = append(out, translation.SegmentResult{
@@ -33,10 +33,6 @@ func (m mockTranslationProvider) TranslateSegments(_ context.Context, segments [
 
 func (m mockTranslationProvider) TranslateFull(_ context.Context, text string) (string, error) {
 	return "mock full: " + text, nil
-}
-
-func (m mockTranslationProvider) LookupCharacter(_ string) (string, string, bool) {
-	return "", "", false
 }
 
 type mockChatProvider struct{}
@@ -58,13 +54,13 @@ func overrideDepsWithMockProvider(t *testing.T, cfg config.Config) *translation.
 		t.Fatalf("new db for override deps: %v", err)
 	}
 	translationStore := translation.NewTranslationStore(db)
-	textEventStore := translation.NewTextEventStore(db)
+	chatStore := translation.NewChatStore(db)
 	srsStore := translation.NewSRSStore(db)
 	profileStore := translation.NewProfileStore(db)
 	transProv := mockTranslationProvider{}
 	chatProv := mockChatProvider{}
 	manager := queue.NewManager(translationStore, transProv)
-	handlers.ConfigureDependencies(translationStore, textEventStore, srsStore, profileStore, manager, transProv, chatProv)
+	handlers.ConfigureDependencies(translationStore, chatStore, srsStore, profileStore, manager, transProv, chatProv)
 	return translationStore
 }
 

@@ -141,6 +141,8 @@ export interface VocabSrsInfoItem {
   opacity: number;
   is_struggling: boolean;
   status: VocabStatus;
+  interval_days: number;
+  next_due_at: string | null;
 }
 
 export interface VocabSrsInfoListResponse {
@@ -161,10 +163,6 @@ export interface DueCountResponse {
   due_count: number;
 }
 
-export interface CreateTextResponse {
-  id: string;
-}
-
 export interface ExtractTextResponse {
   text: string;
 }
@@ -174,6 +172,8 @@ export interface SavedVocabInfo {
   opacity: number;
   isStruggling: boolean;
   status: VocabStatus;
+  intervalDays: number;
+  nextDueAt: string | null;
 }
 
 export interface TooltipState {

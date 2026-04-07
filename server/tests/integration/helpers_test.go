@@ -28,7 +28,6 @@ func newLocalConfig(t *testing.T) config.Config {
 		SecureCookies:          false,
 		MigrationsDir:          filepath.Join(serverRoot, "migrations"),
 		TranslationDBPath:      filepath.Join(t.TempDir(), "translations.db"),
-		CedictPath:             filepath.Join(serverRoot, "data", "cedict_ts.u8"),
 		OpenAIAPIKey:           "test-openai-key",
 		OpenAITranslationModel: "openai/gpt-4o-mini",
 		OpenAIChatModel:        "openai/gpt-4o-mini",
@@ -61,13 +60,6 @@ func newUpstreamConfig(t *testing.T) config.Config {
 		sessionHours = parsed
 	}
 
-	cedictPath := strings.TrimSpace(os.Getenv("CEDICT_PATH"))
-	if cedictPath == "" {
-		cedictPath = filepath.Join(serverRoot, "data", "cedict_ts.u8")
-	} else if !filepath.IsAbs(cedictPath) {
-		cedictPath = filepath.Join(serverRoot, cedictPath)
-	}
-
 	return config.Config{
 		Addr:                   ":0",
 		AppPassword:            os.Getenv("APP_PASSWORD"),
@@ -76,7 +68,6 @@ func newUpstreamConfig(t *testing.T) config.Config {
 		SecureCookies:          secureCookies,
 		MigrationsDir:          filepath.Join(serverRoot, "migrations"),
 		TranslationDBPath:      filepath.Join(t.TempDir(), "translations.db"),
-		CedictPath:             cedictPath,
 		OpenAIAPIKey:           os.Getenv("OPENAI_API_KEY"),
 		OpenAITranslationModel: os.Getenv("OPENAI_TRANSLATION_MODEL"),
 		OpenAIChatModel:        os.Getenv("OPENAI_CHAT_MODEL"),

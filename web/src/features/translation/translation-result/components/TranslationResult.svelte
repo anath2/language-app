@@ -27,6 +27,7 @@ const {
   onMarkKnown,
   onResumeLearning,
   onRecordLookup,
+  onGradeReview,
   onStreamComplete,
   onSegmentsChanged,
 }: {
@@ -43,6 +44,7 @@ const {
   onMarkKnown: (headword: string, vocabItemId: string) => Promise<void>;
   onResumeLearning: (headword: string, vocabItemId: string) => Promise<void>;
   onRecordLookup: (headword: string, vocabItemId: string) => Promise<void>;
+  onGradeReview: (vocabItemId: string, grade: number) => Promise<void>;
   onStreamComplete: () => void;
   onSegmentsChanged: (results: SegmentResultType[]) => void;
 } = $props();
@@ -259,7 +261,7 @@ function handleEditCancel() {
       <span class="section-title">Segmented Text</span>
       {#if !isEditMode && progress.current >= progress.total && translationResults.length > 0}
         <Button size="xs" variant="ghost" shape="pill" onclick={enterEditMode}>
-         <Pencil size={16} /> Edit Segments
+         <Pencil size={16} />
         </Button>
       {/if}
     </div>
@@ -285,6 +287,7 @@ function handleEditCancel() {
         {onMarkKnown}
         {onResumeLearning}
         {onRecordLookup}
+        {onGradeReview}
       />
     {/if}
   {/if}

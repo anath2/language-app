@@ -73,3 +73,37 @@ func (s *TranslationStore) ClaimTranslationJob(translationID string, leaseDurati
 
 	return false, nil
 }
+
+// RenewLease extends the lease_until for a leased job. Intentionally has no
+// retry loop — unlike ClaimTranslationJob, a missed renewal is harmless because
+// the 5-minute lease provides ample headroom; the next tick retries.
+func (s *TranslationStore) RenewLease(translationID string, d time.Duration) error {
+	now := time.Now().UTC()
+	leaseUntil := now.Add(d).Format(time.RFC3339Nano)
+	updatedAt := now.Format(time.RFC3339Nano)
+	_, err := s.db.Exec(
+		`UPDATE translation_jobs
+		 SET lease_until = ?, updated_at = ?
+		 WHERE translation_id = ? AND state = 'leased'`,
+		leaseUntil, updatedAt, translationID,
+	)
+	if err != nil {
+		return fmt.Errorf("renew lease: %w", err)
+	}
+	return nil
+}
+
+// GetJobAttempts returns the number of times a job has been claimed.
+// Used in tests to verify a job was not double-claimed. Not added to the
+// translationStore interface because Get() only queries the translations table.
+func (s *TranslationStore) GetJobAttempts(translationID string) (int, error) {
+	var attempts int
+	err := s.db.QueryRow(
+		`SELECT attempts FROM translation_jobs WHERE translation_id = ?`,
+		translationID,
+	).Scan(&attempts)
+	if err != nil {
+		return 0, fmt.Errorf("get job attempts: %w", err)
+	}
+	return attempts, nil
+}

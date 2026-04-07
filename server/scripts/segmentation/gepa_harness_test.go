@@ -14,42 +14,45 @@ func TestLoadCasesFromCSV_DefaultDataset(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load default csv: %v", err)
 	}
-	if len(cases) < 20 {
-		t.Fatalf("expected at least 20 rows, got %d", len(cases))
+	if len(cases) < 12 {
+		t.Fatalf("expected at least 12 rows, got %d", len(cases))
 	}
-	if strings.TrimSpace(cases[0].Text) == "" {
-		t.Fatal("first case sentence should not be empty")
-	}
-	if len(cases[0].Expected) == 0 {
-		t.Fatal("first case expected segments should not be empty")
+	if strings.TrimSpace(cases[0].Paragraph) == "" {
+		t.Fatal("first case paragraph should not be empty")
 	}
 }
 
-func TestLoadCasesFromCSV_InvalidJSON(t *testing.T) {
+func TestLoadCasesFromCSV_SkipsEmptyParagraph(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	csvPath := filepath.Join(dir, "bad.csv")
-	payload := "id,sentence,expected_segments_json\nx1,我爱你。,not_json\n"
+	csvPath := filepath.Join(dir, "mixed.csv")
+	payload := "id,paragraph\np01,我喜欢中文。\np02,\np03,人工智能。\n"
 	if err := os.WriteFile(csvPath, []byte(payload), 0o644); err != nil {
 		t.Fatalf("write temp csv: %v", err)
 	}
 
-	_, err := LoadCasesFromCSV(csvPath)
-	if err == nil {
-		t.Fatal("expected parse error for malformed expected_segments_json")
+	cases, err := LoadCasesFromCSV(csvPath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cases) != 2 {
+		t.Fatalf("expected 2 cases (empty paragraph skipped), got %d", len(cases))
+	}
+	if cases[0].Name != "p01" || cases[1].Name != "p03" {
+		t.Fatalf("unexpected case names: %s, %s", cases[0].Name, cases[1].Name)
 	}
 }
 
-func TestBuildGEPASentenceDataset_SentenceOnly(t *testing.T) {
+func TestBuildGEPAParagraphDataset(t *testing.T) {
 	t.Parallel()
 
 	corpus := []Case{
-		{Name: "single", Text: "我喜欢中文。", Expected: []string{"我", "喜欢", "中文", "。"}},
-		{Name: "single2", Text: "我们去图书馆。", Expected: []string{"我们", "去", "图书馆", "。"}},
+		{Name: "p01", Paragraph: "我喜欢中文。人工智能改变世界。"},
+		{Name: "p02", Paragraph: "今天下午我们一起去图书馆看书。"},
 	}
 
-	ds, examples := BuildGEPASentenceDataset(corpus, 10)
+	ds, examples := BuildGEPAParagraphDataset(corpus, 10)
 	if ds == nil {
 		t.Fatal("expected non-nil dataset")
 	}
@@ -58,9 +61,9 @@ func TestBuildGEPASentenceDataset_SentenceOnly(t *testing.T) {
 	}
 
 	for i, ex := range examples {
-		gotText, _ := ex.Inputs["text"].(string)
-		if gotText != corpus[i].Text {
-			t.Fatalf("example %d text mismatch: got %q want %q", i, gotText, corpus[i].Text)
+		gotParagraph, _ := ex.Inputs["paragraph"].(string)
+		if gotParagraph != corpus[i].Paragraph {
+			t.Fatalf("example %d paragraph mismatch: got %q want %q", i, gotParagraph, corpus[i].Paragraph)
 		}
 	}
 }
@@ -69,10 +72,10 @@ func TestSplitCasesDeterministic(t *testing.T) {
 	t.Parallel()
 
 	cases := []Case{
-		{Name: "a", Text: "我喜欢中文。", Expected: []string{"我", "喜欢", "中文", "。"}},
-		{Name: "b", Text: "人工智能改变世界。", Expected: []string{"人工智能", "改变", "世界", "。"}},
-		{Name: "c", Text: "我们去图书馆。", Expected: []string{"我们", "去", "图书馆", "。"}},
-		{Name: "d", Text: "研究生命起源。", Expected: []string{"研究", "生命", "起源", "。"}},
+		{Name: "a", Paragraph: "我喜欢中文。"},
+		{Name: "b", Paragraph: "人工智能改变世界。"},
+		{Name: "c", Paragraph: "我们去图书馆。"},
+		{Name: "d", Paragraph: "研究生命起源。"},
 	}
 
 	train1, eval1 := SplitCasesDeterministic(cases, 0.75, 42, 0)
@@ -135,5 +138,100 @@ func TestSelectPromotionDecision_TieBreakers(t *testing.T) {
 	}
 	if *decision.SelectedSeed != 2 {
 		t.Fatalf("expected seed 2 via recon tie-break, got %d", *decision.SelectedSeed)
+	}
+}
+
+func TestSplitParagraphSentences(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		input string
+		want  []string
+	}{
+		{
+			input: "我喜欢学习中文。人工智能改变世界。",
+			want:  []string{"我喜欢学习中文。", "人工智能改变世界。"},
+		},
+		{
+			input: "你好！你怎么样？我很好。",
+			want:  []string{"你好！", "你怎么样？", "我很好。"},
+		},
+		{
+			input: "第一行\n第二行",
+			want:  []string{"第一行", "第二行"},
+		},
+		{
+			input: "没有句号的文本",
+			want:  []string{"没有句号的文本"},
+		},
+	}
+
+	for _, tt := range tests {
+		got := splitParagraphSentences(tt.input)
+		if len(got) != len(tt.want) {
+			t.Fatalf("splitParagraphSentences(%q): got %d sentences %q, want %d %q", tt.input, len(got), got, len(tt.want), tt.want)
+		}
+		for i := range got {
+			if got[i] != tt.want[i] {
+				t.Fatalf("splitParagraphSentences(%q)[%d]: got %q, want %q", tt.input, i, got[i], tt.want[i])
+			}
+		}
+	}
+}
+
+func TestParseJudgeScore(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		input string
+		want  float64
+	}{
+		{"8", 8.0},
+		{"7.5", 7.5},
+		{"The score is 9 out of 10", 9.0},
+		{"", 5.0},
+		{"no numbers here", 5.0},
+		{"15", 10.0}, // clamped
+		{"-3", 3.0},  // regex finds "3" in "-3"
+		{"0.5", 0.5},
+	}
+
+	for _, tt := range tests {
+		got := parseJudgeScore(tt.input)
+		if got != tt.want {
+			t.Errorf("parseJudgeScore(%q) = %.1f, want %.1f", tt.input, got, tt.want)
+		}
+	}
+}
+
+func TestBoundFloat(t *testing.T) {
+	t.Parallel()
+
+	if got := boundFloat(-1, 0, 1); got != 0 {
+		t.Errorf("boundFloat(-1,0,1) = %f, want 0", got)
+	}
+	if got := boundFloat(2, 0, 1); got != 1 {
+		t.Errorf("boundFloat(2,0,1) = %f, want 1", got)
+	}
+	if got := boundFloat(0.5, 0, 1); got != 0.5 {
+		t.Errorf("boundFloat(0.5,0,1) = %f, want 0.5", got)
+	}
+}
+
+func TestFormatTranslationsForJudge(t *testing.T) {
+	t.Parallel()
+
+	// Empty translations returns empty.
+	if got := formatTranslationsForJudge("hello", ""); got != "" {
+		t.Errorf("expected empty for empty translations, got %q", got)
+	}
+	if got := formatTranslationsForJudge("hello", "null"); got != "" {
+		t.Errorf("expected empty for null translations, got %q", got)
+	}
+
+	// Non-empty returns formatted prompt.
+	got := formatTranslationsForJudge("我好", `[{"pinyin":"wǒ hǎo","english":"I'm good"}]`)
+	if !strings.Contains(got, "我好") || !strings.Contains(got, "pinyin") {
+		t.Errorf("formatted judge prompt missing expected content: %q", got)
 	}
 }

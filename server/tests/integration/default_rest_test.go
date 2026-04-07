@@ -12,7 +12,7 @@ func TestAuthAndSessionFlow(t *testing.T) {
 	cfg := newLocalConfig(t)
 	router := newRouterWithConfig(cfg)
 
-	req, err := http.NewRequest(http.MethodGet, "/api/texts/1", nil)
+	req, err := http.NewRequest(http.MethodGet, "/api/translations/1", nil)
 	if err != nil {
 		t.Fatalf("build request: %v", err)
 	}
@@ -44,47 +44,41 @@ func TestCoreJSONPersistenceFlow(t *testing.T) {
 	router := newRouterWithConfig(cfg)
 	sessionCookie := loginSessionCookie(t, router, cfg.AppPassword)
 
-	createText := doJSONRequest(t, router, http.MethodPost, "/api/texts", map[string]any{
-		"raw_text":    "人工智能改变世界",
+	createTranslation := doJSONRequest(t, router, http.MethodPost, "/api/translations", map[string]any{
+		"input_text":  "人工智能改变世界",
 		"source_type": "text",
-		"metadata":    map[string]any{"source": "integration"},
 	}, sessionCookie)
-	if createText.Code != http.StatusOK {
-		t.Fatalf("expected create text 200, got %d", createText.Code)
+	if createTranslation.Code != http.StatusOK {
+		t.Fatalf("expected create translation 200, got %d", createTranslation.Code)
 	}
-	var textResp struct {
-		ID string `json:"id"`
+	var translationResp struct {
+		TranslationID string `json:"translation_id"`
 	}
-	decodeBodyJSON(t, createText, &textResp)
-	if textResp.ID == "" {
-		t.Fatal("expected text id in create response")
-	}
-
-	getText := doJSONRequest(t, router, http.MethodGet, "/api/texts/"+textResp.ID, nil, sessionCookie)
-	if getText.Code != http.StatusOK {
-		t.Fatalf("expected get text 200, got %d", getText.Code)
+	decodeBodyJSON(t, createTranslation, &translationResp)
+	if translationResp.TranslationID == "" {
+		t.Fatal("expected translation id in create response")
 	}
 
 	saveVocab := doJSONRequest(t, router, http.MethodPost, "/api/vocab/save", map[string]any{
-		"headword": "你好",
-		"pinyin":   "ni hao",
-		"english":  "hello",
-		"text_id":  textResp.ID,
-		"status":   "learning",
+		"headword":       "你好",
+		"pinyin":         "ni hao",
+		"english":        "hello",
+		"translation_id": translationResp.TranslationID,
+		"status":         "learning",
 	}, sessionCookie)
 	if saveVocab.Code != http.StatusOK {
 		t.Fatalf("expected save vocab 200, got %d", saveVocab.Code)
 	}
 	var vocabResp struct {
-		VocabItemID string `json:"vocab_item_id"`
+		SegmentID string `json:"segment_id"`
 	}
 	decodeBodyJSON(t, saveVocab, &vocabResp)
-	if vocabResp.VocabItemID == "" {
-		t.Fatal("expected vocab_item_id in save vocab response")
+	if vocabResp.SegmentID == "" {
+		t.Fatal("expected segment_id in save vocab response")
 	}
 
 	lookup := doJSONRequest(t, router, http.MethodPost, "/api/vocab/lookup", map[string]any{
-		"vocab_item_id": vocabResp.VocabItemID,
+		"segment_id": vocabResp.SegmentID,
 	}, sessionCookie)
 	if lookup.Code != http.StatusOK {
 		t.Fatalf("expected vocab lookup 200, got %d", lookup.Code)

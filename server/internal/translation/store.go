@@ -21,6 +21,11 @@ type Translation struct {
 	Total           int
 }
 
+type CharTranslation struct {
+	Char   string
+	Pinyin string
+}
+
 type SegmentResult struct {
 	Segment string `json:"segment"`
 	Pinyin  string `json:"pinyin"`
@@ -53,6 +58,7 @@ const (
 	ChatRoleTool = "tool" // tool result message; one per tool call, owns review_card_json
 )
 
+// / ProgressSnapshot is a snapshot of the translation progress at a given moment.
 type ProgressSnapshot struct {
 	Status  string
 	Current int
@@ -90,16 +96,7 @@ type ChatMessage struct {
 	ReviewCard    *ChatReviewCard `json:"review_card,omitempty"`
 }
 
-type TextRecord struct {
-	ID             string
-	CreatedAt      string
-	SourceType     string
-	RawText        string
-	NormalizedText string
-	Metadata       map[string]any
-}
-
-type VocabRecord struct {
+type SegmentRecord struct {
 	ID       string
 	Headword string
 	Pinyin   string
@@ -107,44 +104,47 @@ type VocabRecord struct {
 	Status   string
 }
 
-type VocabSRSInfo struct {
-	VocabItemID  string
+type SegmentSRSInfo struct {
+	SegmentID    string
 	Headword     string
 	Pinyin       string
 	English      string
 	Opacity      float64
 	IsStruggling bool
 	Status       string
+	IntervalDays float64
+	NextDueAt    *string
 }
 
-type ReviewCard struct {
-	VocabItemID string
-	Headword    string
-	Pinyin      string
-	English     string
-	Snippets    []string
+type SegmentReviewCard struct {
+	SegmentID string
+	Headword  string
+	Pinyin    string
+	English   string
+	Snippets  []string
 }
 
 type ReviewAnswerResult struct {
-	VocabItemID  string
+	SegmentID    *string
+	CharacterID  *string
 	NextDueAt    *string
 	IntervalDays float64
 	RemainingDue int
 }
 
 type CharacterReviewCard struct {
-	VocabItemID  string
-	Character    string
-	Pinyin       string
-	English      string
-	ExampleWords []CharacterExampleWord
+	CharacterID     string
+	Character       string
+	Pinyin          string
+	English         string
+	ExampleSegments []CharacterExampleSegment
 }
 
-type CharacterExampleWord struct {
-	VocabItemID string
-	Headword    string
-	Pinyin      string
-	English     string
+type CharacterExampleSegment struct {
+	SegmentID          string
+	Segment            string
+	SegmentPinyin      string
+	SegmentTranslation string
 }
 
 type UserProfile struct {
@@ -163,11 +163,11 @@ type TranslationStore struct {
 	db *sql.DB
 }
 
-type SRSStore struct {
+type ChatStore struct {
 	db *sql.DB
 }
 
-type TextEventStore struct {
+type SRSStore struct {
 	db *sql.DB
 }
 
@@ -179,12 +179,12 @@ func NewTranslationStore(db *DB) *TranslationStore {
 	return &TranslationStore{db: db.Conn}
 }
 
-func NewSRSStore(db *DB) *SRSStore {
-	return &SRSStore{db: db.Conn}
+func NewChatStore(db *DB) *ChatStore {
+	return &ChatStore{db: db.Conn}
 }
 
-func NewTextEventStore(db *DB) *TextEventStore {
-	return &TextEventStore{db: db.Conn}
+func NewSRSStore(db *DB) *SRSStore {
+	return &SRSStore{db: db.Conn}
 }
 
 func NewProfileStore(db *DB) *ProfileStore {

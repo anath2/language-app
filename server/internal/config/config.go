@@ -19,7 +19,6 @@ type Config struct {
 	SecureCookies          bool
 	MigrationsDir          string
 	TranslationDBPath      string
-	CedictPath             string
 	OpenAIAPIKey           string
 	OpenAITranslationModel string
 	OpenAIChatModel        string
@@ -71,7 +70,7 @@ func Load() (Config, error) {
 		addr = ":8080"
 	}
 
-	repoRoot, err := detectRepoRoot()
+	repoRoot, err := getRepoRoot()
 	if err != nil {
 		return Config{}, err
 	}
@@ -89,7 +88,6 @@ func Load() (Config, error) {
 		SecureCookies:          secureCookies,
 		MigrationsDir:          envOrDefault("LANGUAGE_APP_MIGRATIONS_DIR", filepath.Join(repoRoot, "server", "migrations")),
 		TranslationDBPath:      envOrDefault("LANGUAGE_APP_DB_PATH", filepath.Join(repoRoot, "server", "data", "language_app.db")),
-		CedictPath:             envFirstOrDefault([]string{"CEDICT_PATH", "CEDIT_PATH", "CCEDICT_PATH"}, filepath.Join(repoRoot, "server", "data", "cedict_ts.u8")),
 		OpenAIAPIKey:           openAIAPIKey,
 		OpenAITranslationModel: openAITranslationModel,
 		OpenAIChatModel:        openAIChatModel,
@@ -98,27 +96,19 @@ func Load() (Config, error) {
 	}, nil
 }
 
-func detectRepoRoot() (string, error) {
+func getRepoRoot() (string, error) {
 	wd, err := os.Getwd()
 	if err != nil {
 		return "", fmt.Errorf("get working directory: %w", err)
 	}
 
-	if filepath.Base(wd) == "server" {
-		return filepath.Dir(wd), nil
-	}
-
 	serverDir := filepath.Join(wd, "server")
+
 	if _, err := os.Stat(serverDir); err == nil {
 		return wd, nil
 	}
 
-	parent := filepath.Dir(wd)
-	if filepath.Base(parent) == "server" {
-		return filepath.Dir(parent), nil
-	}
-
-	return "", fmt.Errorf("could not detect repository root from working directory %q", wd)
+	return "", fmt.Errorf("must run from project root (working directory is %q)", wd)
 }
 
 func envOrDefault(key string, fallback string) string {
