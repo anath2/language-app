@@ -62,7 +62,7 @@ func initDependencies(cfg config.Config) error {
 	srsStore := translation.NewSRSStore(db)
 	profileStore := translation.NewProfileStore(db)
 
-	translationProv, err := iltrans.NewDSPyProvider(cfg)
+	translationProv, err := iltrans.NewProvider(cfg)
 	if err != nil {
 		return fmt.Errorf("initialize translation provider: %w", err)
 	}
