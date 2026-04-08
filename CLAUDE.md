@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Language App — a Go REST API that segments Chinese text into words, provides pinyin transliteration, and English translations. Uses dspy-go with OpenAI-compatible endpoints for LLM-powered processing. Includes OCR text extraction, SRS vocabulary review, and segment editing.
+Language App — a Go REST API that segments Chinese text into words, provides pinyin transliteration, and English translations. Uses a direct OpenAI-compatible HTTP client for structured output. Includes OCR text extraction, SRS vocabulary review, and segment editing.
 
 The Go backend in `server/` is the active implementation. The legacy Python backend in `server_old/` is reference only. The frontend (`web/`) lives in a separate worktree.
 
@@ -29,7 +29,10 @@ cd server && go test ./tests/integration -v
 # Upstream-gated integration tests (.env.test, only when explicitly requested)
 cd server && go test ./tests/integration -v -args -upstream
 
-# GEPA prompt optimization (segmentation quality)
+# GEPA prompt optimization (segmentation quality) — canonical Python version
+cd scripts && uv run python gepa_segmentation.py --dataset ../server/data/jepa/paragraphs.csv
+
+# GEPA prompt optimization — Go version (to be removed in a subsequent PR)
 cd server && go run cmd/gepa-segmentation/main.go --dataset data/jepa/sentences_20.csv
 
 # Lint OpenAPI spec
@@ -49,7 +52,7 @@ cd server_old && uv run ruff check .
 
 **Additional CLI tools** (`cmd/`):
 - `migrate/` — Standalone migration runner (migrations also auto-run on server startup).
-- `gepa-segmentation/` — GEPA prompt optimization for segmentation quality. Writes compiled instruction to `data/jepa/compiled_instruction.txt`, which `DSPyProvider` loads at runtime (falls back to a default instruction).
+- `gepa-segmentation/` — Go GEPA runner (to be removed once Python harness is confirmed in production). Writes compiled instruction to `data/jepa/compiled_instruction.txt`, loaded by `Provider` at startup.
 
 **Package structure** (`internal/`):
 - `config/` — Environment variable loading with legacy key fallbacks (`OPENAI_*` preferred, `OPENROUTER_*` supported). Validates config at startup.
@@ -58,7 +61,7 @@ cd server_old && uv run ruff check .
 - `http/routes/` — Route group registration: `auth.go`, `translation.go`, `vocab.go`, `review.go`, `admin.go`, `ocr.go`, `health.go`. Chat endpoints are registered via the translation route group.
 - `http/middleware/` — Auth (session cookie-based) and timeout middleware. Timeout is skipped for SSE streaming endpoints.
 - `intelligence/` — Defines `TranslationProvider` and `ChatProvider` interfaces plus shared request types (`ChatWithTranslationRequest`, `ChatSegmentContext`). No implementation lives here.
-  - `intelligence/translation/` — `DSPyProvider` implements `TranslationProvider` via dspy-go structured outputs. Also contains `parse.go` (response parsing), `guards.go` (CJK detection/segment skip), `cedict.go` (CC-CEDICT dictionary). Loads compiled GEPA instruction at startup.
+  - `intelligence/translation/` — `Provider` implements `TranslationProvider` via direct HTTP to an OpenAI-compatible endpoint with `response_format: json_schema`. Also contains `parse.go` (fail-fast JSON unmarshal), `guards.go` (CJK detection/segment skip), `cedict.go` (CC-CEDICT dictionary). Loads compiled GEPA instruction at startup.
   - `intelligence/chat/` — `Provider` implements `ChatProvider` with real OpenAI SSE streaming: POSTs to `/chat/completions` with `stream: true`, reads response line-by-line with `bufio.Scanner`, calls `onChunk` per token.
 - `queue/` — In-memory job manager with lease-based processing (30s lease). Tracks running jobs with mutex. Resumes restartable jobs on startup. Segments input by sentence boundaries, processes one-by-one.
 - `translation/` — SQLite persistence layer. `store.go` has common types; store files: `store_translation.go` (CRUD, progress), `store_vocab_srs.go` (SM-2 SRS scheduling, review queue, import/export, last-seen vocab context), `store_profile.go` (user profile), `store_jobs.go` (job queue). `db.go` initializes the DB connection; `scan_helpers.go` has shared row-scanning utilities.
@@ -72,8 +75,11 @@ cd server_old && uv run ruff check .
 - Pure REST API — JSON-only auth (`POST /api/auth/login` with `{"password":"..."}`) returns `{"ok":true}` + Set-Cookie. All admin routes under `/api/admin/*`. OCR at `/api/extract-text`.
 - OpenAPI 3.2.0 spec at `server/docs/openapi.yaml`.
 
-**Scripts** (`scripts/segmentation/`):
-- `gepa_harness.go` — Full GEPA optimization pipeline used by `cmd/gepa-segmentation/`. Supports multi-seed optimization campaigns. Outputs artifacts to `data/jepa/`.
+**Go GEPA scripts** (`scripts-go/segmentation/`):
+- `gepa_harness.go` — Go GEPA pipeline (pending removal). Used by `cmd/gepa-segmentation/`. Prefer the Python version in `scripts/gepa_segmentation.py`.
+
+**Python scripts** (`scripts/` at repo root):
+- `gepa_segmentation.py` — Canonical GEPA optimization using Python dspy. Outputs artifacts to `server/data/jepa/`. Run with `cd scripts && uv run python gepa_segmentation.py`.
 
 ## Environment Variables
 
