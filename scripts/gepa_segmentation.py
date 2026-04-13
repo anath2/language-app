@@ -38,6 +38,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_CSV_PATH = "../server/data/jepa/paragraphs.csv"
 DEFAULT_ARTIFACTS_DIR = "../server/data/jepa"
+DEFAULT_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 HARDENED_INSTRUCTION = (
     "Segment the Chinese input into an ordered JSON array of contiguous chunks that "
@@ -112,6 +113,28 @@ def load_cases_from_csv(path: str) -> list[Case]:
 
 
 # ---------------------------------------------------------------------------
+# Model/env helpers
+# ---------------------------------------------------------------------------
+
+
+def normalize_model_id(model: str, base_url: str) -> str:
+    """
+    Normalize model ids for LiteLLM/DSPy.
+
+    With an OpenRouter-compatible base URL, LiteLLM rejects OpenRouter model ids like
+    `google/gemini-2.5-flash-lite` unless they are routed via the `openrouter/` provider.
+    """
+    model = model.strip()
+    if not model:
+        return model
+
+    if "openrouter.ai" in base_url.lower() and model.startswith("google/"):
+        return f"openrouter/{model}"
+
+    return model
+
+
+# ---------------------------------------------------------------------------
 # Instruction builder (mirrors Go BuildConstrainedInstruction)
 # ---------------------------------------------------------------------------
 
@@ -160,36 +183,43 @@ class Segmenter(dspy.Module):
 
 
 def segmentation_metric(
-    example: dspy.Example, pred: dspy.Prediction, trace=None
-) -> dict[str, object]:
+    gold: dspy.Example,
+    pred: dspy.Prediction,
+    trace=None,
+    pred_name=None,
+    pred_trace=None,
+) -> dspy.Prediction:
     """
     Reconstruction accuracy metric with textual feedback for GEPA's reflective evolution.
 
-    Returns {"score": float 0-1, "feedback": str} so GEPA can reflect on failures
-    and propose better instructions.
+    GEPA in DSPy 3.x expects metrics with signature:
+    (gold, pred, trace, pred_name, pred_trace).
+
+    It also expects either a float score or a dspy.Prediction(score=..., feedback=...).
+    Returning a plain dict causes GEPA internals to treat the entire dict as the score.
     """
-    text: str = example.text
+    text: str = gold.text
     segments = getattr(pred, "segments", None) or []
 
     if isinstance(segments, str):
         try:
             segments = json.loads(segments)
         except Exception:
-            return {
-                "score": 0.0,
-                "feedback": f"Could not parse segments output: {segments!r}. Return a JSON array of strings.",
-            }
+            return dspy.Prediction(
+                score=0.0,
+                feedback=f"Could not parse segments output: {segments!r}. Return a JSON array of strings.",
+            )
 
     if not isinstance(segments, list) or not segments:
-        return {
-            "score": 0.0,
-            "feedback": "No segments returned. The output must be a non-empty JSON array of strings.",
-        }
+        return dspy.Prediction(
+            score=0.0,
+            feedback="No segments returned. The output must be a non-empty JSON array of strings.",
+        )
 
     reconstructed = "".join(str(s) for s in segments)
 
     if reconstructed == text:
-        return {"score": 1.0, "feedback": "Perfect reconstruction."}
+        return dspy.Prediction(score=1.0, feedback="Perfect reconstruction.")
 
     # Partial credit based on character overlap, capped at 0.9 for imperfect output.
     overlap = sum(a == b for a, b in zip(reconstructed, text))
@@ -221,7 +251,7 @@ def segmentation_metric(
             "Do not normalize, substitute, or paraphrase any character."
         )
 
-    return {"score": score, "feedback": feedback}
+    return dspy.Prediction(score=score, feedback=feedback)
 
 
 # ---------------------------------------------------------------------------
@@ -260,7 +290,7 @@ def evaluate_program(program: Segmenter, cases: list[Case]) -> EvalSummary:
         try:
             pred = program(text=case.paragraph)
             result = segmentation_metric(dspy.Example(text=case.paragraph), pred)
-            score = result["score"] if isinstance(result, dict) else float(result)
+            score = float(getattr(result, "score", result))
             if score >= 1.0:
                 summary.exact_matches += 1
             else:
@@ -515,17 +545,33 @@ def main() -> None:
     base_url: str = (
         os.environ.get("OPENAI_BASE_URL")
         or os.environ.get("OPENROUTER_BASE_URL")
-        or "https://openrouter.ai/api/v1"
+        or DEFAULT_OPENROUTER_BASE_URL
     )
-    model: str = (
+    raw_model: str = (
         args.model
         or os.environ.get("OPENAI_TRANSLATION_MODEL")
-        or os.environ.get("OPENROUTER_TRANSLATION_MODEL", "")
+        or os.environ.get("OPENROUTER_TRANSLATION_MODEL")
+        or os.environ.get("OPENAI_MODEL")
+        or os.environ.get("OPENROUTER_MODEL", "")
     )
-    if not model:
-        raise SystemExit("Model must be set via --model or OPENAI_TRANSLATION_MODEL env var")
+    if not raw_model:
+        raise SystemExit(
+            "Model must be set via --model or one of: OPENAI_TRANSLATION_MODEL, "
+            "OPENROUTER_TRANSLATION_MODEL, OPENAI_MODEL, OPENROUTER_MODEL"
+        )
 
-    reflection_model: str = args.reflection_model or model
+    raw_reflection_model: str = args.reflection_model or raw_model
+    model = normalize_model_id(raw_model, base_url)
+    reflection_model = normalize_model_id(raw_reflection_model, base_url)
+
+    if model != raw_model:
+        logger.info("Normalized worker model for LiteLLM/OpenRouter: %s -> %s", raw_model, model)
+    if reflection_model != raw_reflection_model:
+        logger.info(
+            "Normalized reflection model for LiteLLM/OpenRouter: %s -> %s",
+            raw_reflection_model,
+            reflection_model,
+        )
 
     lm = dspy.LM(model=model, api_key=api_key, api_base=base_url, cache=False)
     # Reflection LM runs at temperature=1.0 for diversity in instruction proposals.
