@@ -8,7 +8,7 @@ import (
 
 	"github.com/XiaoConstantine/dspy-go/pkg/core"
 	"github.com/anath2/language-app/internal/config"
-	"github.com/anath2/language-app/scripts/segmentation"
+	"github.com/anath2/language-app/scripts-go/segmentation"
 	"github.com/joho/godotenv"
 )
 

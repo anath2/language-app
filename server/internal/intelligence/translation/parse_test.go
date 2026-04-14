@@ -4,97 +4,157 @@ import (
 	"testing"
 )
 
-func TestParseSegments(t *testing.T) {
+func TestParseSegmentsResult(t *testing.T) {
 	t.Parallel()
-
 	cases := []struct {
-		name   string
-		input  any
-		expect []string
+		name    string
+		content string
+		want    []string
+		wantErr bool
 	}{
 		{
-			name:   "array of strings",
-			input:  []any{"春节", "聚会", "，"},
-			expect: []string{"春节", "聚会", "，"},
+			name:    "valid segments",
+			content: `{"segments":["春节","聚会","，"]}`,
+			want:    []string{"春节", "聚会", "，"},
 		},
 		{
-			name:   "filters metadata segment",
-			input:  []any{"segments:", "春节", "聚会"},
-			expect: []string{"春节", "聚会"},
+			name:    "single segment",
+			content: `{"segments":["你好世界"]}`,
+			want:    []string{"你好世界"},
 		},
 		{
-			name:   "filters segments: with space",
-			input:  []any{"segments: ", "你好"},
-			expect: []string{"你好"},
+			name:    "invalid json",
+			content: `not json`,
+			wantErr: true,
 		},
 		{
-			name:   "string with segments prefix",
-			input:  `segments: ["春节", "聚会"]`,
-			expect: []string{"春节", "聚会"},
+			name:    "empty segments array",
+			content: `{"segments":[]}`,
+			wantErr: true,
 		},
 		{
-			name:   "json object with segments key",
-			input:  `{"segments": ["有", "哪些"]}`,
-			expect: []string{"有", "哪些"},
-		},
-		{
-			name:   "freeform text with array",
-			input:  `Here are the segments: ["好的", "做法"]`,
-			expect: []string{"好的", "做法"},
+			name:    "missing segments key",
+			content: `{"words":["你","好"]}`,
+			wantErr: true,
 		},
 	}
 	for _, tc := range cases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			var got []string
-			switch v := tc.input.(type) {
-			case string:
-				got = parseSegmentsString(v)
-			default:
-				got = parseSegments(tc.input)
+			got, err := parseSegmentsResult(tc.content)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got nil (result=%v)", got)
+				}
+				return
 			}
-			if len(got) != len(tc.expect) {
-				t.Fatalf("got %d segments %q, want %d %q", len(got), got, len(tc.expect), tc.expect)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(got) != len(tc.want) {
+				t.Fatalf("got %d segments %q, want %d %q", len(got), got, len(tc.want), tc.want)
 			}
 			for i := range got {
-				if got[i] != tc.expect[i] {
-					t.Fatalf("got[%d]=%q want %q", i, got[i], tc.expect[i])
+				if got[i] != tc.want[i] {
+					t.Fatalf("got[%d]=%q want %q", i, got[i], tc.want[i])
 				}
 			}
 		})
 	}
 }
 
-func TestParseSegmentsFromResponse_NewlineFormat(t *testing.T) {
-	// Model returns newline-separated segments instead of JSON (e.g. gemini with "Return only the segments array").
-	input := "segments:\n如何\n评价\n《\n互联网\n已\n死\n，\nAgent\n永生\n》\n一\n文\n？"
-	got := parseSegmentsFromResponse(input)
-	expect := []string{"如何", "评价", "《", "互联网", "已", "死", "，", "Agent", "永生", "》", "一", "文", "？"}
-	if len(got) != len(expect) {
-		t.Fatalf("got %d segments %q, want %d %q", len(got), got, len(expect), expect)
+func TestParseBatchTranslationsResult(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name    string
+		content string
+		wantN   int
+		wantErr bool
+	}{
+		{
+			name:    "two translations",
+			content: `{"translations":[{"pinyin":"nǐ hǎo","english":"hello"},{"pinyin":"shì jiè","english":"world"}]}`,
+			wantN:   2,
+		},
+		{
+			name:    "empty translations array",
+			content: `{"translations":[]}`,
+			wantN:   0,
+		},
+		{
+			name:    "invalid json",
+			content: `not json`,
+			wantErr: true,
+		},
 	}
-	for i := range got {
-		if got[i] != expect[i] {
-			t.Fatalf("got[%d]=%q want %q", i, got[i], expect[i])
-		}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := parseBatchTranslationsResult(tc.content)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(got) != tc.wantN {
+				t.Fatalf("got %d translations, want %d", len(got), tc.wantN)
+			}
+		})
 	}
 }
 
-func TestIsMetadataSegment(t *testing.T) {
+func TestParseFullTranslationResult(t *testing.T) {
 	t.Parallel()
-
-	metadata := []string{"segments", "segments:", "segments: ", "Segments:", "  segments  "}
-	for _, s := range metadata {
-		if !isMetadataSegment(s) {
-			t.Errorf("isMetadataSegment(%q)=false, want true", s)
-		}
+	cases := []struct {
+		name    string
+		content string
+		want    string
+		wantErr bool
+	}{
+		{
+			name:    "valid translation",
+			content: `{"translation":"Hello, world!"}`,
+			want:    "Hello, world!",
+		},
+		{
+			name:    "trims whitespace",
+			content: `{"translation":"  Hello  "}`,
+			want:    "Hello",
+		},
+		{
+			name:    "empty translation",
+			content: `{"translation":""}`,
+			wantErr: true,
+		},
+		{
+			name:    "invalid json",
+			content: `not json`,
+			wantErr: true,
+		},
 	}
-
-	real := []string{"春节", "你好", "segments 春节"} // segment text containing "segments" is kept
-	for _, s := range real {
-		if isMetadataSegment(s) {
-			t.Errorf("isMetadataSegment(%q)=true, want false", s)
-		}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := parseFullTranslationResult(tc.content)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got nil (result=%q)", got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tc.want {
+				t.Fatalf("got %q, want %q", got, tc.want)
+			}
+		})
 	}
 }

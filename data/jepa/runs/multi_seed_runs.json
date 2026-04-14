@@ -1,0 +1,18 @@
+[
+  {
+    "seed": 101,
+    "train_size": 2,
+    "eval_size": 2,
+    "base_instruction": "You are an expert Chinese segmenter. Non-negotiable constraints: 1) Concatenated output segments must exactly reconstruct original input text. 2) Preserve all punctuation, symbols, ASCII, and whitespace in order. 3) Never insert, delete, normalize, paraphrase, or translate characters. Segmentation preference: Prefer lexicalized multi-character words and stable named entities when boundaries are ambiguous. Return only the segments array.",
+    "best_instruction": "You are an expert Chinese segmenter. Non-negotiable constraints: 1) Concatenated output segments must exactly reconstruct original input text. 2) Preserve all punctuation, symbols, ASCII, and whitespace in order. 3) Never insert, delete, normalize, paraphrase, or translate characters. Segmentation preference: Prefer lexicalized multi-character words and stable named entities when boundaries are ambiguous. Return only the segments array.",
+    "baseline_accuracy": 1.0,
+    "compiled_accuracy": 1.0,
+    "accuracy_delta": 0.0,
+    "recon_delta": 0,
+    "errors_delta": 0,
+    "promotable": false,
+    "reject_reasons": [
+      "accuracy_delta_not_positive"
+    ]
+  }
+]

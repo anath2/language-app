@@ -35,9 +35,9 @@
 | `server/tests/integration/chat_rest_test.go` | Update mock — new signature, remove `LookupCharacter` |
 | `server/tests/integration/upstream_llm_test.go` | Update to use new `TranslateSegments` signature |
 | `server/.env.example` | Remove `CEDICT_PATH` |
-| `server/scripts/segmentation/gepa_harness.go` | New full pipeline program, metric, judge; update dataset loading |
+| `server/scripts-go/segmentation/gepa_harness.go` | New full pipeline program, metric, judge; update dataset loading |
 | `server/cmd/gepa-segmentation/main.go` | Add `--judge-model` flag, remove `--cedict-path` |
-| `server/data/jepa/paragraphs.csv` | New paragraph dataset (replaces `sentences_20.csv`) |
+| `data/jepa/datasets/paragraphs.csv` | New paragraph dataset (replaces `sentences_20.csv`) |
 
 ---
 
@@ -795,8 +795,8 @@ git commit -m "test: add unit tests for batched TranslateSegments"
 Replace `sentences_20.csv` with `paragraphs.csv`. Update the `Case` struct and CSV loader.
 
 **Files:**
-- Create: `server/data/jepa/paragraphs.csv`
-- Modify: `server/scripts/segmentation/gepa_harness.go`
+- Create: `data/jepa/datasets/paragraphs.csv`
+- Modify: `server/scripts-go/segmentation/gepa_harness.go`
 
 - [ ] **Step 1: Create paragraph dataset**
 
@@ -818,7 +818,7 @@ p12,小王昨天在咖啡店遇到了老朋友，聊了很久关于工作和家�
 
 - [ ] **Step 2: Update `Case` struct and CSV loader**
 
-In `server/scripts/segmentation/gepa_harness.go`:
+In `server/scripts-go/segmentation/gepa_harness.go`:
 
 Replace the `Case` struct:
 
@@ -929,13 +929,13 @@ func BuildGEPAParagraphDataset(corpus []Case, maxUnits int) (*datasets.SimpleDat
 - [ ] **Step 4: Update default CSV path constant**
 
 ```go
-const DefaultCSVPath = "data/jepa/paragraphs.csv"
+const DefaultCSVPath = "data/jepa/datasets/paragraphs.csv"
 ```
 
 - [ ] **Step 5: Verify compilation**
 
 ```bash
-cd server && go vet ./scripts/segmentation/...
+cd server && go vet ./scripts-go/segmentation/...
 ```
 
 Expected: Compile errors in functions that reference old `Case.Text` and `Case.Expected` — fixed in next task.
@@ -943,7 +943,7 @@ Expected: Compile errors in functions that reference old `Case.Text` and `Case.E
 - [ ] **Step 6: Commit**
 
 ```bash
-git add server/data/jepa/paragraphs.csv server/scripts/segmentation/gepa_harness.go
+git add data/jepa/datasets/paragraphs.csv server/scripts-go/segmentation/gepa_harness.go
 git commit -m "refactor: switch GEPA dataset from sentences to paragraphs
 
 New paragraphs.csv with multi-sentence entries. Update Case struct,
@@ -957,7 +957,7 @@ CSV loader, and dataset builder."
 The core of the GEPA rework — `NewFullPipelineProgram` and `fullPipelineMetric`.
 
 **Files:**
-- Modify: `server/scripts/segmentation/gepa_harness.go`
+- Modify: `server/scripts-go/segmentation/gepa_harness.go`
 
 - [ ] **Step 1: Add `splitInputSentences` import or copy**
 
@@ -1342,7 +1342,7 @@ Expected: May have errors in `RunMultiSeedOptimization` and evaluation functions
 - [ ] **Step 6: Commit**
 
 ```bash
-git add server/scripts/segmentation/gepa_harness.go
+git add server/scripts-go/segmentation/gepa_harness.go
 git commit -m "feat: implement full pipeline program and judge metric for GEPA
 
 NewFullPipelineProgram runs segment+translate per sentence.
@@ -1356,7 +1356,7 @@ fullPipelineMetric uses judge LLM to score translation quality 0-10."
 Wire everything together — `RunMultiSeedOptimization`, evaluation, and CLI flags.
 
 **Files:**
-- Modify: `server/scripts/segmentation/gepa_harness.go`
+- Modify: `server/scripts-go/segmentation/gepa_harness.go`
 - Modify: `server/cmd/gepa-segmentation/main.go`
 
 - [ ] **Step 1: Update `CompileGEPASentenceLevel`**
