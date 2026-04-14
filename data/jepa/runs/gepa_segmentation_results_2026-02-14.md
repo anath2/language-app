@@ -4,7 +4,7 @@
 - model: google/gemini-2.5-flash-lite
 - optimizer: GEPA
 - objective: sentence-level segmentation prompt optimization
-- dataset source: data/jepa/sentences_20.csv
+- dataset source: data/jepa/datasets/sentences_20.csv
 - dataset size (sentence units): 14
 
 ## Quick-Budget Config
