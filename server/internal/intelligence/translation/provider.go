@@ -275,8 +275,8 @@ func (p *Provider) complete(ctx context.Context, systemPrompt, userPrompt string
 
 func loadCompiledSegmentationInstruction(cfg config.Config) string {
 	for _, path := range []string{
-		filepath.Join("server", "data", "jepa", "compiled_instruction.txt"),
 		filepath.Join("data", "jepa", "compiled_instruction.txt"),
+		filepath.Join("server", "data", "jepa", "compiled_instruction.txt"),
 	} {
 		data, err := os.ReadFile(path)
 		if err != nil {

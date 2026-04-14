@@ -27,14 +27,16 @@ import (
 
 const (
 	SegmentationLLMTimeout = 3 * time.Minute
-	DefaultCSVPath         = "data/jepa/paragraphs.csv"
 	DefaultArtifactsDir    = "data/jepa"
-	DefaultReportPath      = DefaultArtifactsDir + "/gepa_segmentation_results_2026-02-14.md"
+	DefaultDatasetsDir     = DefaultArtifactsDir + "/datasets"
+	DefaultRunsDir         = DefaultArtifactsDir + "/runs"
+	DefaultCSVPath         = DefaultDatasetsDir + "/paragraphs.csv"
+	DefaultReportPath      = DefaultRunsDir + "/gepa_segmentation_results_2026-02-14.md"
 	DefaultInstructionPath = DefaultArtifactsDir + "/compiled_instruction.txt"
-	DefaultMetadataPath    = DefaultArtifactsDir + "/compile_metadata.json"
-	DefaultDecisionPath    = DefaultArtifactsDir + "/promotion_decision.json"
-	DefaultRunsPath        = DefaultArtifactsDir + "/multi_seed_runs.json"
-	DefaultSummaryPath     = DefaultArtifactsDir + "/multi_seed_summary.json"
+	DefaultMetadataPath    = DefaultRunsDir + "/compile_metadata.json"
+	DefaultDecisionPath    = DefaultRunsDir + "/promotion_decision.json"
+	DefaultRunsPath        = DefaultRunsDir + "/multi_seed_runs.json"
+	DefaultSummaryPath     = DefaultRunsDir + "/multi_seed_summary.json"
 	HardenedInstruction    = "Segment the Chinese input into an ordered JSON array of contiguous chunks that exactly reconstruct the original text when concatenated. Preserve every character in order, including Chinese/ASCII punctuation, symbols, and line breaks. Do not drop, normalize, paraphrase, or insert characters. Keep common multi-character words together when appropriate (for example, 人工智能, 图书馆, 看书, 为时未晚). Return only the segments array."
 	csvHeaderID            = "id"
 	csvHeaderParagraph     = "paragraph"
@@ -131,8 +133,10 @@ func (s *stickyPredict) Clone() core.Module {
 func LoadDefaultCases() ([]Case, error) {
 	candidates := []string{
 		DefaultCSVPath,
-		filepath.Join("..", "..", DefaultCSVPath),
+		filepath.Join("..", DefaultCSVPath),
+		filepath.Join("..", "..", "..", DefaultCSVPath),
 		filepath.Join("server", DefaultCSVPath),
+		filepath.Join("server", "data", "jepa", "paragraphs.csv"),
 	}
 	var lastErr error
 	for _, p := range candidates {
@@ -143,6 +147,35 @@ func LoadDefaultCases() ([]Case, error) {
 		lastErr = err
 	}
 	return nil, lastErr
+}
+
+type artifactLayout struct {
+	rootDir         string
+	runsDir         string
+	instructionPath string
+	metadataPath    string
+	reportPath      string
+	decisionPath    string
+	runsPath        string
+	summaryPath     string
+}
+
+func buildArtifactLayout(artifactDir string) artifactLayout {
+	rootDir := strings.TrimSpace(artifactDir)
+	if rootDir == "" {
+		rootDir = DefaultArtifactsDir
+	}
+	runsDir := filepath.Join(rootDir, "runs")
+	return artifactLayout{
+		rootDir:         rootDir,
+		runsDir:         runsDir,
+		instructionPath: filepath.Join(rootDir, filepath.Base(DefaultInstructionPath)),
+		metadataPath:    filepath.Join(runsDir, filepath.Base(DefaultMetadataPath)),
+		reportPath:      filepath.Join(runsDir, filepath.Base(DefaultReportPath)),
+		decisionPath:    filepath.Join(runsDir, filepath.Base(DefaultDecisionPath)),
+		runsPath:        filepath.Join(runsDir, filepath.Base(DefaultRunsPath)),
+		summaryPath:     filepath.Join(runsDir, filepath.Base(DefaultSummaryPath)),
+	}
 }
 
 func LoadCasesFromCSV(path string) ([]Case, error) {
@@ -929,10 +962,11 @@ func WriteGEPAArtifacts(
 	baseline EvalSummary,
 	compiled EvalSummary,
 ) error {
-	if artifactDir == "" {
-		artifactDir = DefaultArtifactsDir
+	layout := buildArtifactLayout(artifactDir)
+	if err := os.MkdirAll(layout.rootDir, 0o755); err != nil {
+		return err
 	}
-	if err := os.MkdirAll(artifactDir, 0o755); err != nil {
+	if err := os.MkdirAll(layout.runsDir, 0o755); err != nil {
 		return err
 	}
 
@@ -968,14 +1002,14 @@ func WriteGEPAArtifacts(
 		return fmt.Errorf("marshal metadata json: %w", err)
 	}
 
-	if err := os.WriteFile(filepath.Join(artifactDir, filepath.Base(DefaultInstructionPath)), []byte(result.BestInstruction), 0o644); err != nil {
+	if err := os.WriteFile(layout.instructionPath, []byte(result.BestInstruction), 0o644); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(artifactDir, filepath.Base(DefaultMetadataPath)), metaJSON, 0o644); err != nil {
+	if err := os.WriteFile(layout.metadataPath, metaJSON, 0o644); err != nil {
 		return err
 	}
 	return WriteGEPAResultsReport(
-		filepath.Join(artifactDir, filepath.Base(DefaultReportPath)),
+		layout.reportPath,
 		modelID,
 		cfg,
 		datasetPath,
@@ -994,10 +1028,11 @@ func WriteOptimizationCampaignArtifacts(
 	summary CampaignSummary,
 	decision PromotionDecision,
 ) error {
-	if artifactDir == "" {
-		artifactDir = DefaultArtifactsDir
+	layout := buildArtifactLayout(artifactDir)
+	if err := os.MkdirAll(layout.rootDir, 0o755); err != nil {
+		return err
 	}
-	if err := os.MkdirAll(artifactDir, 0o755); err != nil {
+	if err := os.MkdirAll(layout.runsDir, 0o755); err != nil {
 		return err
 	}
 
@@ -1013,13 +1048,13 @@ func WriteOptimizationCampaignArtifacts(
 	if err != nil {
 		return fmt.Errorf("marshal decision json: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(artifactDir, filepath.Base(DefaultRunsPath)), runsJSON, 0o644); err != nil {
+	if err := os.WriteFile(layout.runsPath, runsJSON, 0o644); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(artifactDir, filepath.Base(DefaultSummaryPath)), summaryJSON, 0o644); err != nil {
+	if err := os.WriteFile(layout.summaryPath, summaryJSON, 0o644); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(artifactDir, filepath.Base(DefaultDecisionPath)), decisionJSON, 0o644); err != nil {
+	if err := os.WriteFile(layout.decisionPath, decisionJSON, 0o644); err != nil {
 		return err
 	}
 
@@ -1038,7 +1073,7 @@ func WriteOptimizationCampaignArtifacts(
 	}
 
 	return WriteGEPAArtifacts(
-		artifactDir,
+		layout.rootDir,
 		modelID,
 		datasetPath,
 		cfg,

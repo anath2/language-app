@@ -30,10 +30,10 @@ cd server && go test ./tests/integration -v
 cd server && go test ./tests/integration -v -args -upstream
 
 # GEPA prompt optimization (segmentation quality) — canonical Python version
-cd scripts && uv run python gepa_segmentation.py --dataset ../server/data/jepa/paragraphs.csv
+cd scripts-py && uv run python gepa_segmentation.py --dataset data/jepa/datasets/paragraphs.csv
 
 # GEPA prompt optimization — Go version (to be removed in a subsequent PR)
-cd server && go run cmd/gepa-segmentation/main.go --dataset data/jepa/sentences_20.csv
+cd server && go run cmd/gepa-segmentation/main.go --dataset ../data/jepa/datasets/sentences_20.csv
 
 # Lint OpenAPI spec
 npx @redocly/cli lint server/docs/openapi.yaml
@@ -75,11 +75,11 @@ cd server_old && uv run ruff check .
 - Pure REST API — JSON-only auth (`POST /api/auth/login` with `{"password":"..."}`) returns `{"ok":true}` + Set-Cookie. All admin routes under `/api/admin/*`. OCR at `/api/extract-text`.
 - OpenAPI 3.2.0 spec at `server/docs/openapi.yaml`.
 
-**Go GEPA scripts** (`scripts-go/segmentation/`):
-- `gepa_harness.go` — Go GEPA pipeline (pending removal). Used by `cmd/gepa-segmentation/`. Prefer the Python version in `scripts/gepa_segmentation.py`.
+**Go GEPA scripts** (`server/scripts-go/segmentation/`):
+- `gepa_harness.go` — Go GEPA pipeline (pending removal). Used by `cmd/gepa-segmentation/`. Prefer the Python version in `scripts-py/gepa_segmentation.py`.
 
-**Python scripts** (`scripts/` at repo root):
-- `gepa_segmentation.py` — Canonical GEPA optimization using Python dspy. Outputs artifacts to `server/data/jepa/`. Run with `cd scripts && uv run python gepa_segmentation.py`.
+**Python scripts** (`scripts-py/` at repo root):
+- `gepa_segmentation.py` — Canonical GEPA optimization using Python dspy. Outputs `compiled_instruction.txt` to `data/jepa/` and run artifacts to `data/jepa/runs/`. Run with `cd scripts-py && uv run python gepa_segmentation.py`.
 
 ## Environment Variables
 

@@ -5,16 +5,16 @@ Equivalent to server/scripts-go/segmentation/gepa_harness.go but using
 the canonical Python dspy library with native GEPA support.
 
 Usage (from project root):
-    cd scripts && uv sync
-    uv run python gepa_segmentation.py --dataset ../server/data/jepa/paragraphs.csv
+    cd scripts-py && uv sync
+    uv run python gepa_segmentation.py --dataset data/jepa/datasets/paragraphs.csv
 
 Or with a dedicated reflection model:
     uv run python gepa_segmentation.py --model gpt-4o --reflection-model gpt-4o
 
 The script reads paragraphs from a CSV (columns: id, paragraph), runs GEPA
-instruction optimization across multiple seeds, and writes artifacts to
-server/data/jepa/ — including compiled_instruction.txt which the Go server
-loads at startup.
+instruction optimization across multiple seeds, and writes artifacts under
+data/jepa/ — with compiled_instruction.txt at the artifact root and run
+metadata under data/jepa/runs/.
 """
 
 import argparse
@@ -32,12 +32,16 @@ from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
 
+REPO_ROOT = Path(__file__).resolve().parent.parent
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
-DEFAULT_CSV_PATH = "../server/data/jepa/paragraphs.csv"
-DEFAULT_ARTIFACTS_DIR = "../server/data/jepa"
+DEFAULT_DATA_DIR = Path("data") / "jepa"
+DEFAULT_RUNS_DIR = DEFAULT_DATA_DIR / "runs"
+DEFAULT_CSV_PATH = str(DEFAULT_DATA_DIR / "datasets" / "paragraphs.csv")
+DEFAULT_ARTIFACTS_DIR = str(DEFAULT_DATA_DIR)
 DEFAULT_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 HARDENED_INSTRUCTION = (
@@ -110,6 +114,25 @@ def load_cases_from_csv(path: str) -> list[Case]:
     if not cases:
         raise ValueError(f"No valid rows found in {path!r}")
     return cases
+
+
+def resolve_repo_path(raw_path: str | Path) -> Path:
+    path = Path(raw_path)
+    if path.is_absolute():
+        return path
+    return REPO_ROOT / path
+
+
+def build_artifact_paths(artifacts_dir: str | Path) -> dict[str, Path]:
+    root_dir = Path(artifacts_dir)
+    runs_dir = root_dir / "runs"
+    return {
+        "root_dir": root_dir,
+        "runs_dir": runs_dir,
+        "compiled_instruction": root_dir / "compiled_instruction.txt",
+        "multi_seed_runs": runs_dir / "multi_seed_runs.json",
+        "compile_metadata": runs_dir / "compile_metadata.json",
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -468,15 +491,17 @@ def write_artifacts(
     model_id: str,
     dataset_path: str,
 ) -> None:
-    os.makedirs(artifacts_dir, exist_ok=True)
+    paths = build_artifact_paths(artifacts_dir)
+    paths["root_dir"].mkdir(parents=True, exist_ok=True)
+    paths["runs_dir"].mkdir(parents=True, exist_ok=True)
 
-    # compiled_instruction.txt — loaded by the Go server at startup.
-    Path(artifacts_dir, "compiled_instruction.txt").write_text(
+    # compiled_instruction.txt — canonical repo-level artifact loaded by the Go server.
+    paths["compiled_instruction"].write_text(
         instruction.strip() + "\n", encoding="utf-8"
     )
 
     # multi_seed_runs.json — per-seed results.
-    Path(artifacts_dir, "multi_seed_runs.json").write_text(
+    paths["multi_seed_runs"].write_text(
         json.dumps([asdict(r) for r in runs], indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
     )
@@ -495,7 +520,7 @@ def write_artifacts(
         "best_accuracy_delta": max(deltas) if deltas else 0.0,
         "worst_accuracy_delta": min(deltas) if deltas else 0.0,
     }
-    Path(artifacts_dir, "compile_metadata.json").write_text(
+    paths["compile_metadata"].write_text(
         json.dumps(metadata, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )
 
@@ -510,9 +535,9 @@ def write_artifacts(
 
 
 def main() -> None:
-    # Load .env from scripts/ dir, then fall back to server/.env.
+    # Load .env from the current working directory, then fall back to server/.env.
     load_dotenv()
-    load_dotenv(dotenv_path=Path(__file__).parent.parent / "server" / ".env")
+    load_dotenv(dotenv_path=REPO_ROOT / "server" / ".env")
 
     logging.basicConfig(
         level=logging.INFO,
@@ -580,9 +605,12 @@ def main() -> None:
     )
     dspy.configure(lm=lm)
 
+    dataset_path = resolve_repo_path(args.dataset)
+    artifacts_dir = resolve_repo_path(args.artifacts_dir)
+
     logger.info("Worker: %s  Reflection: %s  Base URL: %s", model, reflection_model, base_url)
-    logger.info("Loading dataset from %s", args.dataset)
-    cases = load_cases_from_csv(args.dataset)
+    logger.info("Loading dataset from %s", dataset_path)
+    cases = load_cases_from_csv(str(dataset_path))
     logger.info("Loaded %d cases", len(cases))
 
     runs, best_instruction = run_multi_seed_optimization(
@@ -596,7 +624,7 @@ def main() -> None:
     )
 
     write_artifacts(
-        artifacts_dir=args.artifacts_dir,
+        artifacts_dir=str(artifacts_dir),
         instruction=best_instruction,
         runs=runs,
         model_id=model,

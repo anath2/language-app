@@ -22,6 +22,47 @@ func TestLoadCasesFromCSV_DefaultDataset(t *testing.T) {
 	}
 }
 
+func TestLoadDefaultCases_PrefersRepoRootDatasetPath(t *testing.T) {
+	tempDir := t.TempDir()
+	rootCSVPath := filepath.Join(tempDir, "data", "jepa", "datasets", "paragraphs.csv")
+	legacyCSVPath := filepath.Join(tempDir, "server", "data", "jepa", "paragraphs.csv")
+
+	if err := os.MkdirAll(filepath.Dir(rootCSVPath), 0o755); err != nil {
+		t.Fatalf("mkdir root dataset dir: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(legacyCSVPath), 0o755); err != nil {
+		t.Fatalf("mkdir legacy dataset dir: %v", err)
+	}
+	if err := os.WriteFile(rootCSVPath, []byte("id,paragraph\nroot,根路径数据集。\n"), 0o644); err != nil {
+		t.Fatalf("write root dataset: %v", err)
+	}
+	if err := os.WriteFile(legacyCSVPath, []byte("id,paragraph\nlegacy,旧路径数据集。\n"), 0o644); err != nil {
+		t.Fatalf("write legacy dataset: %v", err)
+	}
+
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(tempDir); err != nil {
+		t.Fatalf("chdir temp dir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(wd)
+	})
+
+	cases, err := LoadDefaultCases()
+	if err != nil {
+		t.Fatalf("load default cases: %v", err)
+	}
+	if len(cases) != 1 {
+		t.Fatalf("expected 1 case, got %d", len(cases))
+	}
+	if cases[0].Name != "root" {
+		t.Fatalf("expected root dataset to win, got first case %q", cases[0].Name)
+	}
+}
+
 func TestLoadCasesFromCSV_SkipsEmptyParagraph(t *testing.T) {
 	t.Parallel()
 
@@ -215,6 +256,54 @@ func TestBoundFloat(t *testing.T) {
 	}
 	if got := boundFloat(0.5, 0, 1); got != 0.5 {
 		t.Errorf("boundFloat(0.5,0,1) = %f, want 0.5", got)
+	}
+}
+
+func TestWriteOptimizationCampaignArtifacts_UsesRootAndRunsLayout(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := ModerateFastGEPAConfig()
+	selectedSeed := 101
+
+	runs := []SeedRunResult{
+		{
+			Seed:       selectedSeed,
+			Promotable: true,
+			CompiledResult: CompileResult{
+				BestInstruction: "repo root instruction",
+			},
+			BaselineEval: EvalSummary{TotalCases: 1},
+			CompiledEval: EvalSummary{TotalCases: 1},
+		},
+	}
+
+	summary := CampaignSummary{Seeds: 1}
+	decision := PromotionDecision{Promoted: true, SelectedSeed: &selectedSeed}
+
+	if err := WriteOptimizationCampaignArtifacts(
+		tempDir,
+		"test-model",
+		"data/jepa/datasets/paragraphs.csv",
+		cfg,
+		runs,
+		summary,
+		decision,
+	); err != nil {
+		t.Fatalf("write campaign artifacts: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(tempDir, "compiled_instruction.txt")); err != nil {
+		t.Fatalf("expected compiled instruction at root artifact dir: %v", err)
+	}
+	for _, path := range []string{
+		filepath.Join(tempDir, "runs", "compile_metadata.json"),
+		filepath.Join(tempDir, "runs", "promotion_decision.json"),
+		filepath.Join(tempDir, "runs", "multi_seed_runs.json"),
+		filepath.Join(tempDir, "runs", "multi_seed_summary.json"),
+		filepath.Join(tempDir, "runs", "gepa_segmentation_results_2026-02-14.md"),
+	} {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("expected run artifact %q: %v", path, err)
+		}
 	}
 }
 

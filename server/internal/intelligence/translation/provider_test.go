@@ -5,7 +5,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
+
+	"github.com/anath2/language-app/internal/config"
 )
 
 func mockCompletionServer(t *testing.T, content string) *httptest.Server {
@@ -180,5 +184,67 @@ func TestNormalizeOpenAIEndpoint(t *testing.T) {
 				t.Fatalf("unexpected error for %q: %v", tc.input, err)
 			}
 		})
+	}
+}
+
+func TestLoadCompiledSegmentationInstruction_PrefersRepoRootPath(t *testing.T) {
+	tempDir := t.TempDir()
+	rootPath := filepath.Join(tempDir, "data", "jepa", "compiled_instruction.txt")
+	legacyPath := filepath.Join(tempDir, "server", "data", "jepa", "compiled_instruction.txt")
+
+	if err := os.MkdirAll(filepath.Dir(rootPath), 0o755); err != nil {
+		t.Fatalf("mkdir root path: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(legacyPath), 0o755); err != nil {
+		t.Fatalf("mkdir legacy path: %v", err)
+	}
+	if err := os.WriteFile(rootPath, []byte("repo root instruction\n"), 0o644); err != nil {
+		t.Fatalf("write root instruction: %v", err)
+	}
+	if err := os.WriteFile(legacyPath, []byte("legacy instruction\n"), 0o644); err != nil {
+		t.Fatalf("write legacy instruction: %v", err)
+	}
+
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(tempDir); err != nil {
+		t.Fatalf("chdir temp dir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(wd)
+	})
+
+	got := loadCompiledSegmentationInstruction(config.Config{})
+	if got != "repo root instruction" {
+		t.Fatalf("expected repo root instruction, got %q", got)
+	}
+}
+
+func TestLoadCompiledSegmentationInstruction_FallsBackToLegacyServerPath(t *testing.T) {
+	tempDir := t.TempDir()
+	legacyPath := filepath.Join(tempDir, "server", "data", "jepa", "compiled_instruction.txt")
+	if err := os.MkdirAll(filepath.Dir(legacyPath), 0o755); err != nil {
+		t.Fatalf("mkdir legacy path: %v", err)
+	}
+	if err := os.WriteFile(legacyPath, []byte("legacy instruction\n"), 0o644); err != nil {
+		t.Fatalf("write legacy instruction: %v", err)
+	}
+
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(tempDir); err != nil {
+		t.Fatalf("chdir temp dir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(wd)
+	})
+
+	got := loadCompiledSegmentationInstruction(config.Config{})
+	if got != "legacy instruction" {
+		t.Fatalf("expected legacy fallback instruction, got %q", got)
 	}
 }
