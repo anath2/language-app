@@ -1368,21 +1368,6 @@ func normalizeJSONLikePayload(raw string) string {
 	return strings.TrimSpace(strings.TrimPrefix(raw, "json"))
 }
 
-func parseLooseSegments(raw string) []string {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return nil
-	}
-	raw = strings.ReplaceAll(raw, "\n", " ")
-	raw = strings.ReplaceAll(raw, ",", " ")
-	raw = strings.ReplaceAll(raw, "|", " ")
-	parts := strings.Fields(raw)
-	if len(parts) == 0 {
-		return nil
-	}
-	return parts
-}
-
 func normalizeForReconstruction(s string) string {
 	var b strings.Builder
 	for _, r := range s {

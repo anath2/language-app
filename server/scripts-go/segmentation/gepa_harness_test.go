@@ -142,7 +142,7 @@ func TestEvaluatePromotionGate_Strict(t *testing.T) {
 	}
 
 	compiledFail := EvalSummary{ExactMatches: 5, TotalCases: 10, ReconstructionFail: 3, Errors: 1}
-	pass, reasons = EvaluatePromotionGate(baseline, compiledFail)
+	pass, _ = EvaluatePromotionGate(baseline, compiledFail)
 	if pass {
 		t.Fatal("expected fail when reconstruction failures increase")
 	}

@@ -22,7 +22,7 @@ func (s *SRSStore) SaveSegment(headword string, pinyin string, english string, t
 		status = "learning"
 	}
 	if !isValidStatus(status) {
-		return "", errors.New("Invalid status")
+		return "", errors.New("invalid status")
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	id, _ := newID()
@@ -71,7 +71,7 @@ func (s *SRSStore) SaveSegment(headword string, pinyin string, english string, t
 
 func (s *SRSStore) UpdateSegmentStatus(segmentID string, status string) error {
 	if !isValidStatus(status) {
-		return errors.New("Invalid status")
+		return errors.New("invalid status")
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	res, err := s.db.Exec(`UPDATE saved_segments SET status = ?, updated_at = ? WHERE id = ?`, status, now, segmentID)
@@ -87,7 +87,7 @@ func (s *SRSStore) UpdateSegmentStatus(segmentID string, status string) error {
 
 func (s *SRSStore) UpdateCharacterStatus(characterID string, status string) error {
 	if !isValidStatus(status) {
-		return errors.New("Invalid status")
+		return errors.New("invalid status")
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	res, err := s.db.Exec(`UPDATE saved_characters SET status = ?, updated_at = ? WHERE id = ?`, status, now, characterID)
@@ -242,14 +242,14 @@ func (s *SRSStore) GetSegmentDueCount() int {
 
 func (s *SRSStore) RecordReviewAnswer(entityID string, entityType string, grade int) (ReviewAnswerResult, bool, error) {
 	if grade < 0 || grade > 2 {
-		return ReviewAnswerResult{}, false, errors.New("Grade must be 0, 1, or 2")
+		return ReviewAnswerResult{}, false, errors.New("grade must be 0, 1, or 2")
 	}
 	entityType = strings.TrimSpace(entityType)
 	if entityType == "" {
 		entityType = reviewEntitySegment
 	}
 	if entityType != reviewEntitySegment && entityType != reviewEntityCharacter {
-		return ReviewAnswerResult{}, false, errors.New("Invalid entity type")
+		return ReviewAnswerResult{}, false, errors.New("invalid entity type")
 	}
 
 	entityExistsQuery := `SELECT 1 FROM saved_segments WHERE id = ?`
@@ -388,12 +388,12 @@ func (s *SRSStore) ExportProgressJSON() (string, error) {
 func (s *SRSStore) ImportProgressJSON(input string) (map[string]int, error) {
 	var data map[string]any
 	if err := json.Unmarshal([]byte(input), &data); err != nil {
-		return nil, fmt.Errorf("Invalid JSON: %w", err)
+		return nil, fmt.Errorf("invalid JSON: %w", err)
 	}
 	getArr := func(key string) ([]map[string]any, error) {
 		raw, ok := data[key]
 		if !ok {
-			return nil, fmt.Errorf("Missing '%s' field", key)
+			return nil, fmt.Errorf("missing '%s' field", key)
 		}
 		list, ok := raw.([]any)
 		if !ok {

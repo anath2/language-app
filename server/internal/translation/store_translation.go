@@ -120,7 +120,7 @@ func (s *TranslationStore) Delete(id string) bool {
 
 func (s *TranslationStore) List(limit int, offset int, status string) ([]Translation, int, error) {
 	if status != "" && status != "pending" && status != "processing" && status != "completed" && status != "failed" {
-		return nil, 0, errors.New("Invalid status filter")
+		return nil, 0, errors.New("invalid status filter")
 	}
 	if limit <= 0 {
 		limit = 20

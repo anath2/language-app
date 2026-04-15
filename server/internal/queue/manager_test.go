@@ -41,8 +41,8 @@ func (m *mockProvider) Segment(_ context.Context, text string) ([]string, error)
 	if text == "" {
 		return []string{}, nil
 	}
-	out := make([]string, 0, len([]rune(text)))
-	for _, r := range []rune(text) {
+	out := make([]string, 0, len(text))
+	for _, r := range text {
 		if r == ' ' || r == '\n' || r == '\t' {
 			continue
 		}

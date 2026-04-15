@@ -69,20 +69,6 @@ func normalizeModelField(value string) string {
 	return value
 }
 
-func toString(v any) string {
-	if v == nil {
-		return ""
-	}
-	switch t := v.(type) {
-	case string:
-		return t
-	case fmt.Stringer:
-		return t.String()
-	default:
-		return fmt.Sprintf("%v", t)
-	}
-}
-
 func preview(s string, max int) string {
 	runes := []rune(strings.TrimSpace(s))
 	if len(runes) <= max {
