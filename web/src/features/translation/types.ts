@@ -186,7 +186,7 @@ export interface TooltipState {
   y: number;
 }
 
-export interface TranslateBatchResponse {
+export interface TranslateSentenceSegmentsResponse {
   translations: TranslationResult[];
 }
 

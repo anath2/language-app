@@ -736,7 +736,7 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
-  /api/translations/segments/batch:
+  /api/translations/sentence-segments/translate:
     post:
       tags: [translations]
       summary: Translate sentence segments with sentence context

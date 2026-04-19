@@ -17,7 +17,7 @@ func TestUpstreamTranslateSentenceSegments(t *testing.T) {
 	router := newRouterWithConfig(cfg)
 	sessionCookie := loginSessionCookie(t, router, cfg.AppPassword)
 
-	res := doJSONRequest(t, router, http.MethodPost, "/api/translations/segments/batch", map[string]any{
+	res := doJSONRequest(t, router, http.MethodPost, "/api/translations/sentence-segments/translate", map[string]any{
 		"segments": []string{"人工智能", "改变", "世界"},
 		"context":  "人工智能改变世界",
 	}, sessionCookie)

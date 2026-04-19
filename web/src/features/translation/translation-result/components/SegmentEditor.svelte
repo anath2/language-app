@@ -1,5 +1,5 @@
 <script lang="ts">
-import { translateBatch } from '@/features/translation/api';
+import { translateSentenceSegments } from '@/features/translation/api';
 import type { DisplaySentence, SentenceMeta, SegmentResult } from '@/features/translation/types';
 import { getPastelColor } from '@/features/translation/utils';
 import Button from '@/ui/Button.svelte';
@@ -200,7 +200,7 @@ async function save() {
       }
     });
 
-    const data = await translateBatch(
+    const data = await translateSentenceSegments(
       allSegmentTexts,
       currentRawText || null,
       currentTranslationId,

@@ -108,5 +108,5 @@ Key unit test files: `intelligence/translation/cedict_test.go` (segment filterin
 - **Always run `cd server && gofmt -w .` after finishing a piece of work** (before committing)
 - CC-CEDICT pinyin is preferred over LLM-generated pinyin when available
 - SRS opacity: 1.0 = new/struggling word (full highlight), 0 = known word (no highlight)
-- Segment editing (split/join) re-translates via `POST /api/translations/segments/batch`
+- Segment editing (split/join) re-translates via `POST /api/translations/sentence-segments/translate`
 - SSE streaming delivers segment-by-segment translation progress at `/api/translations/{id}/stream`

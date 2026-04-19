@@ -1,5 +1,5 @@
 import { patchJson, postJson, postJsonForm } from '../../lib/api';
-import type { ExtractTextResponse, TranslateBatchResponse } from './types';
+import type { ExtractTextResponse, TranslateSentenceSegmentsResponse } from './types';
 
 export async function updateTranslationSource(
   id: string,
@@ -12,13 +12,13 @@ export async function updateTranslationTitle(id: string, title: string): Promise
   await patchJson(`/api/translations/${id}`, { title });
 }
 
-export async function translateBatch(
+export async function translateSentenceSegments(
   segments: string[],
   context: string | null,
   translationId: string | null,
   sentenceIdx: number | null
-): Promise<TranslateBatchResponse> {
-  return postJson('/api/translations/segments/batch', {
+): Promise<TranslateSentenceSegmentsResponse> {
+  return postJson('/api/translations/sentence-segments/translate', {
     segments,
     context,
     translation_id: translationId,
