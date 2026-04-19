@@ -51,7 +51,7 @@ func (m *mockProvider) Segment(_ context.Context, text string) ([]string, error)
 	return out, nil
 }
 
-func (m *mockProvider) TranslateSegments(_ context.Context, segments []string, _ string, _ string) ([]translation.SegmentResult, error) {
+func (m *mockProvider) TranslateSentenceSegments(_ context.Context, segments []string, _ string, _ string) ([]translation.SegmentResult, error) {
 	out := make([]translation.SegmentResult, 0, len(segments))
 	for _, seg := range segments {
 		out = append(out, translation.SegmentResult{

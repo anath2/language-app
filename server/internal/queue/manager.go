@@ -270,7 +270,7 @@ func (m *Manager) StartReprocessing(translationID string, sentencesToProcess map
 			if !ok {
 				continue
 			}
-			translated, err := m.provider.TranslateSegments(ctx, b.segments, b.sentenceText, item.InputText)
+			translated, err := m.provider.TranslateSentenceSegments(ctx, b.segments, b.sentenceText, item.InputText)
 			if err != nil || len(translated) == 0 {
 				_ = m.store.Fail(translationID, "Failed to translate segment during reprocessing")
 				return
@@ -421,7 +421,7 @@ func (m *Manager) runJob(ctx context.Context, translationID string, item transla
 	}
 
 	for _, batch := range batches {
-		translated, err := m.provider.TranslateSegments(ctx, batch.segments, batch.sentenceText, item.InputText)
+		translated, err := m.provider.TranslateSentenceSegments(ctx, batch.segments, batch.sentenceText, item.InputText)
 		if err != nil || len(translated) == 0 {
 			_ = m.store.Fail(translationID, "Failed to translate segments")
 			return

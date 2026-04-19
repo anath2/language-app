@@ -114,7 +114,7 @@ func (p *Provider) Segment(ctx context.Context, text string) ([]string, error) {
 	return segments, nil
 }
 
-func (p *Provider) TranslateSegments(ctx context.Context, segments []string, sentence string, fullText string) ([]store.SegmentResult, error) {
+func (p *Provider) TranslateSentenceSegments(ctx context.Context, segments []string, sentence string, fullText string) ([]store.SegmentResult, error) {
 	type indexedSegment struct {
 		originalIdx int
 		segment     string

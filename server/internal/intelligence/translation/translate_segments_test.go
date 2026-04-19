@@ -5,10 +5,10 @@ import (
 	"testing"
 )
 
-func TestTranslateSegments_SkipsNonCJK(t *testing.T) {
+func TestTranslateSentenceSegments_SkipsNonCJK(t *testing.T) {
 	t.Parallel()
 	provider := &Provider{}
-	results, err := provider.TranslateSegments(context.Background(), []string{"。", "!", " "}, "test", "test")
+	results, err := provider.TranslateSentenceSegments(context.Background(), []string{"。", "!", " "}, "test", "test")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

@@ -92,10 +92,10 @@ func TestProvider_Segment_NoChoices(t *testing.T) {
 	}
 }
 
-func TestProvider_TranslateSegments_SkipsNonCJK(t *testing.T) {
+func TestProvider_TranslateSentenceSegments_SkipsNonCJK(t *testing.T) {
 	t.Parallel()
 	p := &Provider{client: &http.Client{}, baseURL: "http://unused", model: "m", instruction: "i"}
-	results, err := p.TranslateSegments(context.Background(), []string{"。", "!", " "}, "test", "test")
+	results, err := p.TranslateSentenceSegments(context.Background(), []string{"。", "!", " "}, "test", "test")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -109,13 +109,13 @@ func TestProvider_TranslateSegments_SkipsNonCJK(t *testing.T) {
 	}
 }
 
-func TestProvider_TranslateSegments_HappyPath(t *testing.T) {
+func TestProvider_TranslateSentenceSegments_HappyPath(t *testing.T) {
 	t.Parallel()
 	srv := mockCompletionServer(t, `{"translations":[{"pinyin":"nǐ hǎo","english":"hello"},{"pinyin":"shì jiè","english":"world"}]}`)
 	defer srv.Close()
 
 	p := newTestProvider(t, srv)
-	results, err := p.TranslateSegments(context.Background(), []string{"你好", "世界"}, "你好世界", "你好世界")
+	results, err := p.TranslateSentenceSegments(context.Background(), []string{"你好", "世界"}, "你好世界", "你好世界")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
