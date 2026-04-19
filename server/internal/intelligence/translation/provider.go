@@ -65,7 +65,7 @@ var segmentationSchema = map[string]any{
 	"additionalProperties": false,
 }
 
-var batchTranslationSchema = map[string]any{
+var sentenceSegmentsTranslationSchema = map[string]any{
 	"type": "object",
 	"properties": map[string]any{
 		"translations": map[string]any{
@@ -152,13 +152,13 @@ func (p *Provider) TranslateSentenceSegments(ctx context.Context, segments []str
 	}
 
 	const systemPrompt = "Given an array of Chinese word segments from a sentence, produce the pinyin (with tone marks) and a concise English translation for each segment. Use the sentence and full text for context to select the correct reading and meaning. Return a JSON object with a \"translations\" array of objects with \"pinyin\" and \"english\" fields, in the same order as the input segments."
-	content, err := p.complete(ctx, systemPrompt, string(userMsg), batchTranslationSchema, "batch_translation_result")
+	content, err := p.complete(ctx, systemPrompt, string(userMsg), sentenceSegmentsTranslationSchema, "sentence_segments_translation_result")
 	if err != nil {
-		return nil, fmt.Errorf("batch translate: %w", err)
+		return nil, fmt.Errorf("translate sentence segments: %w", err)
 	}
 	translations, err := parseBatchTranslationsResult(content)
 	if err != nil {
-		return nil, fmt.Errorf("batch translate: %w", err)
+		return nil, fmt.Errorf("translate sentence segments: %w", err)
 	}
 
 	for i, cs := range cjkSegments {

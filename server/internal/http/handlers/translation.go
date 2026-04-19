@@ -58,7 +58,7 @@ type translationStatusResponse struct {
 	Total         *int   `json:"total"`
 }
 
-type translateBatchRequest struct {
+type translateSentenceSegmentsRequest struct {
 	Segments      []string `json:"segments"`
 	Context       *string  `json:"context"`
 	TranslationID *string  `json:"translation_id"`
@@ -71,16 +71,16 @@ type translationResult struct {
 	English string `json:"english"`
 }
 
-type translateBatchResponse struct {
+type translateSentenceSegmentsResponse struct {
 	Translations []translationResult `json:"translations"`
 }
 
-func TranslateBatch(w http.ResponseWriter, r *http.Request) {
+func TranslateSentenceSegments(w http.ResponseWriter, r *http.Request) {
 	if err := validateDependencies(); err != nil {
 		WriteJSON(w, http.StatusInternalServerError, map[string]string{"detail": err.Error()})
 		return
 	}
-	var req translateBatchRequest
+	var req translateSentenceSegmentsRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": "Invalid JSON payload"})
 		return
@@ -107,7 +107,7 @@ func TranslateBatch(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	WriteJSON(w, http.StatusOK, translateBatchResponse{Translations: results})
+	WriteJSON(w, http.StatusOK, translateSentenceSegmentsResponse{Translations: results})
 }
 
 func CreateTranslation(w http.ResponseWriter, r *http.Request) {

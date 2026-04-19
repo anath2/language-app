@@ -108,7 +108,7 @@ func TestRouteContractWithAuthenticatedSession(t *testing.T) {
 		{name: "review queue", method: http.MethodGet, path: "/api/review/words/queue", status: http.StatusOK},
 		{name: "review answer", method: http.MethodPost, path: "/api/review/answer", status: http.StatusBadRequest},
 		{name: "review count", method: http.MethodGet, path: "/api/review/words/count", status: http.StatusOK},
-		{name: "translate batch", method: http.MethodPost, path: "/api/translations/segments/batch", status: http.StatusBadRequest},
+		{name: "translate sentence segments", method: http.MethodPost, path: "/api/translations/segments/batch", status: http.StatusBadRequest},
 		{name: "export progress", method: http.MethodGet, path: "/api/admin/progress/export", status: http.StatusOK},
 		{name: "import progress", method: http.MethodPost, path: "/api/admin/progress/import", status: http.StatusBadRequest},
 		{name: "get profile", method: http.MethodGet, path: "/api/admin/profile", status: http.StatusOK},

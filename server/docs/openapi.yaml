@@ -739,8 +739,8 @@ paths:
   /api/translations/segments/batch:
     post:
       tags: [translations]
-      summary: Translate a batch of segments
-      operationId: translateBatch
+      summary: Translate sentence segments with sentence context
+      operationId: translateSentenceSegments
       requestBody:
         required: true
         content:
@@ -761,7 +761,7 @@ paths:
                   type: ["integer", "null"]
       responses:
         "200":
-          description: Translated segments
+          description: Translated sentence segments
           content:
             application/json:
               schema:

@@ -10,7 +10,7 @@ import (
 	"github.com/anath2/language-app/internal/translation"
 )
 
-func TestUpstreamTranslateBatch(t *testing.T) {
+func TestUpstreamTranslateSentenceSegments(t *testing.T) {
 	requireUpstream(t)
 
 	cfg := newUpstreamConfig(t)
@@ -22,7 +22,7 @@ func TestUpstreamTranslateBatch(t *testing.T) {
 		"context":  "人工智能改变世界",
 	}, sessionCookie)
 	if res.Code != http.StatusOK {
-		t.Fatalf("expected translate-batch 200, got %d: %s", res.Code, res.Body.String())
+		t.Fatalf("expected translate-sentence-segments 200, got %d: %s", res.Code, res.Body.String())
 	}
 
 	var out struct {

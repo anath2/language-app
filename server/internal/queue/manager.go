@@ -423,7 +423,7 @@ func (m *Manager) runJob(ctx context.Context, translationID string, item transla
 	for _, batch := range batches {
 		translated, err := m.provider.TranslateSentenceSegments(ctx, batch.segments, batch.sentenceText, item.InputText)
 		if err != nil || len(translated) == 0 {
-			_ = m.store.Fail(translationID, "Failed to translate segments")
+			_ = m.store.Fail(translationID, "Failed to translate sentence segments")
 			return
 		}
 		for _, segmentResult := range translated {
