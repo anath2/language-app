@@ -1,8 +1,5 @@
 """
-Segmentation instruction optimizer using dspy.GEPA.
-
-Equivalent to server/scripts-go/segmentation/gepa_harness.go but using
-the canonical Python dspy library with native GEPA support.
+Segmentation instruction optimizer using dspy.GEPA (Python dspy).
 
 Usage (from project root):
     cd scripts-py && uv sync
