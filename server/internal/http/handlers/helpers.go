@@ -34,8 +34,13 @@ func pathParam(r *http.Request, key string) string {
 }
 
 func preview(text string, max int) string {
-	if len(text) <= max {
+	if max < 0 {
+		max = 0
+	}
+
+	runes := []rune(text)
+	if len(runes) <= max {
 		return text
 	}
-	return text[:max] + "..."
+	return string(runes[:max]) + "..."
 }
