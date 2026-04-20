@@ -86,7 +86,8 @@ func TranslateSentenceSegments(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	results := make([]translationResult, 0, len(req.Segments))
-	segmentResults, err := transProvider.TranslateSentenceSegments(context.Background(), req.Segments, derefOr(req.Context, ""), derefOr(req.Context, ""))
+	sentenceText := strings.Join(req.Segments, "")
+	segmentResults, err := transProvider.TranslateSentenceSegments(r.Context(), req.Segments, sentenceText, derefOr(req.Context, ""))
 	if err != nil {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": err.Error()})
 		return
