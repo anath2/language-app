@@ -14,13 +14,13 @@ export async function updateTranslationTitle(id: string, title: string): Promise
 
 export async function translateSentenceSegments(
   segments: string[],
-  context: string | null,
+  fullText: string | null,
   translationId: string | null,
   sentenceIdx: number | null
 ): Promise<TranslateSentenceSegmentsResponse> {
   return postJson('/api/translations/sentence-segments/translate', {
     segments,
-    context,
+    full_text: fullText,
     translation_id: translationId,
     sentence_idx: sentenceIdx,
   });

@@ -35,7 +35,7 @@ func TestPatchTranslationSource(t *testing.T) {
 		t.Fatalf("expected PATCH non-existent 404, got %d", notFound.Code)
 	}
 
-	// PATCH with an appended sentence — all paragraphs are new (no hashes stored yet).
+	// PATCH with an appended sentence — all sentences are new (no hashes stored yet).
 	patchRes := doJSONRequest(t, router, http.MethodPatch, "/api/translations/"+id, map[string]any{
 		"input_text": "今天天气很好。明天会下雨。后天是晴天。",
 	}, sessionCookie)

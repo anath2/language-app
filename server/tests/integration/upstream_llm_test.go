@@ -18,8 +18,8 @@ func TestUpstreamTranslateSentenceSegments(t *testing.T) {
 	sessionCookie := loginSessionCookie(t, router, cfg.AppPassword)
 
 	res := doJSONRequest(t, router, http.MethodPost, "/api/translations/sentence-segments/translate", map[string]any{
-		"segments": []string{"人工智能", "改变", "世界"},
-		"context":  "人工智能改变世界",
+		"segments":  []string{"人工智能", "改变", "世界"},
+		"full_text": "人工智能改变世界",
 	}, sessionCookie)
 	if res.Code != http.StatusOK {
 		t.Fatalf("expected translate-sentence-segments 200, got %d: %s", res.Code, res.Body.String())

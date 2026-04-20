@@ -69,8 +69,8 @@ func TestTranslateSentenceSegmentsUsesDistinctSentenceAndFullText(t *testing.T) 
 	segments := []string{"人工智能", "改变", "世界"}
 	fullText := "人工智能改变世界。科技正在进步。"
 	res := doJSONRequest(t, router, http.MethodPost, "/api/translations/sentence-segments/translate", map[string]any{
-		"segments": segments,
-		"context":  fullText,
+		"segments":  segments,
+		"full_text": fullText,
 	}, sessionCookie)
 	if res.Code != http.StatusOK {
 		t.Fatalf("expected translate-sentence-segments 200, got %d: %s", res.Code, res.Body.String())

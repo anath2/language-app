@@ -58,7 +58,7 @@ One batched dspy call per sentence replaces the per-segment pinyin + meaning cal
 Inputs:
   segments_json:    JSON array of CJK segments to translate
   sentence:         The immediate sentence containing the segments
-  full_text:        The complete input text / paragraph for broader context
+  full_text:        The complete input text for broader context
 
 Output:
   translations_json: JSON array of {pinyin, english} objects, one per input segment
@@ -112,7 +112,7 @@ Cap max sentence length to bound failure risk on long sentences. The batched cal
 
 1. Segments the input sentence using the candidate segmentation instruction (worker LLM)
 2. Filters CJK segments via `shouldSkipSegment`
-3. Calls the batched translation signature (worker LLM) with segments + sentence + paragraph context
+3. Calls the batched translation signature (worker LLM) with segments + sentence + full-text context
 4. Returns structured results:
 
 ```go
@@ -177,7 +177,7 @@ Parsed via structured output. Normalized to 0.0-1.0.
 1. Split paragraph into sentences (same `splitInputSentences` as production)
 2. For each sentence:
    a. Segment (worker LLM with candidate instruction)
-   b. Translate segments (worker LLM, with full paragraph as context)
+   b. Translate segments (worker LLM, with full_text as context)
    c. Judge scores sentence translations (judge LLM, with paragraph context)
 3. Paragraph score = mean of sentence scores
 

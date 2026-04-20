@@ -60,7 +60,7 @@ type translationStatusResponse struct {
 
 type translateSentenceSegmentsRequest struct {
 	Segments      []string `json:"segments"`
-	Context       *string  `json:"context"`
+	FullText      *string  `json:"full_text"`
 	TranslationID *string  `json:"translation_id"`
 	SentenceIdx   *int     `json:"sentence_idx"`
 }
@@ -87,7 +87,7 @@ func TranslateSentenceSegments(w http.ResponseWriter, r *http.Request) {
 	}
 	results := make([]translationResult, 0, len(req.Segments))
 	sentenceText := strings.Join(req.Segments, "")
-	segmentResults, err := transProvider.TranslateSentenceSegments(r.Context(), req.Segments, sentenceText, derefOr(req.Context, ""))
+	segmentResults, err := transProvider.TranslateSentenceSegments(r.Context(), req.Segments, sentenceText, derefOr(req.FullText, ""))
 	if err != nil {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"detail": err.Error()})
 		return

@@ -305,9 +305,9 @@ paths:
         "200":
           description: |
             Server-Sent Events stream. Events are JSON objects with a `type` field:
-            - `start` — translation began, includes `translation_id`, `total`, `paragraphs`
+            - `start` — translation began, includes `translation_id`, `total`, `sentences`
             - `progress` — a segment was translated, includes `current`, `total`, `result`
-            - `complete` — all segments done, includes `paragraphs`, `fullTranslation`
+            - `complete` — all segments done, includes `sentences`, `fullTranslation`
             - `error` — an error occurred, includes `message`
           content:
             text/event-stream:
@@ -753,11 +753,11 @@ paths:
                   type: array
                   items:
                     type: string
-                context:
+                full_text:
                   type: ["string", "null"]
                 translation_id:
                   type: ["string", "null"]
-                paragraph_idx:
+                sentence_idx:
                   type: ["integer", "null"]
       responses:
         "200":
@@ -1030,12 +1030,12 @@ components:
           type: ["string", "null"]
         error_message:
           type: ["string", "null"]
-        paragraphs:
+        sentences:
           type: ["array", "null"]
           items:
-            $ref: "#/components/schemas/ParagraphMeta"
+            $ref: "#/components/schemas/SentenceMeta"
 
-    ParagraphMeta:
+    SentenceMeta:
       type: object
       required: [segment_count, indent, separator]
       properties:
