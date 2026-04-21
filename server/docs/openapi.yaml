@@ -33,6 +33,8 @@ tags:
     description: Admin operations (profile, progress import/export)
   - name: ocr
     description: OCR text extraction
+  - name: discovery
+    description: Discovery scaffold endpoints
 
 paths:
   /health:
@@ -587,6 +589,29 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/VocabSRSItem"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/discovery/status:
+    get:
+      tags: [discovery]
+      summary: Discovery scaffold status
+      operationId: getDiscoveryStatus
+      responses:
+        "200":
+          description: Discovery scaffold metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, phase]
+                properties:
+                  status:
+                    type: string
+                    example: scaffold
+                  phase:
+                    type: string
+                    example: backend-prep
         "401":
           $ref: "#/components/responses/Unauthorized"
 

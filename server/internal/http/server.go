@@ -100,6 +100,7 @@ func registerRoutes(r chi.Router, cfg config.Config, sessionManager *middleware.
 	routes.RegisterTranslationRoutes(r)
 	routes.RegisterVocabRoutes(r)
 	routes.RegisterReviewRoutes(r)
+	routes.RegisterDiscoveryRoutes(r)
 	routes.RegisterAdminRoutes(r)
 }
 

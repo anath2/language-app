@@ -24,6 +24,7 @@ func TestRegisterRoutesIncludesCoreEndpoints(t *testing.T) {
 	assertRouteRegistered(t, r, http.MethodGet, "/health")
 	assertRouteRegistered(t, r, http.MethodPost, "/api/ocr/extract-text")
 	assertRouteRegistered(t, r, http.MethodPost, "/api/auth/login")
+	assertRouteRegistered(t, r, http.MethodGet, "/api/discovery/status")
 }
 
 func assertRouteRegistered(t *testing.T, r chi.Router, method string, path string) {
