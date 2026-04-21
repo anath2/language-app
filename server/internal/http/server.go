@@ -15,6 +15,7 @@ import (
 	iltrans "github.com/anath2/language-app/internal/intelligence/translation"
 	"github.com/anath2/language-app/internal/migrations"
 	"github.com/anath2/language-app/internal/queue"
+	"github.com/anath2/language-app/internal/storage"
 	"github.com/anath2/language-app/internal/translation"
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
@@ -52,7 +53,7 @@ func runMigrations(cfg config.Config) error {
 }
 
 func initDependencies(cfg config.Config) error {
-	db, err := translation.NewDB(cfg.TranslationDBPath)
+	db, err := storage.NewDB(cfg.TranslationDBPath)
 	if err != nil {
 		return fmt.Errorf("initialize translation store: %w", err)
 	}

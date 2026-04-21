@@ -11,6 +11,7 @@ import (
 	"github.com/anath2/language-app/internal/http/handlers"
 	"github.com/anath2/language-app/internal/intelligence"
 	"github.com/anath2/language-app/internal/queue"
+	"github.com/anath2/language-app/internal/storage"
 	"github.com/anath2/language-app/internal/translation"
 )
 
@@ -47,7 +48,7 @@ func (p *captureSentenceContextProvider) TranslateFull(_ context.Context, text s
 func overrideDepsWithTranslationProvider(t *testing.T, cfg config.Config, transProv intelligence.TranslationProvider) {
 	t.Helper()
 
-	db, err := translation.NewDB(cfg.TranslationDBPath)
+	db, err := storage.NewDB(cfg.TranslationDBPath)
 	if err != nil {
 		t.Fatalf("new db for override deps: %v", err)
 	}

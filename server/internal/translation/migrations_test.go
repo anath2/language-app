@@ -6,11 +6,12 @@ import (
 	"testing"
 
 	"github.com/anath2/language-app/internal/migrations"
+	"github.com/anath2/language-app/internal/storage"
 )
 
 func TestNewDBRequiresMigratedSchema(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "translations.db")
-	_, err := NewDB(dbPath)
+	_, err := storage.NewDB(dbPath)
 	if err == nil {
 		t.Fatal("expected schema verification error for unmigrated database")
 	}
@@ -30,7 +31,7 @@ func TestRunUpIsIdempotentAndCreatesUsableSchema(t *testing.T) {
 		t.Fatalf("second run migrations: %v", err)
 	}
 
-	db, err := NewDB(dbPath)
+	db, err := storage.NewDB(dbPath)
 	if err != nil {
 		t.Fatalf("new migrated db: %v", err)
 	}

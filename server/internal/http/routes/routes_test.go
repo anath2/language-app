@@ -23,6 +23,14 @@ func TestRegisterOCRRoutes(t *testing.T) {
 	assertRouteRegistered(t, r, http.MethodPost, "/api/ocr/extract-text")
 }
 
+func TestRegisterDiscoveryRoutes(t *testing.T) {
+	r := chi.NewRouter()
+
+	RegisterDiscoveryRoutes(r)
+
+	assertRouteRegistered(t, r, http.MethodGet, "/api/discovery/status")
+}
+
 func assertRouteRegistered(t *testing.T, r chi.Router, method string, path string) {
 	t.Helper()
 

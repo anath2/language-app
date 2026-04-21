@@ -3,6 +3,8 @@ package translation
 import (
 	"database/sql"
 	"errors"
+
+	"github.com/anath2/language-app/internal/storage"
 )
 
 var ErrNotFound = errors.New("translation not found")
@@ -155,10 +157,6 @@ type UserProfile struct {
 	UpdatedAt string
 }
 
-type DB struct {
-	Conn *sql.DB
-}
-
 type TranslationStore struct {
 	db *sql.DB
 }
@@ -175,18 +173,18 @@ type ProfileStore struct {
 	db *sql.DB
 }
 
-func NewTranslationStore(db *DB) *TranslationStore {
+func NewTranslationStore(db *storage.DB) *TranslationStore {
 	return &TranslationStore{db: db.Conn}
 }
 
-func NewChatStore(db *DB) *ChatStore {
+func NewChatStore(db *storage.DB) *ChatStore {
 	return &ChatStore{db: db.Conn}
 }
 
-func NewSRSStore(db *DB) *SRSStore {
+func NewSRSStore(db *storage.DB) *SRSStore {
 	return &SRSStore{db: db.Conn}
 }
 
-func NewProfileStore(db *DB) *ProfileStore {
+func NewProfileStore(db *storage.DB) *ProfileStore {
 	return &ProfileStore{db: db.Conn}
 }
